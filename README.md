@@ -1,2 +1,2 @@
 # iapytoo
-Un toolkit pour vite coder un modèlel pytorch d'ia utilisant mlflow
+Un __toolkit__ pour vite coder un modèle __pytorch__ d'ia utilisant mlflow
