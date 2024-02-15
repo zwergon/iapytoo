@@ -12,7 +12,7 @@ from iapytoo.utils.timer import Timer
 from iapytoo.utils.iterative_mean import Mean
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
-from iapytoo.train.predictions import Predictions
+from iapytoo.train.predictions import Predictions, PredictionPlotter
 from iapytoo.train.metrics_collection import MetricsCollection
 from iapytoo.train.models import ModelFactory
 
@@ -26,7 +26,10 @@ class Training:
         numpy.random.seed(seed)
         torch.manual_seed(seed)
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, 
+        config: Config, 
+        metric_creators: list = None,
+        prediction_plotter: PredictionPlotter = None ) -> None:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self._config = config
         self.criterion = self._create_criterion()
@@ -43,6 +46,8 @@ class Training:
         self.optimizer = None
         self.scheduler = None
         self.predictions = None
+        self.metric_creators = metric_creators
+        self.prediction_plotter = prediction_plotter
  
     @property
     def config(self):
@@ -113,25 +118,25 @@ class Training:
     
         self.optimizer.step()
 
-        metrics.update_from_batch(Y_hat, Y)
+        metrics.update(Y_hat, Y)
 
         return loss.item()
 
-    def _inner_validate(self, batch, batch_idx, metrics: MetricsCollection):
+    def _inner_validate(self, batch, batch_idx, metrics : MetricsCollection):
         X, Y = batch
         X = X.to(self.device)
         Y = Y.to(self.device)
         Y_hat = self.model(X)
         loss = self.criterion(Y_hat, Y)
 
-        metrics.update_from_batch(Y_hat, Y)
+        metrics.update(Y_hat, Y)
 
         return loss.item()
     
     def _on_epoch_ended(self, epoch, checkpoint, train_loss, valid_loss):
         
         if epoch % 10 == 0:
-            self.predictions.compute(self.model, device=self.device)
+            self.predictions.compute(self)
             self.logger.report_prediction(epoch, self.predictions)
 
             checkpoint.update(
@@ -171,9 +176,10 @@ class Training:
             
             size_by_batch = len(loader)
             step = max(size_by_batch // self.config["n_steps_by_batch"], 1)
-           
-            metrics = MetricsCollection()
 
+            metrics = MetricsCollection(description, self.metric_creators)
+            metrics.to(self.device)
+           
             timer = Timer()
             timer.start()
             with tqdm(loader, unit="batch", file=sys.stdout) as tepoch:
@@ -194,6 +200,7 @@ class Training:
             
             metrics.compute()
             self.logger.report_metrics(epoch, metrics)
+            
          
         return new_function
 
@@ -207,9 +214,12 @@ class Training:
         def new_function(epoch, loader, description, mean: Mean):
             size_by_batch = len(loader)
             step = max(size_by_batch // self.config["n_steps_by_batch"], 1)
-            metrics = MetricsCollection(loader, self.device)
+
+            metrics = MetricsCollection(description, self.metric_creators)
+            metrics.to(self.device)
+            
             for batch_idx, batch in enumerate(loader):
-                loss = function(batch, batch_idx, metrics)
+                loss = function(batch, batch_idx, self.metrics)
 
                 mean.update(loss)
 
@@ -221,8 +231,7 @@ class Training:
             
             metrics.compute()
             self.logger.report_metrics(epoch, metrics)
-
-
+            
         return new_function
     
     
@@ -306,7 +315,8 @@ class Training:
         self.model = self._create_model(train_loader)
         self.optimizer = self._create_optimizer()
         self.scheduler = self._create_scheduler(self.optimizer)
-        self.predictions = Predictions(valid_loader)
+
+        self.predictions = Predictions(valid_loader, prediction_plotter=self.prediction_plotter)
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init_model(self.model)
@@ -343,6 +353,6 @@ class Training:
         checkpoint = CheckPoint(run_id)
         checkpoint.init_model(self.model)
 
-        self.predictions.compute(self.model, self.device)
+        self.predictions.compute(self)
 
     

@@ -5,13 +5,13 @@ from iapytoo.utils.config import Config
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("dataset", help="path to parquet file")
+    parser.add_argument("dataset", help="root path to the dataset")
     parser.add_argument(
         "-e",
         "--epochs",
         help="number of epochs in learning process",
         type=int,
-        default=101,
+        default=11,
     )
     parser.add_argument(
         "-b", "--batch_size", help="batch size in learning process", type=int, default=8

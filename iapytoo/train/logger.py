@@ -61,7 +61,7 @@ class Logger:
         active_run = mlflow.start_run(
             experiment_id=self.experiment_id,
             run_id=self.run_id,
-            run_name=self._run_name(self.config["sensors"]),
+            run_name=self._run_name(self.config["run"]),
         )
         self.run_id = active_run.info.run_id
         mlflow.log_params(self._params())
@@ -73,12 +73,17 @@ class Logger:
     def set_signature(self, loader):
        
         X, Y = next(iter(loader))
+        x_shape = list(X.shape)
+        x_shape[0] = -1
+        y_shape = list(Y.shape)
+        y_shape[0] = -1
+            
 
         input_schema = Schema(
-            [TensorSpec(type=np.dtype(np.float32), shape=(-1, X.shape[1], X.shape[2]))]
+            [TensorSpec(type=np.dtype(np.float32), shape=x_shape)]
         )
         output_schema = Schema(
-            [TensorSpec(type=np.dtype(np.float32), shape=(-1, Y.shape[1], Y.shape[2]))]
+            [TensorSpec(type=np.dtype(np.float32), shape=y_shape)]
         )
         self.signature = ModelSignature(
             inputs=input_schema, outputs=output_schema
@@ -143,11 +148,12 @@ class Logger:
                         values[f"{k}_{c}"] = v[c].item()
             mlflow.log_metrics(values, step=epoch)
 
-    def report_prediction(self, epoch, predictions: Predictions, index=0):
+    def report_prediction(self, epoch, predictions: Predictions):
         with self.lock:
-            fig = predictions_plot(predictions=predictions)
-            mlflow.log_figure(fig, f"actual_predicted_{epoch}.png")
-            plt.close(fig)
+            fig = predictions.plot(epoch)
+            if fig is not None:
+                mlflow.log_figure(fig, f"predictions_{epoch}.png")
+                plt.close(fig)
 
     def report_findlr(self, lrs, losses):
         fig = lrfind_plot(lrs, losses)
