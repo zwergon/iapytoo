@@ -12,8 +12,8 @@ from iapytoo.utils.timer import Timer
 from iapytoo.utils.iterative_mean import Mean
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
-from iapytoo.train.predictions import Predictions, PredictionPlotter
-from iapytoo.train.metrics_collection import MetricsCollection
+from iapytoo.predictions import Predictions, PredictionPlotter
+from iapytoo.metrics.collection import MetricsCollection
 from iapytoo.train.models import ModelFactory
 
 
@@ -26,10 +26,13 @@ class Training:
         numpy.random.seed(seed)
         torch.manual_seed(seed)
 
-    def __init__(self, 
-        config: Config, 
+    def __init__(
+        self,
+        config: Config,
         metric_creators: list = None,
-        prediction_plotter: PredictionPlotter = None ) -> None:
+        prediction_plotter: PredictionPlotter = None,
+    ) -> None:
+
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self._config = config
         self.criterion = self._create_criterion()
@@ -48,22 +51,21 @@ class Training:
         self.predictions = None
         self.metric_creators = metric_creators
         self.prediction_plotter = prediction_plotter
- 
+
     @property
     def config(self):
         return self._config.__dict__
-    
+
     # ----------------------------------------
     # Protected methods that may be overloaded
     # ----------------------------------------
 
-    
     def _get_lr(optimizer):
         for param_group in optimizer.param_groups:
             return param_group["lr"]
-    
+
     def _create_optimizer(self):
-        
+
         model = self.model
         if self.config["optimizer"] == "Adam":
             optimizer = optim.Adam(
@@ -82,19 +84,14 @@ class Training:
 
         self.optimizer = optimizer
         return optimizer
-    
+
     def _create_criterion(self):
         return nn.MSELoss()
-    
 
     def _create_model(self, loader):
 
-        model = ModelFactory().create_model(
-            self.config, 
-            loader, 
-            self.device
-            )
-        
+        model = ModelFactory().create_model(self.config, loader, self.device)
+
         return model
 
     def _create_scheduler(self, optimizer):
@@ -115,14 +112,14 @@ class Training:
 
         loss = self.criterion(Y_hat, Y)
         loss.backward()
-    
+
         self.optimizer.step()
 
         metrics.update(Y_hat, Y)
 
         return loss.item()
 
-    def _inner_validate(self, batch, batch_idx, metrics : MetricsCollection):
+    def _inner_validate(self, batch, batch_idx, metrics: MetricsCollection):
         X, Y = batch
         X = X.to(self.device)
         Y = Y.to(self.device)
@@ -132,24 +129,24 @@ class Training:
         metrics.update(Y_hat, Y)
 
         return loss.item()
-    
+
     def _on_epoch_ended(self, epoch, checkpoint, train_loss, valid_loss):
-        
+
         if epoch % 10 == 0:
             self.predictions.compute(self)
             self.logger.report_prediction(epoch, self.predictions)
 
             checkpoint.update(
-                        run_id=self.logger.run_id,
-                        epoch=epoch,
-                        model=self.model.state_dict(),
-                        optimizer=self.optimizer.state_dict(),
-                        scheduler=self.scheduler.state_dict(),
-                        train_loss=train_loss.state_dict(),
-                        valid_loss=valid_loss.state_dict()
-                    )
+                run_id=self.logger.run_id,
+                epoch=epoch,
+                model=self.model.state_dict(),
+                optimizer=self.optimizer.state_dict(),
+                scheduler=self.scheduler.state_dict(),
+                train_loss=train_loss.state_dict(),
+                valid_loss=valid_loss.state_dict(),
+            )
             self.logger.log_checkpoint(checkpoint=checkpoint)
-    
+
     # ----------------------------------------
     # Private methods
     # ----------------------------------------
@@ -157,13 +154,16 @@ class Training:
     def __display_device(self):
 
         use_cuda = torch.cuda.is_available()
-        if self.config['cuda'] and use_cuda:
-                print('__CUDNN VERSION:', torch.backends.cudnn.version())
-                print('__Number CUDA Devices:', torch.cuda.device_count())
-                print('__CUDA Device Name:',torch.cuda.get_device_name(0))
-                print('__CUDA Device Total Memory [GB]:',torch.cuda.get_device_properties(0).total_memory/1e9)
+        if self.config["cuda"] and use_cuda:
+            print("__CUDNN VERSION:", torch.backends.cudnn.version())
+            print("__Number CUDA Devices:", torch.cuda.device_count())
+            print("__CUDA Device Name:", torch.cuda.get_device_name(0))
+            print(
+                "__CUDA Device Total Memory [GB]:",
+                torch.cuda.get_device_properties(0).total_memory / 1e9,
+            )
         else:
-                print('__CPU')
+            print("__CPU")
 
     def __tqdm_loop(self, function):
         """
@@ -173,13 +173,13 @@ class Training:
         """
 
         def new_function(epoch, loader, description, mean: Mean):
-            
+
             size_by_batch = len(loader)
             step = max(size_by_batch // self.config["n_steps_by_batch"], 1)
 
             metrics = MetricsCollection(description, self.metric_creators)
             metrics.to(self.device)
-           
+
             timer = Timer()
             timer.start()
             with tqdm(loader, unit="batch", file=sys.stdout) as tepoch:
@@ -197,11 +197,10 @@ class Training:
                         )
             timer.log()
             timer.stop()
-            
+
             metrics.compute()
             self.logger.report_metrics(epoch, metrics)
-            
-         
+
         return new_function
 
     def __batch_loop(self, function):
@@ -217,7 +216,7 @@ class Training:
 
             metrics = MetricsCollection(description, self.metric_creators)
             metrics.to(self.device)
-            
+
             for batch_idx, batch in enumerate(loader):
                 loss = function(batch, batch_idx, self.metrics)
 
@@ -228,13 +227,12 @@ class Training:
                     self.logger.report_metric(
                         epoch=mean.iter, metrics={f"{description}_loss": mean.value}
                     )
-            
+
             metrics.compute()
             self.logger.report_metrics(epoch, metrics)
-            
+
         return new_function
-    
-    
+
     def __train(self, epoch, train_loader, train_loss):
         # Train
         self.model.train()
@@ -244,12 +242,11 @@ class Training:
         self.model.eval()
         with torch.no_grad():
             return self.valid_loop(epoch, valid_loader, "Valid", valid_loss)
-        
+
     # ----------------------------------------
     # Public methods
     # ----------------------------------------
 
-    
     def find_lr(self, train_loader):
         num_epochs = self.config["epochs"]
         num_batch = len(train_loader)
@@ -305,25 +302,25 @@ class Training:
         train_time.log()
         train_time.stop()
 
-
     def fit(self, train_loader, valid_loader, run_id=None):
-        num_epochs = self.config["epochs"] 
+        num_epochs = self.config["epochs"]
 
         train_loss = Mean.create("ewm")
         valid_loss = Mean.create("ewm")
-        
+
         self.model = self._create_model(train_loader)
         self.optimizer = self._create_optimizer()
         self.scheduler = self._create_scheduler(self.optimizer)
 
-        self.predictions = Predictions(valid_loader, prediction_plotter=self.prediction_plotter)
+        self.predictions = Predictions(
+            valid_loader, prediction_plotter=self.prediction_plotter
+        )
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init_model(self.model)
         checkpoint.init_optimizer(self.optimizer)
         checkpoint.init_scheduler(self.scheduler)
         checkpoint.init_loss(train_loss, valid_loss)
-
 
         with Logger(self._config, run_id=None) as self.logger:
             self.__display_device()
@@ -332,15 +329,15 @@ class Training:
 
             for epoch in range(num_epochs):
 
-                # Train   
+                # Train
                 self.__train(epoch, train_loader, train_loss)
-            
+
                 # Test
                 self.__validate(epoch, valid_loader, valid_loss)
 
                 # increments scheduler
                 self.scheduler.step()
-                
+
                 self._on_epoch_ended(epoch, checkpoint, train_loss, valid_loss)
 
             self.logger.save_model(self.model)
@@ -354,5 +351,3 @@ class Training:
         checkpoint.init_model(self.model)
 
         self.predictions.compute(self)
-
-    

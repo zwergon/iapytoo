@@ -18,4 +18,4 @@ description = "Un toolkit pour vite coder un modèle pytorch d'ia utilisant mlfl
 dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools]
-packages = ["iapytoo", "iapytoo.train", "iapytoo.utils"]
+packages = ["iapytoo", "iapytoo.dataset", "iapytoo.utils", "iapytoo.predictions", "iapytoo.train"]

@@ -1,4 +1,4 @@
-from iapytoo.train.predictions import Predictions
+from iapytoo.predictions import Predictions
 
 
 class Feature:

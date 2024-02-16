@@ -1,7 +1,8 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from iapytoo.train.predictions import Predictions
+from iapytoo.predictions import Predictions
+
 
 class MetricsDistrib:
     def __init__(self, metric):
@@ -16,6 +17,5 @@ class MetricsDistrib:
         for i in range(Y.shape[0]):
             for j in range(Y.shape[1]):
                 self.distrib[i, j] = self.metric(Y[i, j, :], y_hat[i, j, :])
-           
-        return self.distrib
 
+        return self.distrib

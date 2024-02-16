@@ -17,15 +17,14 @@ from mlflow.types.schema import TensorSpec, Schema
 from iapytoo.utils.config import Config
 from iapytoo.utils.display import predictions_plot, lrfind_plot
 from iapytoo.train.checkpoint import CheckPoint
-from iapytoo.train.predictions import Predictions
-
+from iapytoo.predictions import Predictions
 
 
 class Logger:
     @staticmethod
     def _run_name(root_name):
         return f"{root_name}_{str(uuid.uuid1())[:8]}"
- 
+
     @property
     def experiment_id(self):
         experiment = mlflow.get_experiment_by_name(self.config["project"])
@@ -33,7 +32,7 @@ class Logger:
             return mlflow.create_experiment(self.config["project"])
         else:
             return experiment.experiment_id
-        
+
     @property
     def config(self):
         return self._config.__dict__
@@ -44,8 +43,7 @@ class Logger:
         self.agg = matplotlib.rcParams["backend"]
         self.signature = None
         self.lock = Lock()
-        if 'tracking_uri' in self.config \
-            and self.config['tracking_uri'] is not None:
+        if "tracking_uri" in self.config and self.config["tracking_uri"] is not None:
             print(f".. set tracking uri to {self.config['tracking_uri']}")
             mlflow.set_tracking_uri(self.config["tracking_uri"])
 
@@ -71,29 +69,22 @@ class Logger:
         mlflow.end_run()
 
     def set_signature(self, loader):
-       
+
         X, Y = next(iter(loader))
         x_shape = list(X.shape)
         x_shape[0] = -1
         y_shape = list(Y.shape)
         y_shape[0] = -1
-            
 
-        input_schema = Schema(
-            [TensorSpec(type=np.dtype(np.float32), shape=x_shape)]
-        )
-        output_schema = Schema(
-            [TensorSpec(type=np.dtype(np.float32), shape=y_shape)]
-        )
-        self.signature = ModelSignature(
-            inputs=input_schema, outputs=output_schema
-        )
+        input_schema = Schema([TensorSpec(type=np.dtype(np.float32), shape=x_shape)])
+        output_schema = Schema([TensorSpec(type=np.dtype(np.float32), shape=y_shape)])
+        self.signature = ModelSignature(inputs=input_schema, outputs=output_schema)
 
     def _params(self):
         # take care, some config parameters are saved by mlflow.
         # When you run it again, these parameters can not change between two runs.
         params = self._config.__dict__.copy()
-        if "run_id" in params: 
+        if "run_id" in params:
             del params["run_id"]
         del params["epochs"]
         return params
@@ -126,12 +117,13 @@ class Logger:
         with self.lock:
             # model for deployment don't need a GPU device
             # store it on gpu
-            device = torch.device('cpu')
+            device = torch.device("cpu")
             mlflow.pytorch.log_model(
-                model.to(device), 
-                "model", 
+                model.to(device),
+                "model",
                 signature=self.signature,
-                extra_pip_requirements=["--extra-index-url https://zwergon.github.io"],)
+                extra_pip_requirements=["--extra-index-url https://zwergon.github.io"],
+            )
 
     def report_metric(self, epoch, metrics: dict):
         with self.lock:
@@ -150,9 +142,9 @@ class Logger:
 
     def report_prediction(self, epoch, predictions: Predictions):
         with self.lock:
-            fig = predictions.plot(epoch)
+            name, fig = predictions.plot(epoch)
             if fig is not None:
-                mlflow.log_figure(fig, f"predictions_{epoch}.png")
+                mlflow.log_figure(fig, f"{name}_{epoch}.png")
                 plt.close(fig)
 
     def report_findlr(self, lrs, losses):
@@ -160,6 +152,3 @@ class Logger:
         with self.lock:
             mlflow.log_figure(figure=fig, artifact_file="find_lr.jpg")
         plt.close(fig)
-
-    
-        

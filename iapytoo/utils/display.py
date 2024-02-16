@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from iapytoo.train.predictions import Predictions
-from iapytoo.train.metric_distrib import MetricsDistrib
+from iapytoo.predictions import Predictions
+from iapytoo.metrics.distrib import MetricsDistrib
 
 
 def smooth(liste, beta=0.98):
@@ -71,16 +71,16 @@ def predictions_plot(predictions: Predictions, index=0, span=None):
 
 
 def distrib_plot(distrib: MetricsDistrib, columns=None):
-    
-        if columns is None:
-            labels = [f"col_{i+1}" for i in range(distrib.shape[1])]
-        else:
-            labels = columns
 
-        fig, ax = plt.subplots()
-        ax.boxplot(distrib, vert=True, patch_artist=True, labels=labels)
-        ax.set_title("Score")
-        ax.yaxis.grid(True)
-        ax.set_xlabel("Observed values")
+    if columns is None:
+        labels = [f"col_{i+1}" for i in range(distrib.shape[1])]
+    else:
+        labels = columns
 
-        return fig
+    fig, ax = plt.subplots()
+    ax.boxplot(distrib, vert=True, patch_artist=True, labels=labels)
+    ax.set_title("Score")
+    ax.yaxis.grid(True)
+    ax.set_xlabel("Observed values")
+
+    return fig
