@@ -7,12 +7,9 @@ class DummyVisionDataset(VisionDataset):
 
     def __init__(
         self,
-        root: str,
-        transforms: Callable[..., Any] | None = None,
-        transform: Callable[..., Any] | None = None,
-        target_transform: Callable[..., Any] | None = None,
+        root: str
     ) -> None:
-        super().__init__(root, transforms, transform, target_transform)
+        super().__init__(root)
 
         self.length = 10
         self.dim = 4
