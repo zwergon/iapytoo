@@ -2,13 +2,16 @@
 
 import time
 import numpy as np
+import logging
 
 
 class TimerError(Exception):
     """A custom exception used to report errors in use of Timer class"""
 
+
 class Timer:
     """Time your code using a class, context manager, or decorator"""
+
     text: str = "{} cycle elapsed {:0.4f} s mean {:0.4f}"
     with_log: bool = True
 
@@ -30,9 +33,9 @@ class Timer:
 
         self._start_time = None
 
-    def tick(self)->None:
+    def tick(self) -> None:
         if self._start_time is None:
-             raise TimerError(f"Timer is not running. Use .start() to start it")
+            raise TimerError(f"Timer is not running. Use .start() to start it")
         self.times.append(time.perf_counter() - self._start_time)
         self._start_time = time.perf_counter()
 
@@ -47,4 +50,6 @@ class Timer:
     def log(self):
         if self.with_log:
             elapsed_time = self.elapsed
-            print(self.text.format(len(self.times), elapsed_time, np.mean(self.times)))
+            logging.info(
+                self.text.format(len(self.times), elapsed_time, np.mean(self.times))
+            )

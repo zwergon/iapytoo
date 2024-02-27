@@ -25,9 +25,9 @@ class Predictions:
         return prediction_plotter
 
     def compute(self, training):
-
         model = training.model
         device = training.device
+        y_scaling = training.y_scaling
 
         idx = 0
         model.eval()
@@ -41,11 +41,9 @@ class Predictions:
                     predicted = Y_hat[i].detach().cpu()
                     actual = Y[i].detach().cpu()
 
-                    # TODO add normalization
-                    # dataset: WBDataset = self.loader.dataset
-                    # if not self.norm and dataset.norma:
-                    #     dataset.norma.unnorm_y(predicted)
-                    #     dataset.norma.unnorm_y(actual)
+                    if not self.norm and y_scaling is not None:
+                        predicted = y_scaling.inv(predicted)
+                        actual = y_scaling.inv(actual)
 
                     self.predicted[idx] = predicted
                     self.actual[idx] = actual

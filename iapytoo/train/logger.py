@@ -7,6 +7,7 @@ import tempfile
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+import logging
 
 from threading import Lock
 
@@ -44,7 +45,7 @@ class Logger:
         self.signature = None
         self.lock = Lock()
         if "tracking_uri" in self.config and self.config["tracking_uri"] is not None:
-            print(f".. set tracking uri to {self.config['tracking_uri']}")
+            logging.info(f".. set tracking uri to {self.config['tracking_uri']}")
             mlflow.set_tracking_uri(self.config["tracking_uri"])
 
     def __enter__(self):
@@ -69,7 +70,6 @@ class Logger:
         mlflow.end_run()
 
     def set_signature(self, loader):
-
         X, Y = next(iter(loader))
         x_shape = list(X.shape)
         x_shape[0] = -1
@@ -87,10 +87,12 @@ class Logger:
         if "run_id" in params:
             del params["run_id"]
         del params["epochs"]
+        del params["tracking_uri"]
         return params
 
     def __str__(self):
-        msg = f"Type Network: {self.config['type']}\n"
+        msg = "\nLogger:\n"
+        msg += f"Type Network: {self.config['type']}\n"
         msg += f"matplotlib backend: {matplotlib.rcParams['backend']}, interactive: {matplotlib.is_interactive()}\n"
         msg += f"tracking_uri: {mlflow.get_tracking_uri()}\n"
         active_run = mlflow.active_run()
@@ -104,8 +106,8 @@ class Logger:
         return msg
 
     def summary(self):
-        print(str(self))
-        mlflow.log_text(str(self), "summary.txt")
+        logging.info(str(self))
+        logging.info(self._config)
 
     def log_checkpoint(self, checkpoint: CheckPoint):
         with tempfile.TemporaryDirectory() as tmpdirname:

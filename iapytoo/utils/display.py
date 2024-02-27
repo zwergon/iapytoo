@@ -29,12 +29,20 @@ def lrfind_plot(lr, loss):
     ax.plot(lr[: len(loss)], loss, color="lightsteelblue", alpha=0.4)
     ax.plot(lr[: len(trace)], trace, color="navy")
 
+    # find max end power of learning rate for x ticks
+    lr_max = lr[-1]
+    power = -8
+    while 10**power < lr_max:
+        power += 1
+
     ax.set_title("LR Finder", fontsize=18)
     ax.set_xlabel("learning rate", fontsize=15)
     ax.set_ylabel("Loss", fontsize=15)
     ax.set_xscale("log")
     ax.set_xticks(
-        np.array([np.arange(1, 10) * 10 ** (-8 + i) for i in range(1, 10)]).flatten()
+        np.array(
+            [np.arange(1, 10) * 10 ** (-8 + i) for i in range(1, abs(power))]
+        ).flatten()
     )
     ax.set_ylim(0.95 * min(trace), 1.05 * max(trace))
 
@@ -71,7 +79,6 @@ def predictions_plot(predictions: Predictions, index=0, span=None):
 
 
 def distrib_plot(distrib: MetricsDistrib, columns=None):
-
     if columns is None:
         labels = [f"col_{i+1}" for i in range(distrib.shape[1])]
     else:
