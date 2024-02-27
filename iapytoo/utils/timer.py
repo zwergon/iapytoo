@@ -22,27 +22,27 @@ class Timer:
     def start(self) -> None:
         """Start a new timer"""
         if self._start_time is not None:
-            raise TimerError(f"Timer is running. Use .stop() to stop it")
+            raise TimerError("Timer is running. Use .stop() to stop it")
 
         self._start_time = time.perf_counter()
 
     def stop(self) -> None:
         """Stop the timer, and report the elapsed time"""
         if self._start_time is None:
-            raise TimerError(f"Timer is not running. Use .start() to start it")
+            raise TimerError("Timer is not running. Use .start() to start it")
 
         self._start_time = None
 
     def tick(self) -> None:
         if self._start_time is None:
-            raise TimerError(f"Timer is not running. Use .start() to start it")
+            raise TimerError("Timer is not running. Use .start() to start it")
         self.times.append(time.perf_counter() - self._start_time)
         self._start_time = time.perf_counter()
 
     @property
     def elapsed(self):
         if self._start_time is None:
-            raise TimerError(f"Timer is not running. Use .start() to start it")
+            raise TimerError("Timer is not running. Use .start() to start it")
         if len(self.times) == 0:
             self.tick()
         return np.sum(self.times)

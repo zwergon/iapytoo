@@ -1,4 +1,3 @@
-from typing import Any
 from torchmetrics.metric import Metric
 
 

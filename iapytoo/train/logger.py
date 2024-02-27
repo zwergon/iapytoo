@@ -16,7 +16,7 @@ from mlflow.models import ModelSignature
 from mlflow.types.schema import TensorSpec, Schema
 
 from iapytoo.utils.config import Config
-from iapytoo.utils.display import predictions_plot, lrfind_plot
+from iapytoo.utils.display import lrfind_plot
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.predictions import Predictions
 
@@ -111,7 +111,7 @@ class Logger:
 
     def log_checkpoint(self, checkpoint: CheckPoint):
         with tempfile.TemporaryDirectory() as tmpdirname:
-            ckp_name = os.path.join(tmpdirname, f"checkpoint.pt")
+            ckp_name = os.path.join(tmpdirname, "checkpoint.pt")
             torch.save(checkpoint.params, ckp_name)
             mlflow.log_artifact(local_path=ckp_name, artifact_path="checkpoints")
 

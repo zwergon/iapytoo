@@ -1,12 +1,9 @@
 import unittest
-import matplotlib.pyplot as plt
-
 from iapytoo.dataset import DummyVisionDataset
 import numpy as np
 
 
 class TestDataset(unittest.TestCase):
-
     def __init__(self, methodName: str = "runTest") -> None:
         super().__init__(methodName)
 

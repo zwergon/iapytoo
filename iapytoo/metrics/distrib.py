@@ -1,6 +1,4 @@
-import torch
 import numpy as np
-import matplotlib.pyplot as plt
 from iapytoo.predictions import Predictions
 
 

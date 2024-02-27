@@ -1,10 +1,5 @@
-import gc
-from multiprocessing import Process, Event, Value
-import os
 import time
 from timeit import default_timer
-
-import numpy as np
 
 
 class Timer:
@@ -43,4 +38,3 @@ class Timer:
     @staticmethod
     def format_elapsed_time(value: float):
         return time.strftime("%H:%M:%S", time.gmtime(value))
-

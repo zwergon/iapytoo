@@ -9,7 +9,7 @@ class Mean:
         elif kind == "ewm":
             return ExponentialSmoothingMean(**kwargs)
         else:
-            raise KeyError(f"mean should be mean, or ewm")
+            raise KeyError("mean should be mean, or ewm")
 
     def __init__(self, **kwargs) -> None:
         self._value = 0.0
@@ -22,12 +22,6 @@ class Mean:
     def load_state_dict(self, state_dict):
         self._value = state_dict["value"]
         self.iter = state_dict["iter"]
-
-    @property
-    def value(self):
-        with self.lock:
-            val = self._value
-        return val
 
     @property
     def value(self):

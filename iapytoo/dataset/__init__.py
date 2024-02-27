@@ -1,14 +1,10 @@
 import numpy as np
-from typing import Any, Callable, Tuple
+from typing import Any, Tuple
 from torchvision.datasets.vision import VisionDataset
 
 
 class DummyVisionDataset(VisionDataset):
-
-    def __init__(
-        self,
-        root: str
-    ) -> None:
+    def __init__(self, root: str) -> None:
         super().__init__(root)
 
         self.length = 10
