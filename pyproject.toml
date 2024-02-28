@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 [project]
 
 name = "iapytoo"
-version = "0.1"
+version = "0.0.1"
 
 authors = [
   { name="Jean-François Lecomte", email="zwergon@free.fr" },
@@ -18,4 +18,9 @@ description = "Un toolkit pour vite coder un modèle pytorch d'ia utilisant mlfl
 dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools]
-packages = ["iapytoo", "iapytoo.dataset", "iapytoo.utils", "iapytoo.predictions", "iapytoo.train"]
+packages = ["iapytoo", 
+"iapytoo.dataset",
+"iapytoo.metrics", 
+"iapytoo.utils", 
+"iapytoo.predictions", 
+"iapytoo.train"]
