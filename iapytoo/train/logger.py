@@ -34,6 +34,13 @@ class Logger:
         else:
             return experiment.experiment_id
 
+    def active_run_name(self):
+        active_run = mlflow.active_run()
+        if active_run:
+            return active_run.info.run_name
+
+        return None
+
     @property
     def config(self):
         return self._config.__dict__
@@ -44,6 +51,7 @@ class Logger:
         self.agg = matplotlib.rcParams["backend"]
         self.signature = None
         self.lock = Lock()
+        print("tracking_uri", self.config["tracking_uri"])
         if "tracking_uri" in self.config and self.config["tracking_uri"] is not None:
             logging.info(f".. set tracking uri to {self.config['tracking_uri']}")
             mlflow.set_tracking_uri(self.config["tracking_uri"])
@@ -62,6 +70,7 @@ class Logger:
             run_id=self.run_id,
             run_name=self._run_name(self.config["run"]),
         )
+        print("active_run", active_run.info.run_id)
         self.run_id = active_run.info.run_id
         mlflow.log_params(self._params())
 

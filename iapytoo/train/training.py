@@ -320,6 +320,7 @@ class Training:
         checkpoint.init_loss(train_loss, valid_loss)
 
         with Logger(self._config, run_id=None) as self.logger:
+            active_run_name = self.logger.active_run_name()
             self.__display_device()
             self.logger.set_signature(train_loader)
             self.logger.summary()
@@ -337,6 +338,12 @@ class Training:
                 self._on_epoch_ended(epoch, checkpoint, train_loss, valid_loss)
 
             self.logger.save_model(self.model)
+
+        return {
+            "run_id": self.logger.run_id,
+            "run_name": active_run_name,
+            "loss": valid_loss.value,
+        }
 
     def predict(self, loader, run_id=None):
         """
