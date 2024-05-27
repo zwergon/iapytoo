@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import numbers
 
 from iapytoo.predictions.plotters import PredictionPlotter
 
@@ -12,7 +13,11 @@ class Predictions:
         dataset = self.loader.dataset
         self.norm = norm
         _, Y = dataset[0]
-        shape = (len(dataset),) + Y.shape
+        if isinstance(Y, numbers.Real):
+            y_shape = (1,)
+        else:
+            y_shape = Y.shape
+        shape = (len(dataset),) + y_shape
         self.predicted = np.zeros(shape=shape)
         self.actual = np.zeros(shape=shape)
 
@@ -35,7 +40,7 @@ class Predictions:
             for X, Y in self.loader:
                 X = X.to(device)
                 Y = Y.to(device)
-                Y_hat = model(X)
+                Y_hat = model.predict(X)
 
                 for i in range(Y.shape[0]):
                     predicted = Y_hat[i].detach().cpu()

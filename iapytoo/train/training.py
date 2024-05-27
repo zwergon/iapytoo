@@ -23,7 +23,7 @@ class Training:
     def __init__(
         self,
         config: Config,
-        metric_creators: list = None,
+        metric_creators: list = [],
         prediction_plotter: PredictionPlotter = None,
         y_scaling: Scaling = None,
     ) -> None:
@@ -44,10 +44,10 @@ class Training:
             self.train_loop = self.__batch_loop(self._inner_train)
             self.valid_loop = self.__batch_loop(self._inner_validate)
 
-        self.model = None
         self.logger = None
-        self.optimizer = None
-        self.scheduler = None
+        self._models = []
+        self._optimizers = []
+        self._schedulers = []
         self.predictions = None
         self.y_scaling = y_scaling
         self.metric_creators = metric_creators
@@ -57,6 +57,18 @@ class Training:
     def config(self):
         return self._config.__dict__
 
+    @property
+    def model(self):
+        return self._models[0]
+
+    @property
+    def scheduler(self):
+        return self._schedulers[0]
+
+    @property
+    def optimizer(self):
+        return self._optimizers[0]
+
     # ----------------------------------------
     # Protected methods that may be overloaded
     # ----------------------------------------
@@ -65,7 +77,7 @@ class Training:
         for param_group in optimizer.param_groups:
             return param_group["lr"]
 
-    def _create_optimizer(self):
+    def _create_optimizers(self):
         model = self.model
         if self.config["optimizer"] == "Adam":
             optimizer = optim.Adam(
@@ -82,24 +94,31 @@ class Training:
         else:
             raise Exception("Unknown optimizer")
 
-        self.optimizer = optimizer
-        return optimizer
+        return [optimizer]
 
     def _create_criterion(self):
-        return nn.MSELoss()
+        if self.config["loss"] == "MSE":
+            return nn.MSELoss()
+        elif self.config["loss"] == "NLL":
+            return nn.functional.nll_loss
+        else:
+            raise Exception("unknown loss function")
 
-    def _create_model(self, loader):
-        model = ModelFactory().create_model(self.config, loader, self.device)
+    def _create_models(self, loader):
+        model = ModelFactory().create_model(
+            self.config["type"], self.config, loader, self.device
+        )
 
-        return model
+        return [model]
 
-    def _create_scheduler(self, optimizer):
+    def _create_schedulers(self, optimizer):
         # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
         def lr_lambda(epoch):
             # LR to be 0.1 * (1/1+0.01*epoch)
             return 0.995**epoch
 
-        return optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+        return [scheduler]
 
     def _inner_train(self, batch, batch_idx, metrics: MetricsCollection):
         X, Y = batch
@@ -248,15 +267,15 @@ class Training:
         num_epochs = self.config["epochs"]
         num_batch = len(train_loader)
 
-        self.model = self._create_model(train_loader)
-        self.optimizer = self._create_optimizer()
+        self._models = self._create_models(train_loader)
+        self._optimizers = self._create_optimizers()
 
         lr = self.config["learning_rate"]
         mult = (lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
         self.optimizer.param_groups[0]["lr"] = 1e-8
-        self.scheduler = torch.optim.lr_scheduler.StepLR(
-            self.optimizer, step_size=1, gamma=mult
-        )
+        self._schedulers = [
+            torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=mult)
+        ]
 
         train_time = Timer()
         with Logger(self._config) as self.logger:
@@ -305,9 +324,9 @@ class Training:
         train_loss = Mean.create("ewm")
         valid_loss = Mean.create("ewm")
 
-        self.model = self._create_model(train_loader)
-        self.optimizer = self._create_optimizer()
-        self.scheduler = self._create_scheduler(self.optimizer)
+        self._models = self._create_models(train_loader)
+        self._optimizers = self._create_optimizers()
+        self._schedulers = self._create_schedulers(self.optimizer)
 
         self.predictions = Predictions(
             valid_loader, prediction_plotter=self.prediction_plotter
@@ -351,7 +370,7 @@ class Training:
         if run_id is None, reuse a model
         """
         if run_id is not None:
-            self.model = self._create_model(loader)
+            self._models = self._create_models(loader)
             checkpoint = CheckPoint(run_id)
             checkpoint.init_model(self.model)
         else:
