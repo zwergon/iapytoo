@@ -35,4 +35,13 @@ def parse_args():
         type=str,
         default=Config.default_path(),
     )
+
+    parser.add_argument("-r", "--run_id", help="which run_id to continue", default=None)
+    parser.add_argument(
+        "-tu",
+        "--tracking_uri",
+        help="where to find run_id",
+        type=str,
+        default=None,
+    )
     return parser.parse_args()

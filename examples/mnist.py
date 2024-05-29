@@ -52,7 +52,7 @@ class ConfusionPlotter(PredictionPlotter):
         # Calcul de la matrice de confusion
         cm = confusion_matrix(self.predictions.predicted, self.predictions.actual)
         fig, ax = plt.subplots(figsize=(10, 5))
-        sns.heatmap(cm)
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False)
 
         return "confusion_matrix", fig
 
@@ -65,10 +65,22 @@ class MnistTraining(Training):
 if __name__ == "__main__":
     import os
 
-    config_name = os.path.join(os.path.dirname(__file__), "config_mnist.json")
-    config = Config(config_name)
+    from iapytoo.utils.arguments import parse_args
 
     ModelFactory().register_model("mnist", MnistModel)
+
+    args = parse_args()
+
+    if args.run_id is not None:
+        config = Config.create_from_run_id(args.run_id, args.tracking_uri)
+        config.epochs = args.epochs
+    else:
+        # INPUT Parameters
+        config = Config.create_from_args(args)
+
+    Training.seed(config)
+
+    config = Config.create_from_args(args)
 
     training = MnistTraining(config)
 
@@ -76,8 +88,10 @@ if __name__ == "__main__":
         [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
     )
 
-    dataset1 = datasets.MNIST("../data", train=True, download=True, transform=transform)
-    dataset2 = datasets.MNIST("../data", train=False, transform=transform)
+    dataset1 = datasets.MNIST(
+        args.dataset, train=True, download=True, transform=transform
+    )
+    dataset2 = datasets.MNIST(args.dataset, train=False, transform=transform)
 
     train_loader = torch.utils.data.DataLoader(
         dataset1, batch_size=config.batch_size, num_workers=config.num_workers
@@ -86,4 +100,6 @@ if __name__ == "__main__":
         dataset2, batch_size=config.batch_size, num_workers=config.num_workers
     )
 
-    training.fit(train_loader=train_loader, valid_loader=test_loader)
+    training.fit(
+        train_loader=train_loader, valid_loader=test_loader, run_id=args.run_id
+    )

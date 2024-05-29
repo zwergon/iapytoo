@@ -15,9 +15,13 @@ class Mean:
         self._value = 0.0
         self.iter = 0
         self.lock = Lock()
+        self.buffer = []
 
     def state_dict(self):
         return {"value": self._value, "iter": self.iter}
+
+    def flush(self):
+        self.buffer = []
 
     def load_state_dict(self, state_dict):
         self._value = state_dict["value"]
@@ -35,7 +39,7 @@ class Mean:
             self._value = 0.0
 
     def update(self):
-        pass
+        self.buffer.append((self.iter, self._value))
 
 
 class IterativeMean(Mean):
@@ -46,6 +50,7 @@ class IterativeMean(Mean):
         with self.lock:
             self.iter += 1
             self._value = (value + (self.iter - 1) * self._value) / self.iter
+            super().update()
 
 
 class ExponentialSmoothingMean(Mean):
@@ -57,3 +62,4 @@ class ExponentialSmoothingMean(Mean):
         with self.lock:
             self.iter += 1
             self._value = self.alpha * value + (1 - self.alpha) * self._value
+            super().update()

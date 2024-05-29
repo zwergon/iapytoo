@@ -72,7 +72,6 @@ class Config:
         json.dump(cf, temp_file, indent=4)
         temp_file.close()
         config = Config(temp_file.name)
-        config.dirname = None
         os.unlink(temp_file.name)
 
         return config
@@ -99,7 +98,6 @@ class Config:
     def __init__(self, config_name) -> None:
         with open(config_name, "r") as file:
             self.__dict__ = json.load(file)
-        self.dirname = os.path.dirname(config_name)
 
         # initialize root logger
         logger = logging.getLogger()

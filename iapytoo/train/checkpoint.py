@@ -34,22 +34,17 @@ class CheckPoint:
     def epoch(self):
         return self.params["epoch"]
 
-    def init_model(self, model):
-        if self.run_id is not None:
-            model.load_state_dict(self.params["model"])
+    def update(self, run_id, epoch, training):
+        self.params["run_id"] = run_id
+        self.params["epoch"] = epoch
+        self.params["model"] = training.model.state_dict()
+        self.params["optimizer"] = training.optimizer.state_dict()
+        self.params["scheduler"] = training.scheduler.state_dict()
+        self.params["loss"] = training.loss.state_dict()
 
-    def init_optimizer(self, optimizer):
+    def init(self, training):
         if self.run_id is not None:
-            optimizer.load_state_dict(self.params["optimizer"])
-
-    def init_scheduler(self, scheduler):
-        if self.run_id is not None:
-            scheduler.load_state_dict(self.params["scheduler"])
-
-    def init_loss(self, train_loss, valid_loss):
-        if self.run_id is not None:
-            train_loss.load_state_dict(self.params["train_loss"])
-            valid_loss.load_state_dict(self.params["valid_loss"])
-
-    def update(self, **kwargs):
-        self.params.update(**kwargs)
+            training.model.load_state_dict(self.params["model"])
+            training.optimizer.load_state_dict(self.params["optimizer"])
+            training.scheduler.load_state_dict(self.params["scheduler"])
+            training.loss.load_state_dict(self.params["loss"])

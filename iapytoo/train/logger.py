@@ -65,6 +65,7 @@ class Logger:
 
     def start(self):
         matplotlib.use("agg")
+        params_flag = self.run_id is None
         active_run = mlflow.start_run(
             experiment_id=self.experiment_id,
             run_id=self.run_id,
@@ -72,7 +73,8 @@ class Logger:
         )
         print("active_run", active_run.info.run_id)
         self.run_id = active_run.info.run_id
-        mlflow.log_params(self._params())
+        if params_flag:
+            mlflow.log_params(self._params())
 
     def close(self):
         matplotlib.use(self.agg)

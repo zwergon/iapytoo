@@ -11,15 +11,23 @@ import logging
 from iapytoo.utils.config import Config
 from iapytoo.utils.timer import Timer
 from iapytoo.utils.iterative_mean import Mean
+from iapytoo.dataset.scaling import Scaling
+from iapytoo.train.loss import Loss
+from iapytoo.train.models import ModelFactory
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.predictions import Predictions, PredictionPlotter
 from iapytoo.metrics.collection import MetricsCollection
-from iapytoo.train.models import ModelFactory
-from iapytoo.dataset.scaling import Scaling
 
 
 class Training:
+    @staticmethod
+    def seed(config: Config):
+        seed = config.seed
+        random.seed(seed)
+        numpy.random.seed(seed)
+        torch.manual_seed(seed)
+
     def __init__(
         self,
         config: Config,
@@ -45,6 +53,7 @@ class Training:
             self.valid_loop = self.__batch_loop(self._inner_validate)
 
         self.logger = None
+        self.loss = Loss()
         self._models = []
         self._optimizers = []
         self._schedulers = []
@@ -147,20 +156,22 @@ class Training:
 
         return loss.item()
 
-    def _on_epoch_ended(self, epoch, checkpoint, train_loss, valid_loss):
+    def _on_epoch_ended(self, epoch, checkpoint):
         if epoch % 10 == 0:
             self.predictions.compute(self)
             self.logger.report_prediction(epoch, self.predictions)
 
-            checkpoint.update(
-                run_id=self.logger.run_id,
-                epoch=epoch,
-                model=self.model.state_dict(),
-                optimizer=self.optimizer.state_dict(),
-                scheduler=self.scheduler.state_dict(),
-                train_loss=train_loss.state_dict(),
-                valid_loss=valid_loss.state_dict(),
-            )
+            for item in self.loss.train_loss.buffer:
+                self.logger.report_metric(
+                    epoch=item[0], metrics={f"train_loss": item[1]}
+                )
+            for item in self.loss.valid_loss.buffer:
+                self.logger.report_metric(
+                    epoch=item[0], metrics={f"valid_loss": item[1]}
+                )
+            self.loss.flush()
+
+            checkpoint.update(run_id=self.logger.run_id, epoch=epoch, training=self)
             self.logger.log_checkpoint(checkpoint=checkpoint)
 
     # ----------------------------------------
@@ -205,10 +216,7 @@ class Training:
                     mean.update(loss)
 
                     tepoch.set_postfix(loss=mean.value)
-                    if mean.iter % step == 0:
-                        self.logger.report_metric(
-                            epoch=mean.iter, metrics={f"{description}_loss": mean.value}
-                        )
+
             timer.log()
             timer.stop()
 
@@ -240,24 +248,21 @@ class Training:
                     logging.info(
                         f"Epoch {epoch} {description} iter {mean.iter} loss: {mean.value}"
                     )
-                    self.logger.report_metric(
-                        epoch=mean.iter, metrics={f"{description}_loss": mean.value}
-                    )
 
             metrics.compute()
             self.logger.report_metrics(epoch, metrics)
 
         return new_function
 
-    def __train(self, epoch, train_loader, train_loss):
+    def __train(self, epoch, train_loader):
         # Train
         self.model.train()
-        return self.train_loop(epoch, train_loader, "Train", train_loss)
+        return self.train_loop(epoch, train_loader, "Train", self.loss.train_loss)
 
-    def __validate(self, epoch, valid_loader, valid_loss):
+    def __validate(self, epoch, valid_loader):
         self.model.eval()
         with torch.no_grad():
-            return self.valid_loop(epoch, valid_loader, "Valid", valid_loss)
+            return self.valid_loop(epoch, valid_loader, "Valid", self.loss.valid_loss)
 
     # ----------------------------------------
     # Public methods
@@ -321,8 +326,7 @@ class Training:
     def fit(self, train_loader, valid_loader, run_id=None):
         num_epochs = self.config["epochs"]
 
-        train_loss = Mean.create("ewm")
-        valid_loss = Mean.create("ewm")
+        self.loss.reset()
 
         self._models = self._create_models(train_loader)
         self._optimizers = self._create_optimizers()
@@ -333,35 +337,32 @@ class Training:
         )
 
         checkpoint = CheckPoint(run_id)
-        checkpoint.init_model(self.model)
-        checkpoint.init_optimizer(self.optimizer)
-        checkpoint.init_scheduler(self.scheduler)
-        checkpoint.init_loss(train_loss, valid_loss)
+        checkpoint.init(self)
 
-        with Logger(self._config, run_id=None) as self.logger:
+        with Logger(self._config, run_id=checkpoint.run_id) as self.logger:
             active_run_name = self.logger.active_run_name()
             self.__display_device()
             self.logger.set_signature(train_loader)
             self.logger.summary()
 
-            for epoch in range(num_epochs):
+            for epoch in range(checkpoint.epoch + 1, num_epochs):
                 # Train
-                self.__train(epoch, train_loader, train_loss)
+                self.__train(epoch, train_loader)
 
                 # Test
-                self.__validate(epoch, valid_loader, valid_loss)
+                self.__validate(epoch, valid_loader)
 
                 # increments scheduler
                 self.scheduler.step()
 
-                self._on_epoch_ended(epoch, checkpoint, train_loss, valid_loss)
+                self._on_epoch_ended(epoch, checkpoint)
 
             self.logger.save_model(self.model)
 
         return {
             "run_id": self.logger.run_id,
             "run_name": active_run_name,
-            "loss": valid_loss.value,
+            "loss": self.loss.valid_loss.value,
         }
 
     def predict(self, loader, run_id=None):

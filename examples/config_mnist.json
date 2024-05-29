@@ -11,9 +11,5 @@
     "optimizer": "Adam",
     "cuda": true,
     "type": "mnist",
-    "seed": 1,
-    "batch_size": 64,
-    "epochs": 14,
-    "learning_rate": 1e-4,
-    "weight_decay": 1e-7
+    "seed": 1
 }
