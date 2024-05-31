@@ -7,9 +7,13 @@
     "n_steps_by_batch": 10,
     "ratio_train_test": 0.9,
     "num_workers": 2,
-    "loss": "NLL",
-    "optimizer": "Adam",
+    "loss": "nll",
     "cuda": true,
-    "type": "mnist",
-    "seed": 1
+    "model": "mnist",
+    "optimizer": "adam",
+    "scheduler": "step",
+    "gamma": 0.7,
+    "seed": 1,
+    "batch_size": 64,
+    "epochs": 11
 }

@@ -103,7 +103,12 @@ class Logger:
 
     def __str__(self):
         msg = "\nLogger:\n"
-        msg += f"Type Network: {self.config['type']}\n"
+        network = (
+            self.config["model"]
+            if "model" in self.config
+            else f"{self.config['discriminator']} & {self.config['generator']}"
+        )
+        msg += f"Network: {network}\n"
         msg += f"matplotlib backend: {matplotlib.rcParams['backend']}, interactive: {matplotlib.is_interactive()}\n"
         msg += f"tracking_uri: {mlflow.get_tracking_uri()}\n"
         active_run = mlflow.active_run()

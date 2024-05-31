@@ -2,12 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import datasets, transforms
+from torch.optim.lr_scheduler import LambdaLR
+
 
 from iapytoo.dataset.scaling import Scaling
 from iapytoo.predictions import PredictionPlotter
-from iapytoo.train.models import Model, ModelFactory
+from iapytoo.train.factories import Model, ModelFactory, SchedulerFactory, Scheduler
 from iapytoo.utils.config import Config
 from iapytoo.train.training import Training
+
 
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
@@ -57,6 +60,17 @@ class ConfusionPlotter(PredictionPlotter):
         return "confusion_matrix", fig
 
 
+class MnistScheduler(Scheduler):
+    def __init__(self, optimizer, config) -> None:
+        super().__init__(optimizer, config)
+
+        def lr_lambda(epoch):
+            # LR to be 0.1 * (1/1+0.01*epoch)
+            return 0.995**epoch
+
+        self.lr_scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
+
+
 class MnistTraining(Training):
     def __init__(self, config: Config) -> None:
         super().__init__(config, [], ConfusionPlotter(), None)
@@ -68,6 +82,7 @@ if __name__ == "__main__":
     from iapytoo.utils.arguments import parse_args
 
     ModelFactory().register_model("mnist", MnistModel)
+    SchedulerFactory().register_scheduler("mnist", MnistScheduler)
 
     args = parse_args()
 

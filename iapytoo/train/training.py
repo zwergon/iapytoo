@@ -13,11 +13,23 @@ from iapytoo.utils.timer import Timer
 from iapytoo.utils.iterative_mean import Mean
 from iapytoo.dataset.scaling import Scaling
 from iapytoo.train.loss import Loss
-from iapytoo.train.models import ModelFactory
+from iapytoo.train.factories import (
+    ModelFactory,
+    OptimizerFactory,
+    SchedulerFactory,
+    LossFactory,
+)
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.predictions import Predictions, PredictionPlotter
 from iapytoo.metrics.collection import MetricsCollection
+
+from enum import IntEnum
+
+
+class LossType(IntEnum):
+    TRAIN = 0
+    VALID = 1
 
 
 class Training:
@@ -53,7 +65,7 @@ class Training:
             self.valid_loop = self.__batch_loop(self._inner_validate)
 
         self.logger = None
-        self.loss = Loss()
+        self.loss = Loss(n_losses=2)
         self._models = []
         self._optimizers = []
         self._schedulers = []
@@ -72,61 +84,47 @@ class Training:
 
     @property
     def scheduler(self):
-        return self._schedulers[0]
+        if len(self._schedulers) > 0:
+            return self._schedulers[0].lr_scheduler
+
+        return None
 
     @property
     def optimizer(self):
-        return self._optimizers[0]
+        if len(self._optimizers) > 0:
+            return self._optimizers[0].torch_optimizer
+
+        return None
 
     # ----------------------------------------
     # Protected methods that may be overloaded
     # ----------------------------------------
 
-    def _get_lr(optimizer):
+    def _create_criterion(self):
+        return LossFactory().create_loss(self.config["loss"])
+
+    def _get_lr(self, optimizer):
         for param_group in optimizer.param_groups:
             return param_group["lr"]
 
     def _create_optimizers(self):
-        model = self.model
-        if self.config["optimizer"] == "Adam":
-            optimizer = optim.Adam(
-                model.parameters(),
-                lr=self.config["learning_rate"],
-                weight_decay=self.config["weight_decay"],
-            )
-        elif self.config["optimizer"] == "SGD":
-            optimizer = optim.SGD(
-                model.parameters(),
-                lr=self.config["learning_rate"],
-                weight_decay=self.config["weight_decay"],
-            )
-        else:
-            raise Exception("Unknown optimizer")
+        optimizer = OptimizerFactory().create_optimizer(
+            self.config["optimizer"], self.model, self.config
+        )
 
         return [optimizer]
 
-    def _create_criterion(self):
-        if self.config["loss"] == "MSE":
-            return nn.MSELoss()
-        elif self.config["loss"] == "NLL":
-            return nn.functional.nll_loss
-        else:
-            raise Exception("unknown loss function")
-
     def _create_models(self, loader):
         model = ModelFactory().create_model(
-            self.config["type"], self.config, loader, self.device
+            self.config["model"], self.config, loader, self.device
         )
 
         return [model]
 
     def _create_schedulers(self, optimizer):
-        # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
-        def lr_lambda(epoch):
-            # LR to be 0.1 * (1/1+0.01*epoch)
-            return 0.995**epoch
-
-        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+        scheduler = SchedulerFactory().create_scheduler(
+            self.config["scheduler"], optimizer, self.config
+        )
         return [scheduler]
 
     def _inner_train(self, batch, batch_idx, metrics: MetricsCollection):
@@ -157,15 +155,18 @@ class Training:
         return loss.item()
 
     def _on_epoch_ended(self, epoch, checkpoint):
+        lr = self._get_lr(self.optimizer)
+        self.logger.report_metric(epoch=epoch, metrics={"learning_rate": lr})
+
         if epoch % 10 == 0:
             self.predictions.compute(self)
             self.logger.report_prediction(epoch, self.predictions)
 
-            for item in self.loss.train_loss.buffer:
+            for item in self.loss(LossType.TRAIN).buffer:
                 self.logger.report_metric(
                     epoch=item[0], metrics={f"train_loss": item[1]}
                 )
-            for item in self.loss.valid_loss.buffer:
+            for item in self.loss(LossType.VALID).buffer:
                 self.logger.report_metric(
                     epoch=item[0], metrics={f"valid_loss": item[1]}
                 )
@@ -178,7 +179,7 @@ class Training:
     # Private methods
     # ----------------------------------------
 
-    def __display_device(self):
+    def _display_device(self):
         use_cuda = torch.cuda.is_available()
         if self.config["cuda"] and use_cuda:
             msg = "\n__CUDA\n"
@@ -199,9 +200,6 @@ class Training:
         """
 
         def new_function(epoch, loader, description, mean: Mean):
-            size_by_batch = len(loader)
-            step = max(size_by_batch // self.config["n_steps_by_batch"], 1)
-
             metrics = MetricsCollection(description, self.metric_creators)
             metrics.to(self.device)
 
@@ -257,12 +255,14 @@ class Training:
     def __train(self, epoch, train_loader):
         # Train
         self.model.train()
-        return self.train_loop(epoch, train_loader, "Train", self.loss.train_loss)
+        return self.train_loop(epoch, train_loader, "Train", self.loss(LossType.TRAIN))
 
     def __validate(self, epoch, valid_loader):
         self.model.eval()
         with torch.no_grad():
-            return self.valid_loop(epoch, valid_loader, "Valid", self.loss.valid_loss)
+            return self.valid_loop(
+                epoch, valid_loader, "Valid", self.loss(LossType.VALID)
+            )
 
     # ----------------------------------------
     # Public methods
@@ -276,10 +276,10 @@ class Training:
         self._optimizers = self._create_optimizers()
 
         lr = self.config["learning_rate"]
-        mult = (lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
+        self.config["gamma"] = (lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
         self.optimizer.param_groups[0]["lr"] = 1e-8
         self._schedulers = [
-            torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=mult)
+            SchedulerFactory().create_scheduler("step", self.optimizer, self.config)
         ]
 
         train_time = Timer()
@@ -341,7 +341,7 @@ class Training:
 
         with Logger(self._config, run_id=checkpoint.run_id) as self.logger:
             active_run_name = self.logger.active_run_name()
-            self.__display_device()
+            self._display_device()
             self.logger.set_signature(train_loader)
             self.logger.summary()
 
@@ -353,7 +353,8 @@ class Training:
                 self.__validate(epoch, valid_loader)
 
                 # increments scheduler
-                self.scheduler.step()
+                if self.scheduler is not None:
+                    self.scheduler.step()
 
                 self._on_epoch_ended(epoch, checkpoint)
 
@@ -362,7 +363,7 @@ class Training:
         return {
             "run_id": self.logger.run_id,
             "run_name": active_run_name,
-            "loss": self.loss.valid_loss.value,
+            "loss": self.loss(LossType.VALID).value,
         }
 
     def predict(self, loader, run_id=None):

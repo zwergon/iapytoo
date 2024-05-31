@@ -7,11 +7,11 @@
     "n_steps_by_batch": 10,
     "ratio_train_test": 0.9,
     "num_workers": 2,
-    "type": "CNN",
+    "model": "CNN",
     "kernel_size": 3,
     "dropout": 0,
-    "loss": "MSE",
-    "optimizer": "Adam",
+    "loss": "mse",
+    "optimizer": "adam",
     "cuda": true,
     "seed":true
 }
