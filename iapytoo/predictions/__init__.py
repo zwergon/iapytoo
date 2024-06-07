@@ -8,18 +8,12 @@ from iapytoo.predictions.plotters import PredictionPlotter
 class Predictions:
     def __init__(
         self, loader, norm=False, prediction_plotter: PredictionPlotter = None
-    ) -> None:
+    ):
         self.loader = loader
         dataset = self.loader.dataset
         self.norm = norm
-        _, Y = dataset[0]
-        if isinstance(Y, numbers.Real):
-            y_shape = (1,)
-        else:
-            y_shape = Y.shape
-        shape = (len(dataset),) + y_shape
-        self.predicted = np.zeros(shape=shape)
-        self.actual = np.zeros(shape=shape)
+        self.predicted = []
+        self.actual = []
 
         self.prediction_plotter = self.__attach_plotter(prediction_plotter)
 
@@ -30,19 +24,19 @@ class Predictions:
         return prediction_plotter
 
     def compute(self, training):
-        model = training.model
         device = training.device
         y_scaling = training.y_scaling
+        self.predicted = []
+        self.actual = []
 
-        idx = 0
+        model = training.model  # first model is generator in gan !
         model.eval()
         with torch.no_grad():
             for X, Y in self.loader:
                 X = X.to(device)
                 Y = Y.to(device)
                 Y_hat = model.predict(X)
-
-                for i in range(Y.shape[0]):
+                for i in range(Y_hat.shape[0]):
                     predicted = Y_hat[i].detach().cpu()
                     actual = Y[i].detach().cpu()
 
@@ -50,12 +44,31 @@ class Predictions:
                         predicted = y_scaling.inv(predicted)
                         actual = y_scaling.inv(actual)
 
-                    self.predicted[idx] = predicted
-                    self.actual[idx] = actual
-                    idx = idx + 1
+                    self.predicted.append(predicted)
+                    self.actual.append(actual)
 
     def plot(self, epoch):
         if self.prediction_plotter is not None:
             return self.prediction_plotter.plot(epoch)
         else:
             return None, None
+
+
+class GenerativePredictions(Predictions):
+    def __init__(
+        self, loader, norm=False, prediction_plotter: PredictionPlotter = None
+    ):
+        super().__init__(loader, norm, prediction_plotter)
+
+    def compute(self, training):
+        self.predicted = []
+        device = training.device
+        generator = training.generator
+        generator.eval()
+        with torch.no_grad():
+            for X in self.loader:
+                X = X.to(device)
+                Y_hat = generator.predict(X)
+                for i in range(Y_hat.shape[0]):
+                    predicted = Y_hat[i].detach().cpu()
+                    self.predicted.append(predicted)

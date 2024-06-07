@@ -9,9 +9,20 @@ class ModelError(Exception):
         super().__init__(*args)
 
 
+class WeightInitiator:
+    def __call__(self, m):
+        """method to be overloaded for weight initialization by use of 'model.apply(initiator)'"""
+        classname = m.__class__.__name__
+        print(f"init {classname}")
+
+
 class Model(nn.Module):
     def __init__(self, loader, config) -> None:
         super().__init__()
+
+    def weight_initiator(self):
+        """return an WeightInitiator subclass that will be used to initialize weights of this model"""
+        return None
 
     def predict(self, X):
         return self.forward(X)
@@ -40,9 +51,13 @@ class ModelFactory(metaclass=MetaSingleton):
             nn.Module: pytorch model
         """
         try:
-            model = self.models_dict[kind](loader, config)
+            model: Model = self.models_dict[kind](loader, config)
         except KeyError:
             raise ModelError(f"model {kind} is not handled")
+
+        initiator = model.weight_initiator()
+        if initiator is not None:
+            model.apply(initiator)
 
         model = model.to(device=device)
         return model
@@ -61,10 +76,21 @@ class Optimizer:
 class AdamOptimizer(Optimizer):
     def __init__(self, model, config) -> None:
         super().__init__(model, config)
-        self.torch_optimizer = to.Adam(
-            model.parameters(),
-            lr=config["learning_rate"],
-            weight_decay=config["weight_decay"],
+
+        kwargs = {"lr": config["learning_rate"]}
+        if "weight_decay" in config:
+            kwargs["weight_decay"] = config["weight_decay"]
+        if "betas" in config:
+            kwargs["betas"] = config["betas"]
+
+        self.torch_optimizer = to.Adam(model.parameters(), **kwargs)
+
+
+class RMSpropOptimizer(Optimizer):
+    def __init__(self, model, config):
+        super().__init__(model, config)
+        self.torch_optimizer = to.RMSprop(
+            model.parameters(), lr=config["learning_rate"]
         )
 
 
@@ -80,7 +106,11 @@ class SGDOptimizer(Optimizer):
 
 class OptimizerFactory(metaclass=MetaSingleton):
     def __init__(self) -> None:
-        self.optimizers_dict = {"adam": AdamOptimizer, "sgd": SGDOptimizer}
+        self.optimizers_dict = {
+            "adam": AdamOptimizer,
+            "sgd": SGDOptimizer,
+            "rmsprop": RMSpropOptimizer,
+        }
 
     def register_optimizer(self, key, optimizer_cls):
         self.optimizers_dict[key] = optimizer_cls
