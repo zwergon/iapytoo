@@ -17,7 +17,7 @@
     "gamma": 0.7,
     "betas": [0.5, 0.99],
     "lambda_gp": 10,
-    "noise_dim": 64,
+    "noise_dim": 100,
     "seed": 1,
     "batch_size": 256,
     "epochs": 11,

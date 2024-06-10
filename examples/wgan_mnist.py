@@ -10,7 +10,7 @@ from iapytoo.utils.config import Config
 
 
 from iapytoo.train.factories import Model, ModelFactory, OptimizerFactory
-from iapytoo.predictions.plotters import PredictionPlotter
+from iapytoo.predictions.plotters import PredictionPlotter, Fake2DPlotter
 
 import torch
 import torch.nn as nn
@@ -32,34 +32,12 @@ class MNISTInitiator(WeightInitiator):
             torch.nn.init.constant_(m.bias, 0)
 
 
+
 class Generator(Model):
-    """
-    Generator Class
-    Values:
-        z_dim: the dimension of the noise vector, a scalar
-        im_chan: the number of channels in the images, fitted for the dataset used, a scalar
-              (MNIST is black-and-white, so 1 channel is your default)
-        hidden_dim: the inner dimension, a scalar
+    """  See https://github.com/Zeleni9/pytorch-wgan
     """
 
-    def __init__(self, loader, config):
-        super(Generator, self).__init__(loader, config)
-        self.z_dim = config["noise_dim"]
-        im_chan = 1
-        hidden_dim = 64
-        # Build the neural network
-        self.gen = nn.Sequential(
-            self.make_gen_block(self.z_dim, hidden_dim * 4),
-            self.make_gen_block(
-                hidden_dim * 4, hidden_dim * 2, kernel_size=4, stride=1
-            ),
-            self.make_gen_block(hidden_dim * 2, hidden_dim),
-            self.make_gen_block(hidden_dim, im_chan, kernel_size=4, final_layer=True),
-        )
-
-    def weight_initiator(self):
-        return MNISTInitiator()
-
+    
     @staticmethod
     def get_noise(n_samples, z_dim, device="cpu"):
         """
@@ -72,48 +50,33 @@ class Generator(Model):
         """
         return torch.randn(n_samples, z_dim, device=device)
 
-    def make_gen_block(
-        self,
-        input_channels,
-        output_channels,
-        kernel_size=3,
-        stride=2,
-        final_layer=False,
-    ):
-        """
-        Function to return a sequence of operations corresponding to a generator block of DCGAN,
-        corresponding to a transposed convolution, a batchnorm (except for in the last layer), and an activation.
-        Parameters:
-            input_channels: how many channels the input feature representation has
-            output_channels: how many channels the output feature representation should have
-            kernel_size: the size of each convolutional filter, equivalent to (kernel_size, kernel_size)
-            stride: the stride of the convolution
-            final_layer: a boolean, true if it is the final layer and false otherwise
-                      (affects activation and batchnorm)
-        """
+    def __init__(self, loader, config):
+        super(Generator, self).__init__(loader, config)
+        self.z_dim = config["noise_dim"]
+        # Filters [1024, 512, 256]
+        # Input_dim = 100
+        # Output_dim = 1 (number of channels)
+        self.main_module = nn.Sequential(
+            # Z latent vector 100
+            nn.ConvTranspose2d(in_channels=self.z_dim, out_channels=1024, kernel_size=4, stride=1, padding=0),
+            nn.BatchNorm2d(num_features=1024),
+            nn.ReLU(True),
 
-        #     Steps:
-        #       1) Do a transposed convolution using the given parameters.
-        #       2) Do a batchnorm, except for the last layer.
-        #       3) Follow each batchnorm with a ReLU activation.
-        #       4) If its the final layer, use a Tanh activation after the deconvolution.
+            # State (1024x4x4)
+            nn.ConvTranspose2d(in_channels=1024, out_channels=512, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=512),
+            nn.ReLU(True),
 
-        # Build the neural block
-        if not final_layer:
-            return nn.Sequential(
-                nn.ConvTranspose2d(
-                    input_channels, output_channels, kernel_size, stride
-                ),
-                nn.BatchNorm2d(output_channels),
-                nn.ReLU(inplace=True),
-            )
-        else:  # Final Layer
-            return nn.Sequential(
-                nn.ConvTranspose2d(
-                    input_channels, output_channels, kernel_size, stride
-                ),
-                nn.Tanh(),
-            )
+            # State (512x8x8)
+            nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(True),
+
+            # State (256x16x16)
+            nn.ConvTranspose2d(in_channels=256, out_channels=1, kernel_size=4, stride=2, padding=1))
+            # output of main module --> Image (Cx32x32)
+
+        self.output = nn.Tanh()
 
     def unsqueeze_noise(self, noise):
         """
@@ -132,77 +95,51 @@ class Generator(Model):
             noise: a noise tensor with dimensions (n_samples, z_dim)
         """
         x = self.unsqueeze_noise(noise)
-        return self.gen(x)
+        x = self.main_module(x)
+        return self.output(x)
+
 
 
 class Discriminator(Model):
-    """
-    Discriminator Class
-    Values:
-        im_chan: the number of channels in the images, fitted for the dataset used, a scalar
-              (MNIST is black-and-white, so 1 channel is your default)
-    hidden_dim: the inner dimension, a scalar
-    """
-
     def __init__(self, loader, config):
         super(Discriminator, self).__init__(loader, config)
-        im_chan = 1
-        hidden_dim = 16
-        self.disc = nn.Sequential(
-            self.make_disc_block(im_chan, hidden_dim),
-            self.make_disc_block(hidden_dim, hidden_dim * 2),
-            self.make_disc_block(hidden_dim * 2, 1, final_layer=True),
-        )
+        # Filters [256, 512, 1024]
+        # Input_dim = 1 (Cx64x64)
+        # Output_dim = 1
+        self.main_module = nn.Sequential(
+            # Omitting batch normalization in critic because our new penalized training objective (WGAN with gradient penalty) is no longer valid
+            # in this setting, since we penalize the norm of the critic's gradient with respect to each input independently and not the enitre batch.
+            # There is not good & fast implementation of layer normalization --> using per instance normalization nn.InstanceNorm2d()
+            # Image (Cx32x32)
+            nn.Conv2d(in_channels=1, out_channels=256, kernel_size=4, stride=2, padding=1),
+            nn.InstanceNorm2d(256, affine=True),
+            nn.LeakyReLU(0.2, inplace=True),
 
-    def weight_initiator(self):
-        return MNISTInitiator()
+            # State (256x16x16)
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=4, stride=2, padding=1),
+            nn.InstanceNorm2d(512, affine=True),
+            nn.LeakyReLU(0.2, inplace=True),
 
-    def make_disc_block(
-        self,
-        input_channels,
-        output_channels,
-        kernel_size=4,
-        stride=2,
-        final_layer=False,
-    ):
-        """
-        Function to return a sequence of operations corresponding to a discriminator block of DCGAN,
-        corresponding to a convolution, a batchnorm (except for in the last layer), and an activation.
-        Parameters:
-            input_channels: how many channels the input feature representation has
-            output_channels: how many channels the output feature representation should have
-            kernel_size: the size of each convolutional filter, equivalent to (kernel_size, kernel_size)
-            stride: the stride of the convolution
-            final_layer: a boolean, true if it is the final layer and false otherwise
-                      (affects activation and batchnorm)
-        """
-        #     Steps:
-        #       1) Add a convolutional layer using the given parameters.
-        #       2) Do a batchnorm, except for the last layer.
-        #       3) Follow each batchnorm with a LeakyReLU activation with slope 0.2.
-        #       Note: Don't use an activation on the final layer
+            # State (512x8x8)
+            nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=4, stride=2, padding=1),
+            nn.InstanceNorm2d(1024, affine=True),
+            nn.LeakyReLU(0.2, inplace=True))
+            # output of main module --> State (1024x4x4)
 
-        # Build the neural block
-        if not final_layer:
-            return nn.Sequential(
-                nn.Conv2d(input_channels, output_channels, kernel_size, stride),
-                nn.BatchNorm2d(output_channels),
-                nn.LeakyReLU(0.2, inplace=True),
-            )
-        else:  # Final Layer
-            return nn.Sequential(
-                nn.Conv2d(input_channels, output_channels, kernel_size, stride)
-            )
+        self.output = nn.Sequential(
+            # The output of D is no longer a probability, we do not apply sigmoid at the output of D.
+            nn.Conv2d(in_channels=1024, out_channels=1, kernel_size=4, stride=1, padding=0))
 
-    def forward(self, image):
-        """
-        Function for completing a forward pass of the discriminator: Given an image tensor,
-        returns a 1-dimension tensor representing fake/real.
-        Parameters:
-            image: a flattened image tensor with dimension (im_dim)
-        """
-        disc_pred = self.disc(image)
-        return disc_pred.view(len(disc_pred), -1)
+
+    def forward(self, x):
+        x = self.main_module(x)
+        return self.output(x)
+
+    def feature_extraction(self, x):
+        # Use discriminator for feature extraction then flatten to vector of 16384
+        x = self.main_module(x)
+        return x.view(-1, 1024*4*4)
+
 
 
 class LatentDataset(Dataset):
@@ -217,19 +154,6 @@ class LatentDataset(Dataset):
         return self.noise[idx, :]
 
 
-class GridPlotter(PredictionPlotter):
-    def __init__(self, n_plot=4):
-        super().__init__()
-        self.n_plot = n_plot
-
-    def plot(self, epoch):
-        fake_list = self.predictions.predicted
-        grid_img = torchvision.utils.make_grid(fake_list, nrow=self.n_plot)
-
-        f, ax = plt.subplots()
-        ax.imshow(grid_img.permute(1, 2, 0))
-
-        return "Generated", f
 
 
 if __name__ == "__main__":
@@ -237,6 +161,7 @@ if __name__ == "__main__":
 
     transform = transforms.Compose(
         [
+            transforms.Resize(32),
             transforms.ToTensor(),
             transforms.Normalize((0.5,), (0.5,)),
         ]
@@ -260,5 +185,5 @@ if __name__ == "__main__":
     model_factory.register_model("generator", Generator)
     model_factory.register_model("critic", Discriminator)
 
-    wgan = WGAN(config, prediction_plotter=GridPlotter())
+    wgan = WGAN(config, prediction_plotter=Fake2DPlotter())
     wgan.fit(train_loader=trainloader, valid_loader=valid_loader, run_id=None)

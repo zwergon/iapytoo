@@ -1,3 +1,4 @@
+import torchvision
 import matplotlib.pyplot as plt
 
 
@@ -20,7 +21,7 @@ class ScatterPlotter(PredictionPlotter):
         return "actual_versus_predicted", fig
 
 
-class FakePlotter(PredictionPlotter):
+class Fake1DPlotter(PredictionPlotter):
     def __init__(self, n_plot=4):
         super().__init__()
         self.n_plot = n_plot
@@ -33,5 +34,20 @@ class FakePlotter(PredictionPlotter):
                 a[i][j].plot(fake[i * self.n_plot + j].view(-1))
                 a[i][j].set_xticks(())
                 a[i][j].set_yticks(())
+
+        return "Generated", f
+
+
+class Fake2DPlotter(PredictionPlotter):
+    def __init__(self, n_plot=4):
+        super().__init__()
+        self.n_plot = n_plot
+
+    def plot(self, epoch):
+        fake_list = self.predictions.predicted
+        grid_img = torchvision.utils.make_grid(fake_list, nrow=self.n_plot)
+
+        f, ax = plt.subplots()
+        ax.imshow(grid_img.permute(1, 2, 0))
 
         return "Generated", f
