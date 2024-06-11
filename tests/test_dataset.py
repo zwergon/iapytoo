@@ -8,7 +8,7 @@ class TestDataset(unittest.TestCase):
         super().__init__(methodName)
 
     def test_dummy_dataset(self):
-        dataset = DummyVisionDataset("./dummy")
+        dataset = DummyVisionDataset()
 
         # get statistics properties of targets 1D
         print(np.mean(dataset.targets), np.std(dataset.targets))

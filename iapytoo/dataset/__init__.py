@@ -4,8 +4,8 @@ from torchvision.datasets.vision import VisionDataset
 
 
 class DummyVisionDataset(VisionDataset):
-    def __init__(self, root: str) -> None:
-        super().__init__(root)
+    def __init__(self):
+        super().__init__("./dummy")
 
         self.length = 10
         self.dim = 4

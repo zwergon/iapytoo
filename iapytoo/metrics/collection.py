@@ -1,10 +1,119 @@
-from torchmetrics.metric import Metric
+import torch
+from iapytoo.utils.meta_singleton import MetaSingleton
 
+class Metric:
+
+    def __init__(self, name, config, loader):
+        self.name = name
+        X, Y = next(iter(loader))
+        self.output_size = (0,) + tuple(Y.shape)
+        print(self.output_size)
+
+        self.predicted = torch.zeros(size=self.output_size)
+
+    @property
+    def device(self):
+        return self.predicted.device
+
+    def to(self, device):
+        self.predicted = self.predicted.to(device)
+        return self
+
+    def update(self, Y_hat, Y):
+        self.predicted = torch.cat((self.predicted, Y_hat.view(1, -1)), dim=0)
+
+    def reset(self):
+        device = self.device
+        self.predicted = torch.zeros(size=self.output_size, device=device)
+
+    def compute(self):
+        pass
+
+
+class R2Metric(Metric):
+    def __init__(self, config, loader) -> None:
+        super(R2Metric, self).__init__("r2", config, loader)
+        self.target = torch.zeros(size=self.output_size)
+
+    def to(self, device):
+        super().to(device)
+        self.target = self.target.to(device)
+        return self
+
+    def update(self, Y_hat, Y):
+        super().update(Y_hat, Y)
+        self.target = torch.cat((self.target, Y.view(1, -1)), dim=0)
+
+    def compute(self):
+
+        # Compute the mean of the target values
+        target_mean = torch.mean(self.target, dim=0)
+        print(self.target)
+       
+        # Compute the total sum of squares (SS_tot)
+        ss_tot = torch.sum((self.target - target_mean) ** 2, dim=0)
+        print(ss_tot)
+
+        # Compute the residual sum of squares (SS_res)
+        ss_res = torch.sum((self.target - self.predicted) ** 2, dim=0)
+        print(ss_res)
+
+        print(ss_res/ss_tot)
+        # Compute the R² score
+        r2_score = 1 - ss_res / ss_tot
+        print("r2_score", r2_score)
+
+        # Return the mean R² score across all output dimensions
+        return { "r2_score": r2_score }
+
+    def reset(self):
+        super().reset()
+        self.target = torch.zeros(size=self.output_size, device=self.device)
+
+
+class MetricError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+class MetricFactory(metaclass=MetaSingleton):
+    def __init__(self) -> None:
+        self.metrics_dict = { "r2": R2Metric }
+
+    def register_metric(self, key, metric_cls):
+        self.metrics_dict[key] = metric_cls
+
+    def create_metric(self, kind: str, config: dict, loader, device="cpu"):
+        """Creates an architecture of NN
+
+        Args:
+            kind (str): kind of NN, key for the factory
+            config (dict): config dict to use to initialize metric
+            device (str, optional): Defaults to "cpu".
+
+        Raises:
+            MetricError: error raised if no architecture fit kind key
+
+        Returns:
+            iapytoo.metrics.Metric: metric
+        """
+        try:
+            metric: Metric = self.metrics_dict[kind](config, loader)
+        except KeyError:
+            raise MetricError(f"metric {kind} is not handled")
+
+        metric = metric.to(device=device)
+        return metric
 
 class MetricsCollection(Metric):
-    def __init__(self, tag: str, metric_creators: list, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.metrics = {f"{tag}_{c.name}": c.create() for c in metric_creators}
+    def __init__(self, tag: str, metric_names: list, config, loader):
+        super().__init__(tag, config, loader)
+        self.metrics = {}
+        factory = MetricFactory()
+        try:
+            for n in metric_names:
+                self.metrics[f"{tag}_{n}"] = factory.create_metric(n, config, loader)  
+        except MetricError as er:
+            print(f"Unable to create metric : {er}")
         self.results = {}
 
     def to(self, device):
