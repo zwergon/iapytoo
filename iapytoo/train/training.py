@@ -43,7 +43,7 @@ class Training:
     def __init__(
         self,
         config: Config,
-        metric_creators: list = [],
+        metric_names: list = [],
         prediction_plotter: PredictionPlotter = None,
         y_scaling: Scaling = None,
     ) -> None:
@@ -71,7 +71,7 @@ class Training:
         self._schedulers = []
         self.predictions = None
         self.y_scaling = y_scaling
-        self.metric_creators = metric_creators
+        self.metric_names = metric_names
         self.prediction_plotter = prediction_plotter
 
     @property
@@ -229,7 +229,7 @@ class Training:
         """
 
         def new_function(epoch, loader, description, mean: Mean):
-            metrics = MetricsCollection(description, self.metric_creators)
+            metrics = MetricsCollection(description, self.metric_names, self.config, loader)
             metrics.to(self.device)
 
             timer = Timer()
@@ -263,7 +263,7 @@ class Training:
             size_by_batch = len(loader)
             step = max(size_by_batch // self.config["n_steps_by_batch"], 1)
 
-            metrics = MetricsCollection(description, self.metric_creators)
+            metrics = MetricsCollection(description, self.metric_names, self.config, loader)
             metrics.to(self.device)
 
             for batch_idx, batch in enumerate(loader):

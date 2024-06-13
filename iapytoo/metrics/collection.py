@@ -3,13 +3,17 @@ from iapytoo.utils.meta_singleton import MetaSingleton
 
 class Metric:
 
-    def __init__(self, name, config, loader):
+    def __init__(self, name, config, loader, with_target=True):
+        self.with_target = with_target
         self.name = name
         X, Y = next(iter(loader))
         self.output_size = (0,) + tuple(Y.shape)
         print(self.output_size)
 
         self.predicted = torch.zeros(size=self.output_size)
+        if self.with_target:
+            self.target = torch.zeros(size=self.output_size)
+        self.results = {}
 
     @property
     def device(self):
@@ -17,14 +21,20 @@ class Metric:
 
     def to(self, device):
         self.predicted = self.predicted.to(device)
+        if self.with_target:
+            self.target = self.target.to(device)
         return self
 
     def update(self, Y_hat, Y):
         self.predicted = torch.cat((self.predicted, Y_hat.view(1, -1)), dim=0)
+        if self.with_target:
+            self.target = torch.cat((self.target, Y.view(1, -1)), dim=0)
 
     def reset(self):
         device = self.device
         self.predicted = torch.zeros(size=self.output_size, device=device)
+        if self.with_target:
+            self.target = torch.zeros(size=self.output_size, device=self.device)
 
     def compute(self):
         pass
@@ -33,22 +43,12 @@ class Metric:
 class R2Metric(Metric):
     def __init__(self, config, loader) -> None:
         super(R2Metric, self).__init__("r2", config, loader)
-        self.target = torch.zeros(size=self.output_size)
-
-    def to(self, device):
-        super().to(device)
-        self.target = self.target.to(device)
-        return self
-
-    def update(self, Y_hat, Y):
-        super().update(Y_hat, Y)
-        self.target = torch.cat((self.target, Y.view(1, -1)), dim=0)
-
+       
     def compute(self):
 
         # Compute the mean of the target values
         target_mean = torch.mean(self.target, dim=0)
-        print(self.target)
+        print(self.target.shape)
        
         # Compute the total sum of squares (SS_tot)
         ss_tot = torch.sum((self.target - target_mean) ** 2, dim=0)
@@ -64,11 +64,30 @@ class R2Metric(Metric):
         print("r2_score", r2_score)
 
         # Return the mean R² score across all output dimensions
-        return { "r2_score": r2_score }
+        return { self.name: r2_score }
 
-    def reset(self):
-        super().reset()
-        self.target = torch.zeros(size=self.output_size, device=self.device)
+class MSMetric(Metric):
+    def __init__(self, config, loader) -> None:
+        super(MSMetric, self).__init__("mean_square", config, loader)
+
+    def _compute(self):
+        diff = self.predicted - self.target
+        return torch.mean(diff * diff, dim=0)
+        
+    def compute(self):
+        ms = self.compute()
+        self.results = {self.name: ms}
+        return self.results
+
+class RMSMetric(MSMetric):
+    def __init__(self, config, loader) -> None:
+        super(RMSMetric, self).__init__(config, loader)
+        self.name = "rms"
+       
+    def compute(self):
+        mean_squared_error = super()._compute()
+        self.results = {self.name: torch.sqrt(mean_squared_error)}
+        return self.results
 
 
 class MetricError(Exception):
@@ -77,7 +96,7 @@ class MetricError(Exception):
 
 class MetricFactory(metaclass=MetaSingleton):
     def __init__(self) -> None:
-        self.metrics_dict = { "r2": R2Metric }
+        self.metrics_dict = { "r2": R2Metric, "rms": RMSMetric}
 
     def register_metric(self, key, metric_cls):
         self.metrics_dict[key] = metric_cls
@@ -114,7 +133,7 @@ class MetricsCollection(Metric):
                 self.metrics[f"{tag}_{n}"] = factory.create_metric(n, config, loader)  
         except MetricError as er:
             print(f"Unable to create metric : {er}")
-        self.results = {}
+        
 
     def to(self, device):
         for m in self.metrics.values():
@@ -128,7 +147,9 @@ class MetricsCollection(Metric):
 
     # overwrite
     def compute(self):
-        self.results = {k: m.compute() for k, m in self.metrics.items()}
+        for k, m in self.metrics.items():
+            results = m.compute()
+            self.results.update(results) 
         return self.results
 
     # overwrite

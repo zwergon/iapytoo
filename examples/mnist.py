@@ -7,14 +7,15 @@ from torch.optim.lr_scheduler import LambdaLR
 
 from iapytoo.dataset.scaling import Scaling
 from iapytoo.predictions import PredictionPlotter
+from iapytoo.predictions.plotters import ConfusionPlotter
 from iapytoo.train.factories import Model, ModelFactory, SchedulerFactory, Scheduler
 from iapytoo.utils.config import Config
 from iapytoo.train.training import Training
 
 
-from sklearn.metrics import confusion_matrix
+
 import matplotlib.pyplot as plt
-import seaborn as sns
+
 
 
 class MnistModel(Model):
@@ -47,17 +48,6 @@ class MnistModel(Model):
         return torch.argmax(output, dim=1)
 
 
-class ConfusionPlotter(PredictionPlotter):
-    def __init__(self):
-        super().__init__()
-
-    def plot(self, epoch):
-        # Calcul de la matrice de confusion
-        cm = confusion_matrix(self.predictions.predicted, self.predictions.actual)
-        fig, ax = plt.subplots(figsize=(10, 5))
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False)
-
-        return "confusion_matrix", fig
 
 
 class MnistScheduler(Scheduler):

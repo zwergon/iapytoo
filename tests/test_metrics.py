@@ -23,7 +23,7 @@ class TestMetrics(unittest.TestCase):
             dataset, batch_size=config["batch_size"], shuffle=True, drop_last=True
         )
         
-        collection = MetricsCollection("test", ["r2"], config, loader)
+        collection = MetricsCollection("test", ["r2", "rms"], config, loader)
 
         for X, Y in loader:
             Y_hat = TestMetrics.compute(Y)
@@ -31,6 +31,7 @@ class TestMetrics(unittest.TestCase):
             collection.update(Y_hat, Y)
 
         collection.compute()
+        print(collection.results)
 
 
 

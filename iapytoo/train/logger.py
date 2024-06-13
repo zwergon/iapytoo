@@ -160,10 +160,11 @@ class Logger:
 
     def report_prediction(self, epoch, predictions: Predictions):
         with self.lock:
-            name, fig = predictions.plot(epoch)
-            if fig is not None:
-                mlflow.log_figure(fig, f"{name}_{epoch}.png")
-                plt.close(fig)
+            plots = predictions.plot(epoch)
+            for name, fig in plots.items():
+                if fig is not None:
+                    mlflow.log_figure(fig, artifact_file=f"{name}/{name}_{epoch}.png")
+                    plt.close(fig)
 
     def report_findlr(self, lrs, losses):
         fig = lrfind_plot(lrs, losses)

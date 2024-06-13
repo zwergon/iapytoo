@@ -10,7 +10,6 @@ class Predictions:
         self, loader, norm=False, prediction_plotter: PredictionPlotter = None
     ):
         self.loader = loader
-        dataset = self.loader.dataset
         self.norm = norm
         self.predicted = []
         self.actual = []
@@ -51,7 +50,7 @@ class Predictions:
         if self.prediction_plotter is not None:
             return self.prediction_plotter.plot(epoch)
         else:
-            return None, None
+            return {} # nothing to plot
 
 
 class GenerativePredictions(Predictions):
