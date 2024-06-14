@@ -10,6 +10,9 @@ class PredictionPlotter:
         self.predictions = None
         self.title = title
 
+    def connect(self, predictions):
+        self.predictions = predictions
+
     def plot(self, epoch):
         return None
 
@@ -20,10 +23,14 @@ class CollectionPlotters(PredictionPlotter):
         super(CollectionPlotters, self).__init__(title)
         self.plotters = []
 
+    def connect(self, predictions):
+        for plotter in self.plotters:
+            plotter.connect(predictions)
+
     def plot(self, epoch):
         plots = {}
         for p in self.plotters:
-            plots.append(p.plot(epoch))
+            plots.update(p.plot(epoch))
 
         return plots
 
@@ -56,7 +63,7 @@ class Fake1DPlotter(PredictionPlotter):
         super().__init__(title="generated_fake1d")
         self.n_plot = n_plot
 
-    def plot(self, epocht):
+    def plot(self, epoch):
         fake = self.predictions.predicted
         f, a = plt.subplots(self.n_plot, self.n_plot, figsize=(8, 8))
         for i in range(self.n_plot):
@@ -75,7 +82,7 @@ class DSPPlotter(PredictionPlotter):
         self.nperseg = nperseg
 
     def plot(self, epoch):
-        fake = self.predictions.predicted[0]
+        fake = self.predictions.predicted[0].view(-1)
         f, ax = plt.subplots()
         
         frequencies, power_spectrum = welch(fake, fs=self.f_max, nperseg=self.nperseg)  

@@ -18,7 +18,7 @@ class Predictions:
 
     def __attach_plotter(self, prediction_plotter: PredictionPlotter):
         if prediction_plotter is not None:
-            prediction_plotter.predictions = self
+            prediction_plotter.connect(self)
 
         return prediction_plotter
 
