@@ -1,14 +1,13 @@
 import torch
 from iapytoo.utils.meta_singleton import MetaSingleton
 
-class Metric:
 
+class Metric:
     def __init__(self, name, config, loader, with_target=True):
         self.with_target = with_target
         self.name = name
         X, Y = next(iter(loader))
         self.output_size = (0,) + tuple(Y.shape)
-        print(self.output_size)
 
         self.predicted = torch.zeros(size=self.output_size)
         if self.with_target:
@@ -43,13 +42,12 @@ class Metric:
 class R2Metric(Metric):
     def __init__(self, config, loader) -> None:
         super(R2Metric, self).__init__("r2", config, loader)
-       
-    def compute(self):
 
+    def compute(self):
         # Compute the mean of the target values
         target_mean = torch.mean(self.target, dim=0)
         print(self.target.shape)
-       
+
         # Compute the total sum of squares (SS_tot)
         ss_tot = torch.sum((self.target - target_mean) ** 2, dim=0)
         print(ss_tot)
@@ -58,13 +56,14 @@ class R2Metric(Metric):
         ss_res = torch.sum((self.target - self.predicted) ** 2, dim=0)
         print(ss_res)
 
-        print(ss_res/ss_tot)
+        print(ss_res / ss_tot)
         # Compute the R² score
         r2_score = 1 - ss_res / ss_tot
         print("r2_score", r2_score)
 
         # Return the mean R² score across all output dimensions
-        return { self.name: r2_score }
+        return {self.name: r2_score}
+
 
 class MSMetric(Metric):
     def __init__(self, config, loader) -> None:
@@ -73,17 +72,18 @@ class MSMetric(Metric):
     def _compute(self):
         diff = self.predicted - self.target
         return torch.mean(diff * diff, dim=0)
-        
+
     def compute(self):
         ms = self.compute()
         self.results = {self.name: ms}
         return self.results
 
+
 class RMSMetric(MSMetric):
     def __init__(self, config, loader) -> None:
         super(RMSMetric, self).__init__(config, loader)
         self.name = "rms"
-       
+
     def compute(self):
         mean_squared_error = super()._compute()
         self.results = {self.name: torch.sqrt(mean_squared_error)}
@@ -94,9 +94,10 @@ class MetricError(Exception):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
 
+
 class MetricFactory(metaclass=MetaSingleton):
     def __init__(self) -> None:
-        self.metrics_dict = { "r2": R2Metric, "rms": RMSMetric}
+        self.metrics_dict = {"r2": R2Metric, "rms": RMSMetric}
 
     def register_metric(self, key, metric_cls):
         self.metrics_dict[key] = metric_cls
@@ -123,6 +124,7 @@ class MetricFactory(metaclass=MetaSingleton):
         metric = metric.to(device=device)
         return metric
 
+
 class MetricsCollection(Metric):
     def __init__(self, tag: str, metric_names: list, config, loader):
         super().__init__(tag, config, loader)
@@ -130,10 +132,9 @@ class MetricsCollection(Metric):
         factory = MetricFactory()
         try:
             for n in metric_names:
-                self.metrics[f"{tag}_{n}"] = factory.create_metric(n, config, loader)  
+                self.metrics[f"{tag}_{n}"] = factory.create_metric(n, config, loader)
         except MetricError as er:
             print(f"Unable to create metric : {er}")
-        
 
     def to(self, device):
         for m in self.metrics.values():
@@ -149,7 +150,7 @@ class MetricsCollection(Metric):
     def compute(self):
         for k, m in self.metrics.items():
             results = m.compute()
-            self.results.update(results) 
+            self.results.update(results)
         return self.results
 
     # overwrite

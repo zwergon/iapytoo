@@ -98,13 +98,13 @@ class Training:
 
     def state_dict(self):
         state_dict = {}
-        state_dict['n_models'] = len(self._models)
+        state_dict["n_models"] = len(self._models)
         for i, m in enumerate(self._models):
             state_dict[f"model_{i}"] = m.state_dict()
-        state_dict['n_optimizers'] = len(self._optimizers)
+        state_dict["n_optimizers"] = len(self._optimizers)
         for i, o in enumerate(self._optimizers):
             state_dict[f"optimizer_{i}"] = o.torch_optimizer.state_dict()
-        state_dict['n_schedulers'] = len(self._schedulers)
+        state_dict["n_schedulers"] = len(self._schedulers)
         for i, s in enumerate(self._schedulers):
             state_dict[f"scheduler_{i}"] = s.lr_scheduler.state_dict()
         state_dict["loss"] = self.loss.state_dict()
@@ -112,18 +112,20 @@ class Training:
         return state_dict
 
     def load_state_dict(self, state_dict):
-        n_models = state_dict['n_models']
+        n_models = state_dict["n_models"]
         for i in range(n_models):
             self._models[i].load_state_dict(state_dict[f"model_{i}"])
-        n_optimizers = state_dict['n_optimizers']
+        n_optimizers = state_dict["n_optimizers"]
         for i in range(n_optimizers):
-            self._optimizers[i].torch_optimizer.load_state_dict(state_dict[f"optimizer_{i}"])
-        n_schedulers = state_dict['n_schedulers']
+            self._optimizers[i].torch_optimizer.load_state_dict(
+                state_dict[f"optimizer_{i}"]
+            )
+        n_schedulers = state_dict["n_schedulers"]
         for i in range(n_schedulers):
-            self._schedulers[i].lr_scheduler.load_state_dict(state_dict[f"scheduler_{i}"])
-        self.loss.load_state_dict(state_dict['loss'])
-   
-
+            self._schedulers[i].lr_scheduler.load_state_dict(
+                state_dict[f"scheduler_{i}"]
+            )
+        self.loss.load_state_dict(state_dict["loss"])
 
     # ----------------------------------------
     # Protected methods that may be overloaded
@@ -229,7 +231,9 @@ class Training:
         """
 
         def new_function(epoch, loader, description, mean: Mean):
-            metrics = MetricsCollection(description, self.metric_names, self.config, loader)
+            metrics = MetricsCollection(
+                description, self.metric_names, self.config, loader
+            )
             metrics.to(self.device)
 
             timer = Timer()
@@ -263,7 +267,9 @@ class Training:
             size_by_batch = len(loader)
             step = max(size_by_batch // self.config["n_steps_by_batch"], 1)
 
-            metrics = MetricsCollection(description, self.metric_names, self.config, loader)
+            metrics = MetricsCollection(
+                description, self.metric_names, self.config, loader
+            )
             metrics.to(self.device)
 
             for batch_idx, batch in enumerate(loader):

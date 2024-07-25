@@ -97,11 +97,10 @@ class RMSpropOptimizer(Optimizer):
 class SGDOptimizer(Optimizer):
     def __init__(self, model, config) -> None:
         super().__init__(model, config)
-        self.torch_optimizer = to.SGD(
-            model.parameters(),
-            lr=config["learning_rate"],
-            weight_decay=config["weight_decay"],
-        )
+        kwargs = {"lr": config["learning_rate"]}
+        if "weight_decay" in config:
+            kwargs["weight_decay"] = config["weight_decay"]
+        self.torch_optimizer = to.SGD(model.parameters(), **kwargs)
 
 
 class OptimizerFactory(metaclass=MetaSingleton):
@@ -149,7 +148,11 @@ class Scheduler:
 class StepScheduler(Scheduler):
     def __init__(self, optimizer, config) -> None:
         super().__init__(optimizer, config)
-        self.lr_scheduler = StepLR(optimizer, step_size=1, gamma=config["gamma"])
+
+        kwargs = {}
+        kwargs["gamma"] = config.get("gamma", 0.7)
+        kwargs["step_size"] = config.get("step_size", 1)
+        self.lr_scheduler = StepLR(optimizer, **kwargs)
 
 
 class SchedulerFactory(metaclass=MetaSingleton):
@@ -182,7 +185,11 @@ class SchedulerFactory(metaclass=MetaSingleton):
 
 class LossFactory(metaclass=MetaSingleton):
     def __init__(self) -> None:
-        self.loss_dict = {"mse": nn.MSELoss, "nll": nn.NLLLoss}
+        self.loss_dict = {
+            "mse": nn.MSELoss,
+            "nll": nn.NLLLoss,
+            "cel": nn.CrossEntropyLoss,
+        }
 
     def register_loss(self, key, loss_cls):
         self.loss_dict[key] = loss_cls
