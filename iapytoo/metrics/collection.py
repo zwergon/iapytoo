@@ -7,7 +7,7 @@ class Metric:
         self.with_target = with_target
         self.name = name
         X, Y = next(iter(loader))
-        self.output_size = (0,) + tuple(Y.shape)
+        self.output_size = (0,) + tuple(Y.shape[1:])
 
         self.predicted = torch.zeros(size=self.output_size)
         if self.with_target:
@@ -25,9 +25,9 @@ class Metric:
         return self
 
     def update(self, Y_hat, Y):
-        self.predicted = torch.cat((self.predicted, Y_hat.view(1, -1)), dim=0)
+        self.predicted = torch.cat((self.predicted, Y_hat), dim=0)
         if self.with_target:
-            self.target = torch.cat((self.target, Y.view(1, -1)), dim=0)
+            self.target = torch.cat((self.target, Y), dim=0)
 
     def reset(self):
         device = self.device
@@ -39,6 +39,17 @@ class Metric:
         pass
 
 
+class AccuracyMetric(Metric):
+    def __init__(self, config, loader):
+        super(AccuracyMetric, self).__init__("accuracy", config, loader)
+
+    def compute(self):
+        accuracy = torch.sum(self.target == self.predicted)
+        return {
+            self.name: torch.round(100.0 * accuracy / self.target.shape[0], decimals=2)
+        }
+
+
 class R2Metric(Metric):
     def __init__(self, config, loader) -> None:
         super(R2Metric, self).__init__("r2", config, loader)
@@ -46,20 +57,15 @@ class R2Metric(Metric):
     def compute(self):
         # Compute the mean of the target values
         target_mean = torch.mean(self.target, dim=0)
-        print(self.target.shape)
 
         # Compute the total sum of squares (SS_tot)
         ss_tot = torch.sum((self.target - target_mean) ** 2, dim=0)
-        print(ss_tot)
 
         # Compute the residual sum of squares (SS_res)
         ss_res = torch.sum((self.target - self.predicted) ** 2, dim=0)
-        print(ss_res)
 
-        print(ss_res / ss_tot)
         # Compute the R² score
         r2_score = 1 - ss_res / ss_tot
-        print("r2_score", r2_score)
 
         # Return the mean R² score across all output dimensions
         return {self.name: r2_score}
@@ -97,7 +103,12 @@ class MetricError(Exception):
 
 class MetricFactory(metaclass=MetaSingleton):
     def __init__(self) -> None:
-        self.metrics_dict = {"r2": R2Metric, "rms": RMSMetric}
+        self.metrics_dict = {
+            "r2": R2Metric,
+            "rms": RMSMetric,
+            "ms": MSMetric,
+            "accuracy": AccuracyMetric,
+        }
 
     def register_metric(self, key, metric_cls):
         self.metrics_dict[key] = metric_cls
@@ -142,9 +153,8 @@ class MetricsCollection(Metric):
 
     # overwrite
     def update(self, Y_hat, Y):
-        for b in range(Y.shape[0]):
-            for m in self.metrics.values():
-                m.update(Y_hat, Y)
+        for m in self.metrics.values():
+            m.update(Y_hat, Y)
 
     # overwrite
     def compute(self):

@@ -1,5 +1,6 @@
+import torch
 import unittest
-from iapytoo.dataset import DummyVisionDataset
+from iapytoo.dataset import DummyVisionDataset, DummyLabelDataset
 import numpy as np
 
 
@@ -25,9 +26,36 @@ class TestDataset(unittest.TestCase):
             np.std(dataset.images, axis=(0, 2, 3)), [4.8083544, 4.5342894, 4.8105454]
         )
 
+        print(".values", dataset.targets)
+
         X, Y = dataset[0]
-        print(X)
+        # print(X)
+
+        loader = torch.utils.data.DataLoader(
+            dataset, batch_size=3, shuffle=False, drop_last=True
+        )
+
+        X, Y = next(iter(loader))
+        # print(X)
         print(Y)
+        print(Y.shape)
+
+    def test_label_dataset(self):
+        dataset = DummyLabelDataset()
+        print("labels", dataset.targets)
+
+        X, Y = dataset[0]
+        # print(X)
+        print(Y)
+
+        loader = torch.utils.data.DataLoader(
+            dataset, batch_size=3, shuffle=False, drop_last=True
+        )
+
+        X, Y = next(iter(loader))
+        # print(X)
+        print(Y)
+        print(Y.shape)
 
 
 if __name__ == "__main__":
