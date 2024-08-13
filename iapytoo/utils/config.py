@@ -61,11 +61,18 @@ class Config:
                     "loss": str,
                     "optimizer": str,
                     "cuda": Config._bool,
-                    "seed": int,
+                    "seed": Config._bool,
                     "batch_size": int,
                     "learning_rate": float,
                     "weight_decay": float,
                     "indices": Config._indices,
+                    "step_size": int,
+                    "rotation": float,
+                    "top_accuracy": int,
+                    "padding": int,
+                    "image_size": int,
+                    "version_number": str,
+                    "version_type": str,
                 }[key](value)
 
             except KeyError:

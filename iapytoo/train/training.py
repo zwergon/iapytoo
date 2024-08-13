@@ -21,6 +21,7 @@ from iapytoo.train.factories import (
 )
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
+from iapytoo.train.context import Context
 from iapytoo.predictions import Predictions, Predictor
 from iapytoo.metrics import MetricsCollection
 
@@ -65,6 +66,7 @@ class Training:
             self.valid_loop = self.__batch_loop(self._inner_validate)
 
         self.logger = None
+        self.context = None
         self.loss = Loss(n_losses=2)
         self._models = []
         self._optimizers = []
@@ -249,8 +251,11 @@ class Training:
             timer.log()
             timer.stop()
 
-            metrics.compute()
-            self.logger.report_metrics(epoch, metrics)
+            if self.context.can_report(epoch):
+                metrics.compute()
+                self.logger.report_metrics(epoch, metrics)
+
+            self.logger.log_context(self.context)
 
         return new_function
 
@@ -278,8 +283,11 @@ class Training:
                         f"Epoch {epoch} {description} iter {mean.iter} loss: {mean.value}"
                     )
 
-            metrics.compute()
-            self.logger.report_metrics(epoch, metrics)
+            if self.context.can_report(epoch):
+                metrics.compute()
+                self.logger.report_metrics(epoch, metrics)
+
+            self.logger.log_context(self.context)
 
         return new_function
 
@@ -366,6 +374,9 @@ class Training:
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
+
+        self.context = Context(run_id)
+        print(self.context.last_epoch)
 
         with Logger(self._config, run_id=checkpoint.run_id) as self.logger:
             active_run_name = self.logger.active_run_name()

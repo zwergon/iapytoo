@@ -18,6 +18,7 @@ from mlflow.types.schema import TensorSpec, Schema
 from iapytoo.utils.config import Config
 from iapytoo.utils.display import lrfind_plot
 from iapytoo.train.checkpoint import CheckPoint
+from iapytoo.train.context import Context
 from iapytoo.predictions import Predictions
 
 
@@ -124,6 +125,11 @@ class Logger:
     def summary(self):
         logging.info(str(self))
         logging.info(self._config)
+
+    def log_context(self, context: Context):
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            ctx_path = context.write(tmpdirname)
+            mlflow.log_artifact(ctx_path)
 
     def log_checkpoint(self, checkpoint: CheckPoint):
         with tempfile.TemporaryDirectory() as tmpdirname:
