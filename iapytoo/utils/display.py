@@ -68,7 +68,7 @@ def predictions_plot(predictions: Predictions, index=0, span=None):
     fig.suptitle("Actual vs. Predicted")
     for i in range(output_size):
         y = predictions.actual[index, i, deb:end]
-        y_hat = predictions.predicted[index, i, deb:end]
+        y_hat = predictions.outputs[index, i, deb:end]
 
         axs[i][0].plot(x_range, y, label="Actual")
         axs[i][0].plot(x_range, y_hat, label="Predicted")

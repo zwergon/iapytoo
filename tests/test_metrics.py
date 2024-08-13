@@ -5,7 +5,7 @@ import numpy as np
 
 from iapytoo.dataset.scaling import Scaling
 from iapytoo.dataset import DummyVisionDataset, DummyLabelDataset
-from iapytoo.metrics.collection import MetricsCollection
+from iapytoo.metrics import MetricsCollection
 
 
 class TestMetrics(unittest.TestCase):
@@ -16,8 +16,8 @@ class TestMetrics(unittest.TestCase):
     @staticmethod
     def compute_labels(Y, n_labels):
         print(Y.shape)
-        Y_hat = torch.ones_like(Y)
-        return Y_hat + 1
+        Y_hat = torch.ones(size=Y.shape + (n_labels,))
+        return Y_hat
 
     def test_regression(self):
         config = {"batch_size": 2}
@@ -27,7 +27,7 @@ class TestMetrics(unittest.TestCase):
             dataset, batch_size=config["batch_size"], shuffle=True, drop_last=True
         )
 
-        collection = MetricsCollection("test", ["r2", "rms"], config, loader)
+        collection = MetricsCollection("test", ["r2", "rms"], config)
 
         for X, Y in loader:
             Y_hat = TestMetrics.compute(Y)
@@ -37,17 +37,17 @@ class TestMetrics(unittest.TestCase):
         print(collection.results)
 
     def test_classification(self):
-        config = {"batch_size": 3}
+        config = {"batch_size": 2, "top_accuracy": 3}
 
         dataset = DummyLabelDataset()
         loader = torch.utils.data.DataLoader(
             dataset, batch_size=config["batch_size"], shuffle=True, drop_last=True
         )
 
-        collection = MetricsCollection("test", ["accuracy"], config, loader)
+        collection = MetricsCollection("test", ["accuracy"], config)
 
         for X, Y in loader:
-            Y_hat = TestMetrics.compute_labels(Y, len(dataset))
+            Y_hat = TestMetrics.compute_labels(Y, dataset.n_labels)
             print(Y, Y_hat)
             collection.update(Y_hat, Y)
 

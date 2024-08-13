@@ -11,5 +11,6 @@ class Feature:
         for i in range(predictions.actual.shape[0]):
             actual_del = self.computer(predictions.actual[i, 0, :], **kwargs)
             self.actual.append(actual_del)
-            predicted_del = self.computer(predictions.predicted[i, 0, :], **kwargs)
+            predicted_del = self.computer(
+                predictions.outputs[i, 0, :], **kwargs)
             self.predicted.append(predicted_del)

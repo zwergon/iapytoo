@@ -4,7 +4,7 @@ from torch.autograd import grad
 from tqdm import tqdm
 
 from iapytoo.dataset.scaling import Scaling
-from iapytoo.predictions import GenerativePredictions, PredictionPlotter
+from iapytoo.predictions import GenerativePredictions, Predictor
 from iapytoo.train.training import Training
 from iapytoo.utils.config import Config
 from iapytoo.train.factories import (
@@ -28,13 +28,14 @@ class WGAN(Training):
     def __init__(
         self,
         config: Config,
+        predictor: Predictor = Predictor(),
         metric_creators: list = ...,
-        prediction_plotter: PredictionPlotter = None,
         y_scaling: Scaling = None,
     ) -> None:
-        super().__init__(config, metric_creators, prediction_plotter, y_scaling)
+        super().__init__(config, predictor, metric_creators, y_scaling)
         self.loss = Loss(n_losses=2)  # one for generator, one for discriminator
         self.train_loop = self.__tqdm_gan_loop(self._update_g, self._update_d)
+        self.predictions = GenerativePredictions()
 
     @property
     def generator(self):
@@ -157,10 +158,11 @@ class WGAN(Training):
 
         return g_loss.item()
 
-    def _on_epoch_ended(self, epoch, checkpoint):
+    def _on_epoch_ended(self, epoch, checkpoint, **kwargs):
         if epoch % 10 == 0:
-            self.predictions.compute(self)
-            self.logger.report_prediction(epoch, self.predictions)
+            if "loader" in kwargs:
+                self.predictions.compute(self, kwargs["loader"])
+                self.logger.report_prediction(epoch, self.predictions)
 
         for item in self.loss(WGAN_FCT.GENERATOR).buffer:
             self.logger.report_metric(epoch=item[0], metrics={f"g_loss": item[1]})
@@ -225,10 +227,6 @@ class WGAN(Training):
         self._models = self._create_models(train_loader)
         self._optimizers = self._create_optimizers()
 
-        self.predictions = GenerativePredictions(
-            valid_loader, prediction_plotter=self.prediction_plotter
-        )
-
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
 
@@ -246,7 +244,7 @@ class WGAN(Training):
                 if self.scheduler is not None:
                     self.scheduler.step()
 
-                self._on_epoch_ended(epoch, checkpoint)
+                self._on_epoch_ended(epoch, checkpoint, loader=valid_loader)
 
             self.logger.save_model(self.model)
 

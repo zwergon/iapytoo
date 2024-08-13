@@ -9,7 +9,7 @@ class MetricsDistrib:
 
     def compute(self, predictions: Predictions, columns=None):
         Y = predictions.actual
-        y_hat = predictions.predicted
+        y_hat = predictions.outputs
 
         self.distrib = np.zeros(shape=(Y.shape[0], Y.shape[1]))
         for i in range(Y.shape[0]):

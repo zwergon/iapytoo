@@ -24,8 +24,10 @@ class Model(nn.Module):
         """return an WeightInitiator subclass that will be used to initialize weights of this model"""
         return None
 
-    def predict(self, X):
-        return self.forward(X)
+    def predict(self, model_output):
+        """This method gives the opportunity to transform output of the model to something equivalent to Y given by the dataset
+        For example, class from probability distribution """
+        return model_output
 
 
 class ModelFactory(metaclass=MetaSingleton):

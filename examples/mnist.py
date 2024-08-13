@@ -6,16 +6,14 @@ from torch.optim.lr_scheduler import LambdaLR
 
 
 from iapytoo.dataset.scaling import Scaling
-from iapytoo.predictions import PredictionPlotter
+from iapytoo.predictions.predictors import MaxPredictor
 from iapytoo.predictions.plotters import ConfusionPlotter
 from iapytoo.train.factories import Model, ModelFactory, SchedulerFactory, Scheduler
 from iapytoo.utils.config import Config
 from iapytoo.train.training import Training
 
 
-
 import matplotlib.pyplot as plt
-
 
 
 class MnistModel(Model):
@@ -43,11 +41,8 @@ class MnistModel(Model):
         output = F.log_softmax(x, dim=1)
         return output
 
-    def predict(self, X):
-        output = self.forward(X)
-        return torch.argmax(output, dim=1)
-
-
+    def predict(self, model_output):
+        return torch.argmax(model_output, dim=1)
 
 
 class MnistScheduler(Scheduler):
@@ -63,7 +58,8 @@ class MnistScheduler(Scheduler):
 
 class MnistTraining(Training):
     def __init__(self, config: Config) -> None:
-        super().__init__(config, [], ConfusionPlotter(), None)
+        super().__init__(config, predictor=MaxPredictor(), metric_names=[])
+        self.predictions.add_plotter(ConfusionPlotter())
 
 
 if __name__ == "__main__":

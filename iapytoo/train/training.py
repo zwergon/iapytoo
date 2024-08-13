@@ -21,8 +21,8 @@ from iapytoo.train.factories import (
 )
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
-from iapytoo.predictions import Predictions, PredictionPlotter
-from iapytoo.metrics.collection import MetricsCollection
+from iapytoo.predictions import Predictions, Predictor
+from iapytoo.metrics import MetricsCollection
 
 from enum import IntEnum
 
@@ -43,8 +43,8 @@ class Training:
     def __init__(
         self,
         config: Config,
+        predictor: Predictor = Predictor(),
         metric_names: list = [],
-        prediction_plotter: PredictionPlotter = None,
         y_scaling: Scaling = None,
     ) -> None:
         # first init all random seeds
@@ -69,10 +69,9 @@ class Training:
         self._models = []
         self._optimizers = []
         self._schedulers = []
-        self.predictions = None
+        self.predictions = Predictions(predictor)
         self.y_scaling = y_scaling
         self.metric_names = metric_names
-        self.prediction_plotter = prediction_plotter
 
     @property
     def config(self):
@@ -163,14 +162,14 @@ class Training:
         X = X.to(self.device)
         Y = Y.to(self.device)
         self.optimizer.zero_grad()
-        Y_hat = self.model(X)
+        model_output = self.model(X)
 
-        loss = self.criterion(Y_hat, Y)
+        loss = self.criterion(model_output, Y)
         loss.backward()
 
         self.optimizer.step()
 
-        metrics.update(Y_hat, Y)
+        metrics.update(model_output, Y)
 
         return loss.item()
 
@@ -178,20 +177,21 @@ class Training:
         X, Y = batch
         X = X.to(self.device)
         Y = Y.to(self.device)
-        Y_hat = self.model(X)
-        loss = self.criterion(Y_hat, Y)
+        model_output = self.model(X)
+        loss = self.criterion(model_output, Y)
 
-        metrics.update(Y_hat, Y)
+        metrics.update(model_output, Y)
 
         return loss.item()
 
-    def _on_epoch_ended(self, epoch, checkpoint):
+    def _on_epoch_ended(self, epoch, checkpoint, **kwargs):
         lr = self._get_lr(self.optimizer)
         self.logger.report_metric(epoch=epoch, metrics={"learning_rate": lr})
 
         if epoch % 10 == 0:
-            self.predictions.compute(self)
-            self.logger.report_prediction(epoch, self.predictions)
+            if "valid_loader" in kwargs and len(self.predictions) > 0:
+                self.predictions.compute(self, kwargs["valid_loader"])
+                self.logger.report_prediction(epoch, self.predictions)
 
             for item in self.loss(LossType.TRAIN).buffer:
                 self.logger.report_metric(
@@ -231,9 +231,7 @@ class Training:
         """
 
         def new_function(epoch, loader, description, mean: Mean):
-            metrics = MetricsCollection(
-                description, self.metric_names, self.config, loader
-            )
+            metrics = MetricsCollection(description, self.metric_names, self.config)
             metrics.to(self.device)
 
             timer = Timer()
@@ -267,9 +265,7 @@ class Training:
             size_by_batch = len(loader)
             step = max(size_by_batch // self.config["n_steps_by_batch"], 1)
 
-            metrics = MetricsCollection(
-                description, self.metric_names, self.config, loader
-            )
+            metrics = MetricsCollection(description, self.metric_names, self.config)
             metrics.to(self.device)
 
             for batch_idx, batch in enumerate(loader):
@@ -312,6 +308,7 @@ class Training:
 
         lr = self.config["learning_rate"]
         self.config["gamma"] = (lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
+        self.config["step_size"] = 1
         self.optimizer.param_groups[0]["lr"] = 1e-8
         self._schedulers = [
             SchedulerFactory().create_scheduler("step", self.optimizer, self.config)
@@ -331,9 +328,9 @@ class Training:
                         X = X.to(self.device)
                         Y = Y.to(self.device)
                         self.optimizer.zero_grad()
-                        Y_hat = self.model(X)
+                        model_output = self.model(X)
 
-                        loss = self.criterion(Y_hat, Y)
+                        loss = self.criterion(model_output, Y)
                         loss.backward()
                         self.optimizer.step()
 
@@ -367,10 +364,6 @@ class Training:
         self._optimizers = self._create_optimizers()
         self._schedulers = self._create_schedulers(self.optimizer)
 
-        self.predictions = Predictions(
-            valid_loader, prediction_plotter=self.prediction_plotter
-        )
-
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
 
@@ -391,7 +384,7 @@ class Training:
                 if self.scheduler is not None:
                     self.scheduler.step()
 
-                self._on_epoch_ended(epoch, checkpoint)
+                self._on_epoch_ended(epoch, checkpoint, valid_loader=valid_loader)
 
             self.logger.save_model(self.model)
 
@@ -413,5 +406,5 @@ class Training:
         else:
             assert self.model is not None, "no model loaded for prediction"
 
-        self.predictions = Predictions(loader)
-        self.predictions.compute(self)
+        assert self.predictions is not None, "no predictions defined for this training"
+        self.predictions.compute(self, loader)

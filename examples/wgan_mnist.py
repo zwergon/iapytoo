@@ -32,12 +32,9 @@ class MNISTInitiator(WeightInitiator):
             torch.nn.init.constant_(m.bias, 0)
 
 
-
 class Generator(Model):
-    """  See https://github.com/Zeleni9/pytorch-wgan
-    """
+    """See https://github.com/Zeleni9/pytorch-wgan"""
 
-    
     @staticmethod
     def get_noise(n_samples, z_dim, device="cpu"):
         """
@@ -58,23 +55,33 @@ class Generator(Model):
         # Output_dim = 1 (number of channels)
         self.main_module = nn.Sequential(
             # Z latent vector 100
-            nn.ConvTranspose2d(in_channels=self.z_dim, out_channels=1024, kernel_size=4, stride=1, padding=0),
+            nn.ConvTranspose2d(
+                in_channels=self.z_dim,
+                out_channels=1024,
+                kernel_size=4,
+                stride=1,
+                padding=0,
+            ),
             nn.BatchNorm2d(num_features=1024),
             nn.ReLU(True),
-
             # State (1024x4x4)
-            nn.ConvTranspose2d(in_channels=1024, out_channels=512, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose2d(
+                in_channels=1024, out_channels=512, kernel_size=4, stride=2, padding=1
+            ),
             nn.BatchNorm2d(num_features=512),
             nn.ReLU(True),
-
             # State (512x8x8)
-            nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose2d(
+                in_channels=512, out_channels=256, kernel_size=4, stride=2, padding=1
+            ),
             nn.BatchNorm2d(num_features=256),
             nn.ReLU(True),
-
             # State (256x16x16)
-            nn.ConvTranspose2d(in_channels=256, out_channels=1, kernel_size=4, stride=2, padding=1))
-            # output of main module --> Image (Cx32x32)
+            nn.ConvTranspose2d(
+                in_channels=256, out_channels=1, kernel_size=4, stride=2, padding=1
+            ),
+        )
+        # output of main module --> Image (Cx32x32)
 
         self.output = nn.Tanh()
 
@@ -99,7 +106,6 @@ class Generator(Model):
         return self.output(x)
 
 
-
 class Discriminator(Model):
     def __init__(self, loader, config):
         super(Discriminator, self).__init__(loader, config)
@@ -111,25 +117,32 @@ class Discriminator(Model):
             # in this setting, since we penalize the norm of the critic's gradient with respect to each input independently and not the enitre batch.
             # There is not good & fast implementation of layer normalization --> using per instance normalization nn.InstanceNorm2d()
             # Image (Cx32x32)
-            nn.Conv2d(in_channels=1, out_channels=256, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(
+                in_channels=1, out_channels=256, kernel_size=4, stride=2, padding=1
+            ),
             nn.InstanceNorm2d(256, affine=True),
             nn.LeakyReLU(0.2, inplace=True),
-
             # State (256x16x16)
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(
+                in_channels=256, out_channels=512, kernel_size=4, stride=2, padding=1
+            ),
             nn.InstanceNorm2d(512, affine=True),
             nn.LeakyReLU(0.2, inplace=True),
-
             # State (512x8x8)
-            nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(
+                in_channels=512, out_channels=1024, kernel_size=4, stride=2, padding=1
+            ),
             nn.InstanceNorm2d(1024, affine=True),
-            nn.LeakyReLU(0.2, inplace=True))
-            # output of main module --> State (1024x4x4)
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+        # output of main module --> State (1024x4x4)
 
         self.output = nn.Sequential(
             # The output of D is no longer a probability, we do not apply sigmoid at the output of D.
-            nn.Conv2d(in_channels=1024, out_channels=1, kernel_size=4, stride=1, padding=0))
-
+            nn.Conv2d(
+                in_channels=1024, out_channels=1, kernel_size=4, stride=1, padding=0
+            )
+        )
 
     def forward(self, x):
         x = self.main_module(x)
@@ -138,8 +151,7 @@ class Discriminator(Model):
     def feature_extraction(self, x):
         # Use discriminator for feature extraction then flatten to vector of 16384
         x = self.main_module(x)
-        return x.view(-1, 1024*4*4)
-
+        return x.view(-1, 1024 * 4 * 4)
 
 
 class LatentDataset(Dataset):
@@ -152,8 +164,6 @@ class LatentDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.noise[idx, :]
-
-
 
 
 if __name__ == "__main__":
@@ -185,5 +195,6 @@ if __name__ == "__main__":
     model_factory.register_model("generator", Generator)
     model_factory.register_model("critic", Discriminator)
 
-    wgan = WGAN(config, prediction_plotter=Fake2DPlotter())
+    wgan = WGAN(config)
+    wgan.predictions.add_plotter(Fake2DPlotter())
     wgan.fit(train_loader=trainloader, valid_loader=valid_loader, run_id=None)
