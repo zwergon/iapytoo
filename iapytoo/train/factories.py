@@ -26,7 +26,7 @@ class Model(nn.Module):
 
     def predict(self, model_output):
         """This method gives the opportunity to transform output of the model to something equivalent to Y given by the dataset
-        For example, class from probability distribution """
+        For example, class from probability distribution"""
         return model_output
 
 
@@ -102,6 +102,8 @@ class SGDOptimizer(Optimizer):
         kwargs = {"lr": config["learning_rate"]}
         if "weight_decay" in config:
             kwargs["weight_decay"] = config["weight_decay"]
+        if "momentum" in config:
+            kwargs["momentum"] = config["momentum"]
         self.torch_optimizer = to.SGD(model.parameters(), **kwargs)
 
 

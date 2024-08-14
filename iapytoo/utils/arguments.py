@@ -13,6 +13,7 @@ def parse_args():
         type=int,
         default=11,
     )
+
     parser.add_argument(
         "-b", "--batch_size", help="batch size in learning process", type=int, default=8
     )
@@ -23,9 +24,6 @@ def parse_args():
         help="learning rate for optimizer",
         type=float,
         default=1e-4,
-    )
-    parser.add_argument(
-        "-wd", "--weight_decay", help="regularization", type=float, default=1e-7
     )
 
     parser.add_argument(
