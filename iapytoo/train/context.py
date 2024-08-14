@@ -7,26 +7,29 @@ class Context:
     filename = "context.txt"
 
     def __init__(self, run_id=None) -> None:
-        self.__dict__["run_id"] = run_id
+        self.run_id = run_id
         self.last_epoch = -1
+        self.epoch = -1
         if run_id is not None:
-            run = mlflow.get_run(self.run_id)
-            assert run is not None, f"unable to find run {self.run_id}"
+            self._load_from_artifact(run_id)
 
-            local_path = mlflow.artifacts.download_artifacts(
-                run_id=run_id, artifact_path=Context.filename
-            )
-            with open(local_path, "r") as f:
-                for line in f:
-                    key, value = line.strip().split(": ", 1)
-                    self.__dict__[key] = value
+    def _load_from_artifact(self, run_id):
+        run = mlflow.get_run(self.run_id)
+        assert run is not None, f"unable to find run {self.run_id}"
 
-    def write(self, dirname):
+        local_path = mlflow.artifacts.download_artifacts(
+            run_id=run_id, artifact_path=Context.filename
+        )
+        with open(local_path, "r") as f:
+            for line in f:
+                key, value = line.strip().split(": ", 1)
+                if key == "epoch":
+                    self.last_epoch = int(value)
+
+    def save(self, dirname):
         filepath = os.path.join(dirname, Context.filename)
+        context_dict = {"epoch": self.epoch}
         with open(filepath, "w") as f:
-            for key, value in self.__dict__.items():
+            for key, value in context_dict.items():
                 f.write(f"{key}: {value}\n")
         return filepath
-
-    def can_report(self, epoch) -> bool:
-        return epoch > int(self.last_epoch)

@@ -57,6 +57,8 @@ class Logger:
             logging.info(f".. set tracking uri to {self.config['tracking_uri']}")
             mlflow.set_tracking_uri(self.config["tracking_uri"])
 
+        self.context = Context(run_id)
+
     def __enter__(self):
         self.start()
         return self
@@ -126,9 +128,13 @@ class Logger:
         logging.info(str(self))
         logging.info(self._config)
 
-    def log_context(self, context: Context):
+    def set_epoch(self, epoch):
+        self.context.epoch = epoch
+        self._save_context()
+
+    def _save_context(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
-            ctx_path = context.write(tmpdirname)
+            ctx_path = self.context.save(tmpdirname)
             mlflow.log_artifact(ctx_path)
 
     def log_checkpoint(self, checkpoint: CheckPoint):
@@ -149,11 +155,16 @@ class Logger:
                 extra_pip_requirements=["--extra-index-url https://zwergon.github.io"],
             )
 
+    def can_report(self):
+        return self.context.epoch > self.context.last_epoch
+
     def report_metric(self, epoch, metrics: dict):
+
         with self.lock:
             mlflow.log_metrics(metrics, step=epoch)
 
     def report_metrics(self, epoch, metrics):
+
         with self.lock:
             values = {}
             for k, v in metrics.results.items():

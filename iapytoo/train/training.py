@@ -66,7 +66,6 @@ class Training:
             self.valid_loop = self.__batch_loop(self._inner_validate)
 
         self.logger = None
-        self.context = None
         self.loss = Loss(n_losses=2)
         self._models = []
         self._optimizers = []
@@ -190,7 +189,8 @@ class Training:
         lr = self._get_lr(self.optimizer)
         self.logger.report_metric(epoch=epoch, metrics={"learning_rate": lr})
 
-        if epoch % 10 == 0:
+        num_epochs = self.config["epochs"]
+        if epoch % 10 == 0 or epoch == num_epochs - 1:
             if "valid_loader" in kwargs and len(self.predictions) > 0:
                 self.predictions.compute(self, kwargs["valid_loader"])
                 self.logger.report_prediction(epoch, self.predictions)
@@ -251,11 +251,9 @@ class Training:
             timer.log()
             timer.stop()
 
-            if self.context.can_report(epoch):
+            if self.logger.can_report():
                 metrics.compute()
                 self.logger.report_metrics(epoch, metrics)
-
-            self.logger.log_context(self.context)
 
         return new_function
 
@@ -283,11 +281,9 @@ class Training:
                         f"Epoch {epoch} {description} iter {mean.iter} loss: {mean.value}"
                     )
 
-            if self.context.can_report(epoch):
+            if self.logger.can_report():
                 metrics.compute()
                 self.logger.report_metrics(epoch, metrics)
-
-            self.logger.log_context(self.context)
 
         return new_function
 
@@ -375,9 +371,6 @@ class Training:
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
 
-        self.context = Context(run_id)
-        print(self.context.last_epoch)
-
         with Logger(self._config, run_id=checkpoint.run_id) as self.logger:
             active_run_name = self.logger.active_run_name()
             self._display_device()
@@ -385,6 +378,8 @@ class Training:
             self.logger.summary()
 
             for epoch in range(checkpoint.epoch + 1, num_epochs):
+
+                self.logger.set_epoch(epoch)
                 # Train
                 self.__train(epoch, train_loader)
 
