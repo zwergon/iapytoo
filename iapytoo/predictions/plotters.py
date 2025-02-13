@@ -88,10 +88,10 @@ class TSNEPlotter(PredictionPlotter):
             ax.scatter(
                 predicted_tsne[actual == i, 0],
                 predicted_tsne[actual == i, 1],
-                label=f"Classe {i}",
+                label=f"{i}",
                 alpha=0.6,
             )
-
+        ax.legend()
         ax.set_title("t-SNE")
 
         return {self.title: fig}

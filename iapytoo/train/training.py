@@ -111,21 +111,22 @@ class Training:
 
         return state_dict
 
-    def load_state_dict(self, state_dict):
+    def load_state_dict(self, state_dict, only_model=False):
         n_models = state_dict["n_models"]
         for i in range(n_models):
             self._models[i].load_state_dict(state_dict[f"model_{i}"])
-        n_optimizers = state_dict["n_optimizers"]
-        for i in range(n_optimizers):
-            self._optimizers[i].torch_optimizer.load_state_dict(
-                state_dict[f"optimizer_{i}"]
-            )
-        n_schedulers = state_dict["n_schedulers"]
-        for i in range(n_schedulers):
-            self._schedulers[i].lr_scheduler.load_state_dict(
-                state_dict[f"scheduler_{i}"]
-            )
-        self.loss.load_state_dict(state_dict["loss"])
+        if not only_model:
+            n_optimizers = state_dict["n_optimizers"]
+            for i in range(n_optimizers):
+                self._optimizers[i].torch_optimizer.load_state_dict(
+                    state_dict[f"optimizer_{i}"]
+                )
+            n_schedulers = state_dict["n_schedulers"]
+            for i in range(n_schedulers):
+                self._schedulers[i].lr_scheduler.load_state_dict(
+                    state_dict[f"scheduler_{i}"]
+                )
+            self.loss.load_state_dict(state_dict["loss"])
 
     # ----------------------------------------
     # Protected methods that may be overloaded
@@ -408,7 +409,7 @@ class Training:
         if run_id is not None:
             self._models = self._create_models(loader)
             checkpoint = CheckPoint(run_id)
-            checkpoint.init_model(self.model)
+            checkpoint.init(self, only_model=True)
         else:
             assert self.model is not None, "no model loaded for prediction"
 

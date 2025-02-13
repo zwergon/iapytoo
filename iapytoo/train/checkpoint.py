@@ -38,9 +38,7 @@ class CheckPoint:
         self.params["run_id"] = run_id
         self.params["epoch"] = epoch
         self.params["training"] = training.state_dict()
-       
 
-    def init(self, training):
+    def init(self, training, only_model=False):
         if self.run_id is not None:
-            training.load_state_dict(self.params["training"])
-           
+            training.load_state_dict(self.params["training"], only_model=only_model)
