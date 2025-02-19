@@ -1,10 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
-
-
-[tool.setuptools_scm]
-version_file = "iapytoo/_version.py"
 
 
 [project]
@@ -21,6 +17,9 @@ license = { text = "Apache-2.0" }
 
 readme = "README.md"
 requires-python = ">=3.7"
+
+[tool.setuptools_scm]
+version_file = "iapytoo/_version.py"
 
 [tool.setuptools.packages.find]
 where = ["."]
