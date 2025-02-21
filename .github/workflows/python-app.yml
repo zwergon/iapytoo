@@ -1,11 +1,16 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+# This workflow will install Python dependencies, 
+# run tests and lint with a single version of Python
+# It will also publish on release branch or if tag v* is pushed
 
 name: Python application
 
 on:
   push:
-    branches: [ "main" ]
+    branches: 
+      - main
+      - 'release/v*'
+    tags:
+      - 'v*'
   pull_request:
     branches: [ "main" ]
 
@@ -43,3 +48,31 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/heads/release/v') || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Fetch all history for all tags and branches
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build setuptools setuptools-scm twine
+      
+      - name: Build the package
+        run: python -m build
+     
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: twine upload dist/*
