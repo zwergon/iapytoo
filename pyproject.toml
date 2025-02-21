@@ -18,6 +18,7 @@ requires-python = ">=3.7"
 
 [tool.setuptools_scm]
 version_file = "iapytoo/_version.py"
+local_scheme = "no-local-version"
 
 [tool.setuptools.packages.find]
 where = ["."]
