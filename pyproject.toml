@@ -2,7 +2,6 @@
 requires = ["setuptools>=61.0", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
-
 [project]
 name = "iapytoo"
 dynamic = ["version"]
@@ -13,7 +12,6 @@ authors = [
 ]
 
 license = { text = "Apache-2.0" }
-
 
 readme = "README.md"
 requires-python = ">=3.7"
