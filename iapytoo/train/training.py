@@ -58,7 +58,7 @@ class Training:
         self._config = config
         self.criterion = self._create_criterion()
 
-        if self.config["tqdm"]:
+        if self._config.training.tqdm:
             self.train_loop = self.__tqdm_loop(self._inner_train)
             self.valid_loop = self.__tqdm_loop(self._inner_validate)
         else:
@@ -74,10 +74,7 @@ class Training:
         self.y_scaling = y_scaling
         self.metric_names = metric_names
 
-    @property
-    def config(self):
-        return self._config.__dict__
-
+    
     @property
     def model(self):
         return self._models[0]
@@ -133,7 +130,7 @@ class Training:
     # ----------------------------------------
 
     def _create_criterion(self):
-        return LossFactory().create_loss(self.config["loss"])
+        return LossFactory().create_loss(self._config.training.loss)
 
     def _get_lr(self, optimizer):
         for param_group in optimizer.param_groups:
@@ -141,21 +138,21 @@ class Training:
 
     def _create_optimizers(self):
         optimizer = OptimizerFactory().create_optimizer(
-            self.config["optimizer"], self.model, self.config
+            self._config.model.optimizer, self.model, self.config
         )
 
         return [optimizer]
 
     def _create_models(self, loader):
         model = ModelFactory().create_model(
-            self.config["model"], self.config, loader, self.device
+            self._config.model.model, self.config, loader, self.device
         )
 
         return [model]
 
     def _create_schedulers(self, optimizer):
         scheduler = SchedulerFactory().create_scheduler(
-            self.config["scheduler"], optimizer, self.config
+            self.config.model.scheduler, optimizer, self.config
         )
         return [scheduler]
 
@@ -190,7 +187,7 @@ class Training:
         lr = self._get_lr(self.optimizer)
         self.logger.report_metric(epoch=epoch, metrics={"learning_rate": lr})
 
-        num_epochs = self.config["epochs"]
+        num_epochs = self._config.training.epochs
         if epoch % 10 == 0 or epoch == num_epochs - 1:
             if "valid_loader" in kwargs and len(self.predictions) > 0:
                 self.predictions.compute(self, kwargs["valid_loader"])
@@ -215,7 +212,7 @@ class Training:
 
     def _display_device(self):
         use_cuda = torch.cuda.is_available()
-        if self.config["cuda"] and use_cuda:
+        if self._config.cuda and use_cuda:
             msg = "\n__CUDA\n"
             msg += f"__CUDNN VERSION: {torch.backends.cudnn.version()}\n"
             msg += f"__Number CUDA Devices: {torch.cuda.device_count()}\n"
@@ -267,7 +264,7 @@ class Training:
 
         def new_function(epoch, loader, description, mean: Mean):
             size_by_batch = len(loader)
-            step = max(size_by_batch // self.config["n_steps_by_batch"], 1)
+            step = max(size_by_batch // self._config.training.n_steps_by_batch, 1)
 
             metrics = MetricsCollection(description, self.metric_names, self.config)
             metrics.to(self.device)
@@ -305,15 +302,15 @@ class Training:
     # ----------------------------------------
 
     def find_lr(self, train_loader):
-        num_epochs = self.config["epochs"]
+        num_epochs = self._config.training.epochs
         num_batch = len(train_loader)
 
         self._models = self._create_models(train_loader)
         self._optimizers = self._create_optimizers()
 
-        lr = self.config["learning_rate"]
-        self.config["gamma"] = (lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
-        self.config["step_size"] = 1
+        lr = self.config.training.learning_rate
+        self.config.training.gamma = (lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
+        self.config.training.step_size = 1
         self.optimizer.param_groups[0]["lr"] = 1e-8
         self._schedulers = [
             SchedulerFactory().create_scheduler("step", self.optimizer, self.config)
@@ -361,7 +358,7 @@ class Training:
         train_time.stop()
 
     def fit(self, train_loader, valid_loader, run_id=None):
-        num_epochs = self.config["epochs"]
+        num_epochs = self._config.training.epochs
 
         self.loss.reset()
 
