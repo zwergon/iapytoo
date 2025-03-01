@@ -15,6 +15,7 @@ class TestConfig(unittest.TestCase):
                 "model": "CNN"
             },
             "dataset": {
+                "path": "dummy_path",
                 "batch_size": 32
             },
             "training": {

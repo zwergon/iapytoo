@@ -3,12 +3,35 @@ import unittest
 
 import numpy as np
 
-from iapytoo.dataset.scaling import Scaling
+from iapytoo.utils.config import Config
 from iapytoo.dataset import DummyVisionDataset, DummyLabelDataset
 from iapytoo.metrics import MetricsCollection
 
 
 class TestMetrics(unittest.TestCase):
+
+    def setUp(self):
+        self.config_data = {
+            "project": "iapytoo",
+            "run": "test_run",
+            "sensors": "sensor_1",
+            "model": {
+                "type": "default",
+                "model": "CNN"
+            },
+            "dataset": {
+                "path": "dummy_path",
+                "batch_size": 2
+            },
+            "training": {
+                "learning_rate": 0.001,
+                "loss": "mse",
+                "optimizer": "adam",
+                "scheduler": "step",
+                "top_accuracy": 3
+            }
+        }
+
     @staticmethod
     def compute(Y):
         return Y + 0.1
@@ -20,11 +43,11 @@ class TestMetrics(unittest.TestCase):
         return Y_hat
 
     def test_regression(self):
-        config = {"batch_size": 2}
+        config = Config.create_from_args(self.config_data)
 
         dataset = DummyVisionDataset()
         loader = torch.utils.data.DataLoader(
-            dataset, batch_size=config["batch_size"], shuffle=True, drop_last=True
+            dataset, batch_size=config.dataset.batch_size, shuffle=True, drop_last=True
         )
 
         collection = MetricsCollection("test", ["r2", "rms"], config)
@@ -37,11 +60,11 @@ class TestMetrics(unittest.TestCase):
         print(collection.results)
 
     def test_classification(self):
-        config = {"batch_size": 2, "top_accuracy": 3}
+        config = Config.create_from_args(self.config_data)
 
         dataset = DummyLabelDataset()
         loader = torch.utils.data.DataLoader(
-            dataset, batch_size=config["batch_size"], shuffle=True, drop_last=True
+            dataset, batch_size=config.dataset.batch_size, shuffle=True, drop_last=True
         )
 
         collection = MetricsCollection("test", ["accuracy"], config)

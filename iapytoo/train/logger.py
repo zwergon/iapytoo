@@ -94,13 +94,12 @@ class Logger:
     def _params(self):
         # take care, some config parameters are saved by mlflow.
         # When you run it again, these parameters can not change between two runs.
-        params = self.config.to_flat_dict()
-        if "run_id" in params:
-            del params["run_id"]
-        if "epochs" in params:
-            del params["epochs"]
-        if "tracking_uri" in params:
-            del params["tracking_uri"]
+        params = self.config.model_dump(exclude_unset=True)
+
+        for key in ['epochs', 'run', 'tracking_uri']:
+            if key in params:
+                del params[key]
+                
         return params
 
     def __str__(self):
@@ -108,8 +107,8 @@ class Logger:
 
         model: ModelConfig = self.config.model
         network = (
-            model
-            if model.is_gan
+            model 
+            if not self.config.is_gan
             else f"{model.discriminator} & {model.generator}"
         )
         msg += f"Network: {network}\n"

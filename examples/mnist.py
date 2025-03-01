@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 
 class MnistModel(Model):
-    def __init__(self, loader, config):
+    def __init__(self, loader, config: Config):
         super(MnistModel, self).__init__(loader, config)
         self.conv1 = nn.Conv2d(1, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 64, 3, 1)
@@ -46,7 +46,7 @@ class MnistModel(Model):
 
 
 class MnistScheduler(Scheduler):
-    def __init__(self, optimizer, config) -> None:
+    def __init__(self, optimizer, config: Config) -> None:
         super().__init__(optimizer, config)
 
         def lr_lambda(epoch):
@@ -74,15 +74,14 @@ if __name__ == "__main__":
 
     if args.run_id is not None:
         config = Config.create_from_run_id(args.run_id, args.tracking_uri)
-        config.epochs = args.epochs
+        config.training.epochs = args.epochs
     else:
         # INPUT Parameters
-        config = Config.create_from_args(args)
+        config = Config.create_from_yaml(args.yaml)
 
     Training.seed(config)
 
-    config = Config.create_from_args(args)
-
+    
     training = MnistTraining(config)
 
     transform = transforms.Compose(
@@ -90,15 +89,26 @@ if __name__ == "__main__":
     )
 
     dataset1 = datasets.MNIST(
-        args.dataset, train=True, download=True, transform=transform
+        config.dataset.path, 
+        train=True, 
+        download=True, 
+        transform=transform
     )
-    dataset2 = datasets.MNIST(args.dataset, train=False, transform=transform)
+    
+    dataset2 = datasets.MNIST(
+        config.dataset.path, 
+        train=False, 
+        transform=transform
+    )
 
     train_loader = torch.utils.data.DataLoader(
-        dataset1, batch_size=config.batch_size, num_workers=config.num_workers
+        dataset1, 
+        batch_size=config.dataset.batch_size, 
+        num_workers=config.training.num_workers
     )
     test_loader = torch.utils.data.DataLoader(
-        dataset2, batch_size=config.batch_size, num_workers=config.num_workers
+        dataset2, batch_size=config.dataset.batch_size, 
+        num_workers=config.training.num_workers
     )
 
     training.fit(

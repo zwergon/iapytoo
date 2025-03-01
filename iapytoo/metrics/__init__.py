@@ -2,12 +2,13 @@ import torch
 
 from iapytoo.utils.meta_singleton import MetaSingleton
 
+from iapytoo.utils.config import Config
 from .predefined import R2Metric, RMSMetric, MSMetric, AccuracyMetric
 from .metric import Metric
 
 
 class MetricsCollection(Metric):
-    def __init__(self, tag: str, metric_names: list, config):
+    def __init__(self, tag: str, metric_names: list, config: Config):
         super().__init__(tag, config)
         self.metrics = {}
         factory = MetricFactory()
@@ -59,7 +60,7 @@ class MetricFactory(metaclass=MetaSingleton):
     def register_metric(self, key, metric_cls):
         self.metrics_dict[key] = metric_cls
 
-    def create_metric(self, kind: str, config: dict, device="cpu") -> Metric:
+    def create_metric(self, kind: str, config: Config, device="cpu") -> Metric:
         """Creates an architecture of NN
 
         Args:

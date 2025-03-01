@@ -4,16 +4,24 @@ import logging
 import mlflow
 import tempfile
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, PlainValidator
 from typing import List, Optional, Dict, Union
+from typing_extensions import Annotated
 
 os.environ["MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR"] = "false"
 
-
+def ensure_list(value):
+    if isinstance(value, str) :
+        v_list = value[1:-1].split(",")
+        return [int(v) for v in v_list]
+    else:
+        return value
+  
 class DatasetConfig(BaseModel):
+    path: str
     normalization: Optional[bool] = False
     batch_size: int
-    indices: List[int] = [0]
+    indices: Annotated[List[int], BeforeValidator(ensure_list)] = [0]
     padding: Optional[int] = 2
     image_size: Optional[int] = 224
     rotation: Optional[float] = 15
@@ -29,7 +37,8 @@ class TrainingConfig(BaseModel):
     loss: str
     learning_rate: float
     optimizer: Optional[str] = "adam"
-    weight_decay: Optional[float] = 1e-4
+    weight_decay: Optional[float] = None
+    betas:  Optional[float] = None
     momentum: Optional[float] = 0.9
     scheduler: Optional[str] = "step"
     step_size: Optional[int] = 10
@@ -37,6 +46,8 @@ class TrainingConfig(BaseModel):
     lambda_gp: Optional[float] = 10.
     groups: Optional[int] = 1
     top_accuracy: Optional[int] = 3 
+
+   
 
 class ModelConfig(BaseModel):
     type: str = "default"
@@ -96,18 +107,6 @@ class Config(BaseModel):
 
         return cls.create_from_args(data)
 
-    @staticmethod
-    def _indices(vars):
-        v_list = vars[1:-1].split(",")
-        return [int(v) for v in v_list]
-
-    @staticmethod
-    def _bool(var):
-        if var == "True":
-            return True
-        else:
-            return False
-
     @classmethod
     def create_from_run_id(cls, run_id, tracking_uri=None):
         cf = {}
@@ -119,13 +118,15 @@ class Config(BaseModel):
 
         nested_dict = {}
         for key, value in run.data.params.items():
+            if isinstance(value, str) and value == 'None':
+                continue
             keys = key.split(".")
             d = nested_dict
             for key in keys[:-1]:
                 if key not in d:   
                     d[key] = {}
                 d = d[key]  
-            d[keys[-1]] = value  # TODO May check and cast type again !
+            d[keys[-1]] = value  
 
         return cls.create_from_args(nested_dict)
 

@@ -138,21 +138,21 @@ class Training:
 
     def _create_optimizers(self):
         optimizer = OptimizerFactory().create_optimizer(
-            self._config.model.optimizer, self.model, self.config
+            self._config.training.optimizer, self.model, self._config
         )
 
         return [optimizer]
 
     def _create_models(self, loader):
         model = ModelFactory().create_model(
-            self._config.model.model, self.config, loader, self.device
+            self._config.model.model, self._config, loader, self.device
         )
 
         return [model]
 
     def _create_schedulers(self, optimizer):
         scheduler = SchedulerFactory().create_scheduler(
-            self.config.model.scheduler, optimizer, self.config
+            self._config.training.scheduler, optimizer, self._config
         )
         return [scheduler]
 
@@ -231,7 +231,7 @@ class Training:
         """
 
         def new_function(epoch, loader, description, mean: Mean):
-            metrics = MetricsCollection(description, self.metric_names, self.config)
+            metrics = MetricsCollection(description, self.metric_names, self._config)
             metrics.to(self.device)
 
             timer = Timer()
@@ -266,7 +266,7 @@ class Training:
             size_by_batch = len(loader)
             step = max(size_by_batch // self._config.training.n_steps_by_batch, 1)
 
-            metrics = MetricsCollection(description, self.metric_names, self.config)
+            metrics = MetricsCollection(description, self.metric_names, self._config)
             metrics.to(self.device)
 
             for batch_idx, batch in enumerate(loader):
@@ -308,12 +308,12 @@ class Training:
         self._models = self._create_models(train_loader)
         self._optimizers = self._create_optimizers()
 
-        lr = self.config.training.learning_rate
-        self.config.training.gamma = (lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
-        self.config.training.step_size = 1
+        lr = self._config.training.learning_rate
+        self._config.training.gamma = (lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
+        self._config.training.step_size = 1
         self.optimizer.param_groups[0]["lr"] = 1e-8
         self._schedulers = [
-            SchedulerFactory().create_scheduler("step", self.optimizer, self.config)
+            SchedulerFactory().create_scheduler("step", self.optimizer, self._config)
         ]
 
         train_time = Timer()
