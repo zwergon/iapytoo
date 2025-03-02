@@ -19,7 +19,7 @@ def ensure_list(value):
   
 class DatasetConfig(BaseModel):
     path: str
-    normalization: Optional[bool] = False
+    normalization: Optional[bool] = True
     batch_size: int
     indices: Annotated[List[int], BeforeValidator(ensure_list)] = [0]
     padding: Optional[int] = 2
@@ -47,8 +47,6 @@ class TrainingConfig(BaseModel):
     groups: Optional[int] = 1
     top_accuracy: Optional[int] = 3 
 
-   
-
 class ModelConfig(BaseModel):
     type: str = "default"
     model: str
@@ -73,7 +71,7 @@ class Config(BaseModel):
     model: Union[ModelConfig, GanConfig]
 
 
-    def to_flat_dict(self) -> Dict[str, str]:
+    def to_flat_dict(self, exclude_unset=False) -> Dict[str, str]:
         """Export the config as a flattened key/value dictionary."""
         def flatten(d, parent_key="", sep="."):
             items = []
@@ -85,7 +83,7 @@ class Config(BaseModel):
                     items.append((new_key, v))
             return dict(items)
 
-        return flatten(self.model_dump())
+        return flatten(self.model_dump(exclude_unset=exclude_unset))
 
     @classmethod
     def create_from_args(cls, args: dict):
@@ -114,9 +112,15 @@ class Config(BaseModel):
         if tracking_uri is not None:
             mlflow.set_tracking_uri(tracking_uri)
 
-        run = mlflow.get_run(run_id)
-
         nested_dict = {}
+
+        run = mlflow.get_run(run_id)
+        experiment_id = run.info.experiment_id
+        experiment = mlflow.get_experiment(experiment_id=experiment_id)
+
+        nested_dict['project'] = experiment.name
+        nested_dict['run'] = run.info.run_name
+        
         for key, value in run.data.params.items():
             if isinstance(value, str) and value == 'None':
                 continue
@@ -127,6 +131,8 @@ class Config(BaseModel):
                     d[key] = {}
                 d = d[key]  
             d[keys[-1]] = value  
+
+        
 
         return cls.create_from_args(nested_dict)
 

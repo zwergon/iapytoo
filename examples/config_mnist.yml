@@ -4,22 +4,17 @@ tracking_uri: null
 
 dataset:
   path: "../data"
-  normalization: true
   n_steps_by_batch: 10
-  ratio_train_test: 0.9
   num_workers: 2
   batch_size: 64
 
 training:
-  tqdm: true
   learning_rate: 1e-4
-  dropout: 0
   loss: "nll"
   optimizer: "adam"
   scheduler: "step"
   epochs: 11
-  gamma: 0.7
-
+ 
 model:
   model: "mnist"
   kernel_size: 3

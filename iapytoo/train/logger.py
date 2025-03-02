@@ -94,9 +94,14 @@ class Logger:
     def _params(self):
         # take care, some config parameters are saved by mlflow.
         # When you run it again, these parameters can not change between two runs.
-        params = self.config.model_dump(exclude_unset=True)
+        params = self.config.to_flat_dict(exclude_unset=True)
 
-        for key in ['epochs', 'run', 'tracking_uri']:
+        for key in [
+            'training.epochs',
+            'training.tqdm', 
+            'project',
+            'run', 
+            'tracking_uri']:
             if key in params:
                 del params[key]
                 
