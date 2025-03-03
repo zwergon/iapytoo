@@ -43,12 +43,10 @@ class TrainingConfig(BaseModel):
     scheduler: Optional[str] = "step"
     step_size: Optional[int] = 10
     gamma: Optional[float] = 0.9
-    lambda_gp: Optional[float] = 10.
     groups: Optional[int] = 1
     top_accuracy: Optional[int] = 3 
 
 class ModelConfig(BaseModel):
-    type: str = "default"
     model: str
     hidden_size: Optional[int] = 128
     num_layers: Optional[int] = 3
@@ -58,6 +56,9 @@ class ModelConfig(BaseModel):
 class GanConfig(ModelConfig):
     generator: str
     discriminator: str
+    lambda_gp: Optional[float] = 10.
+    noise_dim: Optional[int] = 100
+    n_critic: Optional[int] = 5
     
 class Config(BaseModel):
     project: str
@@ -89,9 +90,9 @@ class Config(BaseModel):
     def create_from_args(cls, args: dict):
         
         model_data = args.pop("model", {})  # Enlève "model" du dictionnaire principal
-        model_type = model_data.get("type", "default")
+        model_type = model_data["model"]
 
-        if model_type == "GAN":
+        if model_type.lower() == "gan":
             model_instance = GanConfig(**model_data)
         else:
             model_instance = ModelConfig(**model_data)
@@ -175,4 +176,4 @@ class Config(BaseModel):
 
     @property
     def is_gan(self) -> bool:
-        return self.model.type.lower() == "gan"
+        return self.model.model.lower() == "gan"

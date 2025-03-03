@@ -58,20 +58,20 @@ class WGAN(Training):
 
     def _create_models(self, loader):
         generator = ModelFactory().create_model(
-            self.config["generator"], self.config, loader, self.device
+            self._config.model.generator, self._config, loader, self.device
         )
         discriminator = ModelFactory().create_model(
-            self.config["discriminator"], self.config, loader, self.device
+            self._config.model.discriminator, self._config, loader, self.device
         )
 
         return [generator, discriminator]
 
     def _create_optimizers(self):
         g_optimizer = OptimizerFactory().create_optimizer(
-            self.config["optimizer"], self.generator, self.config
+            self._config.training.optimizer, self.generator, self._config
         )
         d_optimizer = OptimizerFactory().create_optimizer(
-            self.config["optimizer"], self.discriminator, self.config
+            self._config.training.optimizer, self.discriminator, self._config
         )
 
         return [g_optimizer, d_optimizer]
@@ -121,8 +121,8 @@ class WGAN(Training):
         return penalty
 
     def _update_d(self, real_data):
-        noise_dim = self.config["noise_dim"]
-        lambda_gp = self.config["lambda_gp"]
+        noise_dim = self._config.model.noise_dim
+        lambda_gp = self._config.model.lambda_gp
 
         noise = self.generator.get_noise(
             real_data.shape[0], noise_dim, device=self.device
@@ -145,8 +145,8 @@ class WGAN(Training):
         return d_loss.item()
 
     def _update_g(self):
-        noise_dim = self.config["noise_dim"]
-        batch_size = self.config["batch_size"]
+        noise_dim = self._config.model.noise_dim
+        batch_size = self._config.dataset.batch_size
 
         # Mise à jour du générateur
         noise = self.generator.get_noise(batch_size, noise_dim, device=self.device)
@@ -193,13 +193,14 @@ class WGAN(Training):
                     d_loss = update_d(real_data)
                     d_mean.update(d_loss)
 
-                    if "clip_value" in self.config:
-                        clip_value = self.config["clip_value"]
-                        for p in self.discriminator.parameters():
-                            p.data.clamp_(-clip_value, clip_value)
+                    # TODO add clip_value in Config.
+                    # if "clip_value" in self.config:
+                    #     clip_value = self.config["clip_value"]
+                    #     for p in self.discriminator.parameters():
+                    #         p.data.clamp_(-clip_value, clip_value)
 
                     # update generator not so often
-                    n_critic = self.config.get("n_critic", 5)
+                    n_critic = self._config.model.n_critic
                     if n_critic == 1 or step % n_critic == 0:
                         g_loss = update_g()
                         g_mean.update(g_loss)
@@ -220,7 +221,7 @@ class WGAN(Training):
         return self.train_loop(epoch, train_loader, "Train")
 
     def fit(self, train_loader, valid_loader, run_id=None):
-        num_epochs = self.config["epochs"]
+        num_epochs = self._config.training.epochs
 
         self.loss.reset()
 
