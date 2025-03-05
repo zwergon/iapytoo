@@ -107,7 +107,7 @@ class Fake1DPlotter(PredictionPlotter):
         f, a = plt.subplots(self.n_plot, self.n_plot, figsize=(8, 8))
         for i in range(self.n_plot):
             for j in range(self.n_plot):
-                a[i][j].plot(fake[i * self.n_plot + j].view(-1))
+                a[i][j].plot(fake[i * self.n_plot + j, 0, :])
                 a[i][j].set_xticks(())
                 a[i][j].set_yticks(())
 
@@ -121,10 +121,12 @@ class DSPPlotter(PredictionPlotter):
         self.nperseg = nperseg
 
     def plot(self, epoch):
-        fake = self.predictions.predicted[0].view(-1)
+        fake = self.predictions.numpy(PredictionType.PREDICTED)
+        assert fake is not None and fake.shape[0] > 0, "no signal for DSP extraction"
         f, ax = plt.subplots()
 
-        frequencies, power_spectrum = welch(fake, fs=self.f_max, nperseg=self.nperseg)
+        frequencies, power_spectrum = welch(
+            fake[0, 0, :], fs=self.f_max, nperseg=self.nperseg)
         ax.plot(frequencies, power_spectrum)
 
         return {self.title: f}

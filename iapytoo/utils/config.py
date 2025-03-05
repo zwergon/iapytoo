@@ -10,13 +10,15 @@ from typing_extensions import Annotated
 
 os.environ["MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR"] = "false"
 
+
 def ensure_list(value):
-    if isinstance(value, str) :
+    if isinstance(value, str):
         v_list = value[1:-1].split(",")
         return [int(v) for v in v_list]
     else:
         return value
-  
+
+
 class DatasetConfig(BaseModel):
     path: str
     normalization: Optional[bool] = True
@@ -25,8 +27,9 @@ class DatasetConfig(BaseModel):
     padding: Optional[int] = 2
     image_size: Optional[int] = 224
     rotation: Optional[float] = 15
-    version_number: Optional[str] = "1.0.0" 
+    version_number: Optional[str] = "1.0.0"
     version_type: Optional[str] = "stable"
+
 
 class TrainingConfig(BaseModel):
     epochs: int = 10
@@ -44,7 +47,8 @@ class TrainingConfig(BaseModel):
     step_size: Optional[int] = 10
     gamma: Optional[float] = 0.9
     groups: Optional[int] = 1
-    top_accuracy: Optional[int] = 3 
+    top_accuracy: Optional[int] = 3
+
 
 class ModelConfig(BaseModel):
     model: str
@@ -53,13 +57,15 @@ class ModelConfig(BaseModel):
     kernel_size: Optional[int] = 5
     dropout: Optional[float] = 0.5
 
+
 class GanConfig(ModelConfig):
     generator: str
     discriminator: str
     lambda_gp: Optional[float] = 10.
     noise_dim: Optional[int] = 100
     n_critic: Optional[int] = 5
-    
+
+
 class Config(BaseModel):
     project: str
     run: str
@@ -70,7 +76,6 @@ class Config(BaseModel):
     dataset: DatasetConfig
     training: TrainingConfig
     model: Union[ModelConfig, GanConfig]
-
 
     def to_flat_dict(self, exclude_unset=False) -> Dict[str, str]:
         """Export the config as a flattened key/value dictionary."""
@@ -88,8 +93,9 @@ class Config(BaseModel):
 
     @classmethod
     def create_from_args(cls, args: dict):
-        
-        model_data = args.pop("model", {})  # Enlève "model" du dictionnaire principal
+
+        # Enlève "model" du dictionnaire principal
+        model_data = args.pop("model", {})
         model_type = model_data["model"]
 
         if model_type.lower() == "gan":
@@ -98,7 +104,7 @@ class Config(BaseModel):
             model_instance = ModelConfig(**model_data)
 
         return cls(**args, model=model_instance)  # On passe un objet instancié
-    
+
     @classmethod
     def create_from_yaml(cls, yaml_path):
         with open(yaml_path, "r") as file:
@@ -117,23 +123,21 @@ class Config(BaseModel):
 
         run = mlflow.get_run(run_id)
         experiment_id = run.info.experiment_id
-        experiment = mlflow.get_experiment(experiment_id=experiment_id)
+        experiment = mlflow.get_experiment(experiment_id)
 
         nested_dict['project'] = experiment.name
         nested_dict['run'] = run.info.run_name
-        
+
         for key, value in run.data.params.items():
             if isinstance(value, str) and value == 'None':
                 continue
             keys = key.split(".")
             d = nested_dict
             for key in keys[:-1]:
-                if key not in d:   
+                if key not in d:
                     d[key] = {}
-                d = d[key]  
-            d[keys[-1]] = value  
-
-        
+                d = d[key]
+            d[keys[-1]] = value
 
         return cls.create_from_args(nested_dict)
 
@@ -144,7 +148,7 @@ class Config(BaseModel):
             str += f".{k}: {v}\n"
         str += "---------\n"
         return str
-    
+
     def __str__(self):
         return self.__repr__()
 

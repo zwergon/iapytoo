@@ -33,9 +33,10 @@ class WGAN(Training):
         y_scaling: Scaling = None,
     ) -> None:
         super().__init__(config, predictor, metric_creators, y_scaling)
-        self.loss = Loss(n_losses=2)  # one for generator, one for discriminator
+        # one for generator, one for discriminator
+        self.loss = Loss(n_losses=2)
         self.train_loop = self.__tqdm_gan_loop(self._update_g, self._update_d)
-        self.predictions = GenerativePredictions()
+        self.predictions = GenerativePredictions(predictor=predictor)
 
     @property
     def generator(self):
@@ -88,7 +89,8 @@ class WGAN(Training):
         epsilon_shape[0] = real.shape[0]
 
         # epsilon: a vector of the uniformly random proportions of real/fake per mixed image
-        epsilon = torch.rand(epsilon_shape, device=real.device, requires_grad=True)
+        epsilon = torch.rand(
+            epsilon_shape, device=real.device, requires_grad=True)
 
         # Mix the images together
         mixed_images = real * epsilon + fake * (1 - epsilon)
@@ -149,7 +151,8 @@ class WGAN(Training):
         batch_size = self._config.dataset.batch_size
 
         # Mise à jour du générateur
-        noise = self.generator.get_noise(batch_size, noise_dim, device=self.device)
+        noise = self.generator.get_noise(
+            batch_size, noise_dim, device=self.device)
         fake_data = self.generator(noise)
 
         g_loss = -self.discriminator(fake_data).mean()
@@ -165,9 +168,11 @@ class WGAN(Training):
                 self.logger.report_prediction(epoch, self.predictions)
 
         for item in self.loss(WGAN_FCT.GENERATOR).buffer:
-            self.logger.report_metric(epoch=item[0], metrics={f"g_loss": item[1]})
+            self.logger.report_metric(
+                epoch=item[0], metrics={f"g_loss": item[1]})
         for item in self.loss(WGAN_FCT.DISCRIMINATOR).buffer:
-            self.logger.report_metric(epoch=item[0], metrics={f"d_loss": item[1]})
+            self.logger.report_metric(
+                epoch=item[0], metrics={f"d_loss": item[1]})
         self.loss.flush()
 
     def __tqdm_gan_loop(self, update_g, update_d):
@@ -207,7 +212,8 @@ class WGAN(Training):
 
                     timer.tick()
 
-                    tepoch.set_postfix(d_loss=d_mean.value, g_loss=g_mean.value)
+                    tepoch.set_postfix(d_loss=d_mean.value,
+                                       g_loss=g_mean.value)
 
             timer.log()
             timer.stop()
