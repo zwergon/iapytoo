@@ -2,6 +2,7 @@ import sys
 import torch
 from torch.autograd import grad
 from tqdm import tqdm
+import logging
 
 from iapytoo.dataset.scaling import Scaling
 from iapytoo.predictions import GenerativePredictions, Predictor
@@ -35,7 +36,12 @@ class WGAN(Training):
         super().__init__(config, predictor, metric_creators, y_scaling)
         # one for generator, one for discriminator
         self.loss = Loss(n_losses=2)
-        self.train_loop = self.__tqdm_gan_loop(self._update_g, self._update_d)
+        if self._config.training.tqdm:
+            self.train_loop = self.__tqdm_gan_loop(
+                self._update_g, self._update_d)
+        else:
+            self.train_loop = self.__batch_gan_loop(
+                self._update_g, self._update_d)
         self.predictions = GenerativePredictions(predictor=predictor)
 
     @property
@@ -214,6 +220,62 @@ class WGAN(Training):
 
                     tepoch.set_postfix(d_loss=d_mean.value,
                                        g_loss=g_mean.value)
+
+            timer.log()
+            timer.stop()
+
+        return new_function
+
+    def __batch_gan_loop(self, update_g, update_d):
+        """
+        This is a decorator that encapsulates the inner learning procces.
+        Iterations over all batches of one epoch.
+        This decorator displays a progress bar and computes some times
+        """
+
+        def new_function(epoch, loader, description):
+            timer = Timer()
+            timer.start()
+            d_mean = self.loss(WGAN_FCT.DISCRIMINATOR)
+            g_mean = self.loss(WGAN_FCT.GENERATOR)
+
+            logging.info(
+                f"Epoch {epoch} {description}"
+            )
+
+            size_by_batch = len(loader)
+            step = max(size_by_batch //
+                       self._config.training.n_steps_by_batch, 1)
+            for i, (real_data, _) in enumerate(loader):
+
+                if i % step == 0:
+                    f"Processing batch {i+1}/{size_by_batch}"
+
+                # update discriminator
+                real_data = real_data.to(self.device)
+                self.d_optimizer.zero_grad()
+                self.g_optimizer.zero_grad()
+
+                d_loss = update_d(real_data)
+                d_mean.update(d_loss)
+
+                # TODO add clip_value in Config.
+                # if "clip_value" in self.config:
+                #     clip_value = self.config["clip_value"]
+                #     for p in self.discriminator.parameters():
+                #         p.data.clamp_(-clip_value, clip_value)
+
+                # update generator not so often
+                n_critic = self._config.model.n_critic
+                if n_critic == 1 or i % n_critic == 0:
+                    g_loss = update_g()
+                    g_mean.update(g_loss)
+
+                timer.tick()
+
+                if i % step == 0:
+                    logging.info(
+                        f"Step {i+1}/{size_by_batch} - d_loss: {d_mean.value:.6f}, g_loss: {g_mean.value:.6f}")
 
             timer.log()
             timer.stop()
