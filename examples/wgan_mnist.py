@@ -1,25 +1,21 @@
 import os
+import numpy as np
+import matplotlib.pyplot as plt
+
 import torch
+import torchvision
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
+from torch.utils.data import Dataset
 from torch.autograd import grad
+from torchvision.datasets import MNIST
+import torchvision.transforms as transforms
+
 
 from iapytoo.train.wgan import WGAN
 from iapytoo.utils.config import Config
-
-
 from iapytoo.train.factories import Model, ModelFactory, OptimizerFactory
 from iapytoo.predictions.plotters import PredictionPlotter, Fake2DPlotter
-
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset
-import torchvision
-import numpy as np
-from torchvision.datasets import MNIST
-import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
 from iapytoo.train.factories import WeightInitiator
 
 
@@ -47,9 +43,9 @@ class Generator(Model):
         """
         return torch.randn(n_samples, z_dim, device=device)
 
-    def __init__(self, loader, config):
+    def __init__(self, loader, config: Config):
         super(Generator, self).__init__(loader, config)
-        self.z_dim = config["noise_dim"]
+        self.z_dim = config.model.noise_dim
         # Filters [1024, 512, 256]
         # Input_dim = 100
         # Output_dim = 1 (number of channels)
@@ -107,7 +103,7 @@ class Generator(Model):
 
 
 class Discriminator(Model):
-    def __init__(self, loader, config):
+    def __init__(self, loader, config : Config):
         super(Discriminator, self).__init__(loader, config)
         # Filters [256, 512, 1024]
         # Input_dim = 1 (Cx64x64)
@@ -167,7 +163,7 @@ class LatentDataset(Dataset):
 
 
 if __name__ == "__main__":
-    config = Config(os.path.join(os.path.dirname(__file__), "config_wgan.json"))
+    config = Config.create_from_yaml(os.path.join(os.path.dirname(__file__), "config_wgan.yml"))
 
     transform = transforms.Compose(
         [
@@ -178,13 +174,13 @@ if __name__ == "__main__":
     )
 
     # load training data
-    trainset = MNIST(config.data_dir, download=True, train=True, transform=transform)
+    trainset = MNIST(config.dataset.path, download=True, train=True, transform=transform)
 
     trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=config.batch_size, shuffle=True, drop_last=True
+        trainset, batch_size=config.dataset.batch_size, shuffle=True, drop_last=True
     )
 
-    latentset = LatentDataset(config.noise_dim, size=16)
+    latentset = LatentDataset(config.model.noise_dim, size=16)
 
     valid_loader = torch.utils.data.DataLoader(latentset, batch_size=1, shuffle=False)
 

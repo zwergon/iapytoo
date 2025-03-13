@@ -15,7 +15,7 @@ import mlflow
 from mlflow.models import ModelSignature
 from mlflow.types.schema import TensorSpec, Schema
 
-from iapytoo.utils.config import Config
+from iapytoo.utils.config import Config, ModelConfig
 from iapytoo.utils.display import lrfind_plot
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.train.context import Context
@@ -29,9 +29,9 @@ class Logger:
 
     @property
     def experiment_id(self):
-        experiment = mlflow.get_experiment_by_name(self.config["project"])
+        experiment = mlflow.get_experiment_by_name(self.config.project)
         if experiment is None:
-            return mlflow.create_experiment(self.config["project"])
+            return mlflow.create_experiment(self.config.project)
         else:
             return experiment.experiment_id
 
@@ -42,20 +42,17 @@ class Logger:
 
         return None
 
-    @property
-    def config(self):
-        return self._config.__dict__
-
     def __init__(self, config: Config, run_id: str = None) -> None:
-        self._config = config
+        self.config = config
         self.run_id = run_id
         self.agg = matplotlib.rcParams["backend"]
         self.signature = None
         self.lock = Lock()
-        print("tracking_uri", self.config["tracking_uri"])
-        if "tracking_uri" in self.config and self.config["tracking_uri"] is not None:
-            logging.info(f".. set tracking uri to {self.config['tracking_uri']}")
-            mlflow.set_tracking_uri(self.config["tracking_uri"])
+        if self.config.tracking_uri is not None:
+            logging.info(f".. set tracking uri to {self.config.tracking_uri}")
+            mlflow.set_tracking_uri(self.config.tracking_uri)
+        else:
+            logging.info(f"no tracking_uri set")
 
         self.context = Context(run_id)
 
@@ -72,9 +69,9 @@ class Logger:
         active_run = mlflow.start_run(
             experiment_id=self.experiment_id,
             run_id=self.run_id,
-            run_name=self._run_name(self.config["run"]),
+            run_name=self._run_name(self.config.run),
         )
-        print("active_run", active_run.info.run_id)
+        logging.info(f"active_run {active_run.info.run_id}")
         self.run_id = active_run.info.run_id
         if params_flag:
             mlflow.log_params(self._params())
@@ -97,19 +94,27 @@ class Logger:
     def _params(self):
         # take care, some config parameters are saved by mlflow.
         # When you run it again, these parameters can not change between two runs.
-        params = self._config.__dict__.copy()
-        if "run_id" in params:
-            del params["run_id"]
-        del params["epochs"]
-        del params["tracking_uri"]
+        params = self.config.to_flat_dict(exclude_unset=True)
+
+        for key in [
+            'training.epochs',
+            'training.tqdm', 
+            'project',
+            'run', 
+            'tracking_uri']:
+            if key in params:
+                del params[key]
+                
         return params
 
     def __str__(self):
         msg = "\nLogger:\n"
+
+        model: ModelConfig = self.config.model
         network = (
-            self.config["model"]
-            if "model" in self.config
-            else f"{self.config['discriminator']} & {self.config['generator']}"
+            model 
+            if not self.config.is_gan
+            else f"{model.discriminator} & {model.generator}"
         )
         msg += f"Network: {network}\n"
         msg += f"matplotlib backend: {matplotlib.rcParams['backend']}, interactive: {matplotlib.is_interactive()}\n"
@@ -126,7 +131,7 @@ class Logger:
 
     def summary(self):
         logging.info(str(self))
-        logging.info(self._config)
+        logging.info(self.config)
 
     def set_epoch(self, epoch):
         self.context.epoch = epoch

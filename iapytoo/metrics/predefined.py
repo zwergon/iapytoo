@@ -1,12 +1,14 @@
 
 import torch
+
+from iapytoo.utils.config import Config
 from iapytoo.metrics.metric import Metric
 
 
 class AccuracyMetric(Metric):
-    def __init__(self, config):
+    def __init__(self, config: Config):
         super(AccuracyMetric, self).__init__("accuracy", config)
-        self.k = config['top_accuracy']
+        self.k = config.training.top_accuracy
 
     def compute(self):
 
@@ -28,7 +30,7 @@ class AccuracyMetric(Metric):
 
 
 class R2Metric(Metric):
-    def __init__(self, config) -> None:
+    def __init__(self, config: Config) -> None:
         super(R2Metric, self).__init__("r2", config)
 
     def compute(self):
@@ -49,7 +51,7 @@ class R2Metric(Metric):
 
 
 class MSMetric(Metric):
-    def __init__(self, config) -> None:
+    def __init__(self, config: Config) -> None:
         super(MSMetric, self).__init__("mean_square", config)
 
     def _compute(self):
@@ -63,7 +65,7 @@ class MSMetric(Metric):
 
 
 class RMSMetric(MSMetric):
-    def __init__(self, config) -> None:
+    def __init__(self, config: Config) -> None:
         Metric.__init__(self, "root_mean_square", config)
         self.name = "rms"
 

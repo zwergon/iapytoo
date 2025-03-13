@@ -3,6 +3,7 @@ from iapytoo.utils.meta_singleton import MetaSingleton
 import torch.optim as to
 from torch.optim.lr_scheduler import StepLR
 
+from iapytoo.utils.config import Config
 
 class ModelError(Exception):
     def __init__(self, *args: object) -> None:
@@ -37,7 +38,7 @@ class ModelFactory(metaclass=MetaSingleton):
     def register_model(self, key, model_cls):
         self.models_dict[key] = model_cls
 
-    def create_model(self, kind: str, config: dict, loader, device="cpu"):
+    def create_model(self, kind: str, config: Config, loader, device="cpu"):
         """Creates an architecture of NN
 
         Args:
@@ -71,39 +72,39 @@ class OptimizerError(Exception):
 
 
 class Optimizer:
-    def __init__(self, model, config) -> None:
+    def __init__(self, model, config: Config) -> None:
         self.torch_optimizer = None
 
 
 class AdamOptimizer(Optimizer):
-    def __init__(self, model, config) -> None:
+    def __init__(self, model, config: Config) -> None:
         super().__init__(model, config)
 
-        kwargs = {"lr": config["learning_rate"]}
-        if "weight_decay" in config:
-            kwargs["weight_decay"] = config["weight_decay"]
-        if "betas" in config:
-            kwargs["betas"] = config["betas"]
+        kwargs = {"lr": config.training.learning_rate}
+        if config.training.weight_decay is not None:
+            kwargs["weight_decay"] = config.training.weight_decay 
+        if config.training.betas is not None:
+            kwargs["betas"] = config.training.weight_decay 
 
         self.torch_optimizer = to.Adam(model.parameters(), **kwargs)
 
 
 class RMSpropOptimizer(Optimizer):
-    def __init__(self, model, config):
+    def __init__(self, model, config: Config):
         super().__init__(model, config)
         self.torch_optimizer = to.RMSprop(
-            model.parameters(), lr=config["learning_rate"]
+            model.parameters(), lr=config.training.learning_rate
         )
 
 
 class SGDOptimizer(Optimizer):
-    def __init__(self, model, config) -> None:
+    def __init__(self, model, config: Config) -> None:
         super().__init__(model, config)
-        kwargs = {"lr": config["learning_rate"]}
-        if "weight_decay" in config:
-            kwargs["weight_decay"] = config["weight_decay"]
-        if "momentum" in config:
-            kwargs["momentum"] = config["momentum"]
+        kwargs = {"lr": config.training.learning_rate}
+        if config.training.weight_decay is not None:
+            kwargs["weight_decay"] = config.training.weight_decay 
+        if config.training.momentum is not None:
+            kwargs["momentum"] = config.training.momentum
         self.torch_optimizer = to.SGD(model.parameters(), **kwargs)
 
 
@@ -118,7 +119,7 @@ class OptimizerFactory(metaclass=MetaSingleton):
     def register_optimizer(self, key, optimizer_cls):
         self.optimizers_dict[key] = optimizer_cls
 
-    def create_optimizer(self, kind: str, model, config: dict):
+    def create_optimizer(self, kind: str, model, config: Config):
         """Creates an optimizer for the NN
 
         Args:
@@ -145,7 +146,7 @@ class SchedulerError(Exception):
 
 
 class Scheduler:
-    def __init__(self, optimizer, config) -> None:
+    def __init__(self, optimizer, config: Config) -> None:
         self.lr_scheduler = None
 
 
@@ -154,8 +155,8 @@ class StepScheduler(Scheduler):
         super().__init__(optimizer, config)
 
         kwargs = {}
-        kwargs["gamma"] = config.get("gamma", 0.7)
-        kwargs["step_size"] = config.get("step_size", 1)
+        kwargs["gamma"] = config.training.gamma
+        kwargs["step_size"] = config.training.step_size
         self.lr_scheduler = StepLR(optimizer, **kwargs)
 
 
@@ -166,7 +167,7 @@ class SchedulerFactory(metaclass=MetaSingleton):
     def register_scheduler(self, key, scheduler_cls):
         self.schedulers_dict[key] = scheduler_cls
 
-    def create_scheduler(self, kind: str, optimizer, config: dict):
+    def create_scheduler(self, kind: str, optimizer, config: Config):
         """Creates an learning rate scheduler
 
         Args:

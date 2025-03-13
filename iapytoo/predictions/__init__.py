@@ -63,8 +63,8 @@ class Predictions:
 
 
 class GenerativePredictions(Predictions):
-    def __init__(self, norm=False):
-        super().__init__(norm)
+    def __init__(self, predictor: Predictor, norm=False):
+        super().__init__(predictor=predictor, norm=norm)
 
     def compute(self, training, loader):
         device = training.device
