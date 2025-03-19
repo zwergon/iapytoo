@@ -33,7 +33,48 @@ class LossType(IntEnum):
     VALID = 1
 
 
-class Training:
+class Inference:
+
+    def __init__(
+        self,
+        config: Config,
+        predictor: Predictor = Predictor()
+    ) -> None:
+
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._config = config
+        self.logger = None
+        self.predictions = Predictions(predictor)
+        self._models = []
+
+    def _display_device(self):
+        use_cuda = torch.cuda.is_available()
+        if self._config.cuda and use_cuda:
+            msg = "\n__CUDA\n"
+            msg += f"__CUDNN VERSION: {torch.backends.cudnn.version()}\n"
+            msg += f"__Number CUDA Devices: {torch.cuda.device_count()}\n"
+            msg += f"__CUDA Device Name: {torch.cuda.get_device_name(0)}\n"
+            msg += f"__CUDA Device Total Memory [GB]: {torch.cuda.get_device_properties(0).total_memory / 1e9}\n"
+            msg += "-----------\n"
+            logging.info(msg)
+        else:
+            logging.info("__CPU")
+
+    @property
+    def model(self):
+        return self._models[0]
+
+    def _create_models(self, loader):
+        pass
+
+    def _valuator(self, loader) -> Valuator:
+        pass
+
+    def predict(self, loader, run_id=None):
+        pass
+
+
+class Training(Inference):
     @staticmethod
     def seed(config: Config):
         seed = config.seed
@@ -45,17 +86,16 @@ class Training:
         self,
         config: Config,
         predictor: Predictor = Predictor(),
-        metric_names: list = [],
-        y_scaling: Scaling = None,
+        metric_names: list = []
     ) -> None:
+        super().__init__(config=config, predictor=predictor)
+
         # first init all random seeds
         seed = config.seed
         random.seed(seed)
         numpy.random.seed(seed)
         torch.manual_seed(seed)
 
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self._config = config
         self.criterion = self._create_criterion()
 
         if self._config.training.tqdm:
@@ -65,18 +105,10 @@ class Training:
             self.train_loop = self.__batch_loop(self._inner_train)
             self.valid_loop = self.__batch_loop(self._inner_validate)
 
-        self.logger = None
         self.loss = Loss(n_losses=2)
-        self._models = []
         self._optimizers = []
         self._schedulers = []
-        self.predictions = Predictions(predictor)
-        self.y_scaling = y_scaling
         self.metric_names = metric_names
-
-    @property
-    def model(self):
-        return self._models[0]
 
     @property
     def scheduler(self):
@@ -142,6 +174,7 @@ class Training:
 
         return [optimizer]
 
+    # overwrite
     def _create_models(self, loader):
         model = ModelFactory().create_model(
             self._config.model.model, self._config, loader, self.device
@@ -182,6 +215,7 @@ class Training:
 
         return loss.item()
 
+    # overwrite
     def _valuator(self, loader):
         return TrainingValuator(self, loader)
 
@@ -214,19 +248,6 @@ class Training:
     # ----------------------------------------
     # Private methods
     # ----------------------------------------
-
-    def _display_device(self):
-        use_cuda = torch.cuda.is_available()
-        if self._config.cuda and use_cuda:
-            msg = "\n__CUDA\n"
-            msg += f"__CUDNN VERSION: {torch.backends.cudnn.version()}\n"
-            msg += f"__Number CUDA Devices: {torch.cuda.device_count()}\n"
-            msg += f"__CUDA Device Name: {torch.cuda.get_device_name(0)}\n"
-            msg += f"__CUDA Device Total Memory [GB]: {torch.cuda.get_device_properties(0).total_memory / 1e9}\n"
-            msg += "-----------\n"
-            logging.info(msg)
-        else:
-            logging.info("__CPU")
 
     def __tqdm_loop(self, function):
         """
@@ -408,6 +429,7 @@ class Training:
             "loss": self.loss(LossType.VALID).value,
         }
 
+    # overwrite
     def predict(self, loader, run_id=None):
         """
         computes predictions for one learned model.

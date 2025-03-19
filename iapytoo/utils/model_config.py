@@ -33,6 +33,13 @@ class GanConfig(ModelConfig):
         return f"{self.discriminator} & {self.generator}"
 
 
+class MLFlowConfig(ModelConfig):
+    run_id: str
+
+    def _network(self) -> str:
+        return self.run_id
+
+
 class ConfigError(Exception):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
@@ -43,6 +50,7 @@ class ModelConfigFactory:
     def __init__(self) -> None:
         self.model_dict = {
             "default": DefaultModelConfig,
+            "mlflow": MLFlowConfig,
             "gan": GanConfig
         }
 
