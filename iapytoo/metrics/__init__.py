@@ -1,8 +1,8 @@
 import torch
 
-from iapytoo.utils.meta_singleton import MetaSingleton
 
 from iapytoo.utils.config import Config
+from iapytoo.utils.singleton import singleton
 from .predefined import R2Metric, RMSMetric, MSMetric, AccuracyMetric
 from .metric import Metric
 
@@ -48,7 +48,8 @@ class MetricError(Exception):
         super().__init__(*args)
 
 
-class MetricFactory(metaclass=MetaSingleton):
+@singleton
+class MetricFactory():
     def __init__(self) -> None:
         self.metrics_dict = {
             "r2": R2Metric,

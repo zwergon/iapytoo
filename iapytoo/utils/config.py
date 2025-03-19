@@ -4,9 +4,10 @@ import logging
 import mlflow
 import tempfile
 import yaml
-from pydantic import BaseModel, BeforeValidator, PlainValidator
-from typing import List, Optional, Dict, Union
+from pydantic import BaseModel, BeforeValidator
+from typing import List, Optional, Dict
 from typing_extensions import Annotated
+from iapytoo.utils.model_config import ModelConfig, ModelConfigFactory
 
 os.environ["MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR"] = "false"
 
@@ -50,22 +51,6 @@ class TrainingConfig(BaseModel):
     top_accuracy: Optional[int] = 3
 
 
-class ModelConfig(BaseModel):
-    model: str
-    hidden_size: Optional[int] = 128
-    num_layers: Optional[int] = 3
-    kernel_size: Optional[int] = 5
-    dropout: Optional[float] = 0.5
-
-
-class GanConfig(ModelConfig):
-    generator: str
-    discriminator: str
-    lambda_gp: Optional[float] = 10.
-    noise_dim: Optional[int] = 100
-    n_critic: Optional[int] = 5
-
-
 class Config(BaseModel):
     project: str
     run: str
@@ -74,8 +59,8 @@ class Config(BaseModel):
     cuda: Optional[bool] = True
     seed: Optional[int] = 42
     dataset: DatasetConfig
-    training: TrainingConfig
-    model: Union[ModelConfig, GanConfig]
+    training: Optional[TrainingConfig] = None
+    model: ModelConfig
 
     def to_flat_dict(self, exclude_unset=False) -> Dict[str, str]:
         """Export the config as a flattened key/value dictionary."""
@@ -96,12 +81,10 @@ class Config(BaseModel):
 
         # Enlève "model" du dictionnaire principal
         model_data = args.pop("model", {})
-        model_type = model_data["model"]
+        model_type = model_data.get("type", "default")
 
-        if model_type.lower() == "gan":
-            model_instance = GanConfig(**model_data)
-        else:
-            model_instance = ModelConfig(**model_data)
+        factory = ModelConfigFactory()
+        model_instance = factory.create_model_config(model_type, **model_data)
 
         return cls(**args, model=model_instance)  # On passe un objet instancié
 

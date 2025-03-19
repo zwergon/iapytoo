@@ -22,7 +22,7 @@ from iapytoo.train.factories import (
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.train.context import Context
-from iapytoo.predictions import Predictions, Predictor
+from iapytoo.predictions import Predictions, Predictor, Valuator
 from iapytoo.metrics import MetricsCollection
 
 from enum import IntEnum
@@ -74,7 +74,6 @@ class Training:
         self.y_scaling = y_scaling
         self.metric_names = metric_names
 
-    
     @property
     def model(self):
         return self._models[0]
@@ -183,6 +182,9 @@ class Training:
 
         return loss.item()
 
+    def _valuator(self, loader):
+        return TrainingValuator(self, loader)
+
     def _on_epoch_ended(self, epoch, checkpoint, **kwargs):
         lr = self._get_lr(self.optimizer)
         self.logger.report_metric(epoch=epoch, metrics={"learning_rate": lr})
@@ -190,7 +192,9 @@ class Training:
         num_epochs = self._config.training.epochs
         if epoch % 10 == 0 or epoch == num_epochs - 1:
             if "valid_loader" in kwargs and len(self.predictions) > 0:
-                self.predictions.compute(self, kwargs["valid_loader"])
+
+                self.predictions.compute(
+                    self._valuator(kwargs["valid_loader"]))
                 self.logger.report_prediction(epoch, self.predictions)
 
             for item in self.loss(LossType.TRAIN).buffer:
@@ -203,7 +207,8 @@ class Training:
                 )
             self.loss.flush()
 
-            checkpoint.update(run_id=self.logger.run_id, epoch=epoch, training=self)
+            checkpoint.update(run_id=self.logger.run_id,
+                              epoch=epoch, training=self)
             self.logger.log_checkpoint(checkpoint=checkpoint)
 
     # ----------------------------------------
@@ -231,7 +236,8 @@ class Training:
         """
 
         def new_function(epoch, loader, description, mean: Mean):
-            metrics = MetricsCollection(description, self.metric_names, self._config)
+            metrics = MetricsCollection(
+                description, self.metric_names, self._config)
             metrics.to(self.device)
 
             timer = Timer()
@@ -264,9 +270,11 @@ class Training:
 
         def new_function(epoch, loader, description, mean: Mean):
             size_by_batch = len(loader)
-            step = max(size_by_batch // self._config.training.n_steps_by_batch, 1)
+            step = max(size_by_batch //
+                       self._config.training.n_steps_by_batch, 1)
 
-            metrics = MetricsCollection(description, self.metric_names, self._config)
+            metrics = MetricsCollection(
+                description, self.metric_names, self._config)
             metrics.to(self.device)
 
             for batch_idx, batch in enumerate(loader):
@@ -309,7 +317,8 @@ class Training:
         self._optimizers = self._create_optimizers()
 
         lr = self._config.training.learning_rate
-        self._config.training.gamma = (lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
+        self._config.training.gamma = (
+            lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
         self._config.training.step_size = 1
         self.optimizer.param_groups[0]["lr"] = 1e-8
         self._schedulers = [
@@ -388,7 +397,8 @@ class Training:
                 if self.scheduler is not None:
                     self.scheduler.step()
 
-                self._on_epoch_ended(epoch, checkpoint, valid_loader=valid_loader)
+                self._on_epoch_ended(
+                    epoch, checkpoint, valid_loader=valid_loader)
 
             self.logger.save_model(self.model)
 
@@ -411,4 +421,23 @@ class Training:
             assert self.model is not None, "no model loaded for prediction"
 
         assert self.predictions is not None, "no predictions defined for this training"
-        self.predictions.compute(self, loader)
+        self.predictions.compute(self, valuator=self._valuator(loader))
+
+
+class TrainingValuator(Valuator):
+
+    def __init__(self, training: Training, loader):
+        super().__init__(loader, device=training.device)
+        self.training = training
+
+    def evaluate(self):
+        model = self.training.model
+        model.eval()
+        with torch.no_grad():
+            for X, Y in self.loader:
+                X = X.to(self.training.device)
+                model_output = model(X)
+
+                outputs = model_output.detach().cpu()
+                actual = Y.detach().cpu()
+                yield outputs, actual

@@ -5,8 +5,8 @@ from tqdm import tqdm
 import logging
 
 from iapytoo.dataset.scaling import Scaling
-from iapytoo.predictions import GenerativePredictions, Predictor
-from iapytoo.train.training import Training
+from iapytoo.predictions import Predictor
+from iapytoo.train.training import Training, TrainingValuator
 from iapytoo.utils.config import Config
 from iapytoo.train.factories import (
     ModelFactory,
@@ -42,7 +42,6 @@ class WGAN(Training):
         else:
             self.train_loop = self.__batch_gan_loop(
                 self._update_g, self._update_d)
-        self.predictions = GenerativePredictions(predictor=predictor)
 
     @property
     def generator(self):
@@ -82,6 +81,9 @@ class WGAN(Training):
         )
 
         return [g_optimizer, d_optimizer]
+
+    def _valuator(self, loader):
+        return WGANValuator(self, loader)
 
     @staticmethod
     def freeze_params(model, freeze: bool):
@@ -170,7 +172,7 @@ class WGAN(Training):
     def _on_epoch_ended(self, epoch, checkpoint, **kwargs):
         if epoch % 10 == 0:
             if "loader" in kwargs:
-                self.predictions.compute(self, kwargs["loader"])
+                self.predictions.compute(self._valuator(kwargs["loader"]))
                 self.logger.report_prediction(epoch, self.predictions)
 
         for item in self.loss(WGAN_FCT.GENERATOR).buffer:
@@ -323,3 +325,19 @@ class WGAN(Training):
             "g_loss": self.loss(WGAN_FCT.GENERATOR).value,
             "d_loss": self.loss(WGAN_FCT.DISCRIMINATOR).value,
         }
+
+
+class WGANValuator(TrainingValuator):
+
+    def evaluate(self):
+        device = self.training.device
+        generator = self.training.generator
+        generator.eval()
+        with torch.no_grad():
+            for X in self.loader:
+                X = X.to(device)
+                gen_output = generator(X)
+
+                outputs = gen_output.detach().cpu()
+
+                yield outputs, None

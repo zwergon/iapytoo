@@ -87,9 +87,12 @@ class Logger:
         y_shape = list(Y.shape)
         y_shape[0] = -1
 
-        input_schema = Schema([TensorSpec(type=np.dtype(np.float32), shape=x_shape)])
-        output_schema = Schema([TensorSpec(type=np.dtype(np.float32), shape=y_shape)])
-        self.signature = ModelSignature(inputs=input_schema, outputs=output_schema)
+        input_schema = Schema(
+            [TensorSpec(type=np.dtype(np.float32), shape=x_shape)])
+        output_schema = Schema(
+            [TensorSpec(type=np.dtype(np.float32), shape=y_shape)])
+        self.signature = ModelSignature(
+            inputs=input_schema, outputs=output_schema)
 
     def _params(self):
         # take care, some config parameters are saved by mlflow.
@@ -98,25 +101,21 @@ class Logger:
 
         for key in [
             'training.epochs',
-            'training.tqdm', 
+            'training.tqdm',
             'project',
-            'run', 
-            'tracking_uri']:
+            'run',
+                'tracking_uri']:
             if key in params:
                 del params[key]
-                
+
         return params
 
     def __str__(self):
         msg = "\nLogger:\n"
 
-        model: ModelConfig = self.config.model
-        network = (
-            model 
-            if not self.config.is_gan
-            else f"{model.discriminator} & {model.generator}"
-        )
-        msg += f"Network: {network}\n"
+        model_config: ModelConfig = self.config.model
+
+        msg += f"Network: {model_config._network()}\n"
         msg += f"matplotlib backend: {matplotlib.rcParams['backend']}, interactive: {matplotlib.is_interactive()}\n"
         msg += f"tracking_uri: {mlflow.get_tracking_uri()}\n"
         active_run = mlflow.active_run()
@@ -146,7 +145,8 @@ class Logger:
         with tempfile.TemporaryDirectory() as tmpdirname:
             ckp_name = os.path.join(tmpdirname, "checkpoint.pt")
             torch.save(checkpoint.params, ckp_name)
-            mlflow.log_artifact(local_path=ckp_name, artifact_path="checkpoints")
+            mlflow.log_artifact(local_path=ckp_name,
+                                artifact_path="checkpoints")
 
     def save_model(self, model: nn.Module):
         with self.lock:
@@ -157,7 +157,8 @@ class Logger:
                 model.to(device),
                 "model",
                 signature=self.signature,
-                extra_pip_requirements=["--extra-index-url https://zwergon.github.io"],
+                extra_pip_requirements=[
+                    "--extra-index-url https://zwergon.github.io"],
             )
 
     def can_report(self):
@@ -185,7 +186,8 @@ class Logger:
             plots = predictions.plot(epoch)
             for name, fig in plots.items():
                 if fig is not None:
-                    mlflow.log_figure(fig, artifact_file=f"{name}/{name}_{epoch}.png")
+                    mlflow.log_figure(
+                        fig, artifact_file=f"{name}/{name}_{epoch}.png")
                     plt.close(fig)
 
     def report_findlr(self, lrs, losses):

@@ -1,9 +1,10 @@
 import torch.nn as nn
-from iapytoo.utils.meta_singleton import MetaSingleton
+from iapytoo.utils.singleton import singleton
 import torch.optim as to
 from torch.optim.lr_scheduler import StepLR
 
 from iapytoo.utils.config import Config
+
 
 class ModelError(Exception):
     def __init__(self, *args: object) -> None:
@@ -31,7 +32,8 @@ class Model(nn.Module):
         return model_output
 
 
-class ModelFactory(metaclass=MetaSingleton):
+@singleton
+class ModelFactory():
     def __init__(self) -> None:
         self.models_dict = {}
 
@@ -82,9 +84,9 @@ class AdamOptimizer(Optimizer):
 
         kwargs = {"lr": config.training.learning_rate}
         if config.training.weight_decay is not None:
-            kwargs["weight_decay"] = config.training.weight_decay 
+            kwargs["weight_decay"] = config.training.weight_decay
         if config.training.betas is not None:
-            kwargs["betas"] = config.training.weight_decay 
+            kwargs["betas"] = config.training.weight_decay
 
         self.torch_optimizer = to.Adam(model.parameters(), **kwargs)
 
@@ -102,13 +104,14 @@ class SGDOptimizer(Optimizer):
         super().__init__(model, config)
         kwargs = {"lr": config.training.learning_rate}
         if config.training.weight_decay is not None:
-            kwargs["weight_decay"] = config.training.weight_decay 
+            kwargs["weight_decay"] = config.training.weight_decay
         if config.training.momentum is not None:
             kwargs["momentum"] = config.training.momentum
         self.torch_optimizer = to.SGD(model.parameters(), **kwargs)
 
 
-class OptimizerFactory(metaclass=MetaSingleton):
+@singleton
+class OptimizerFactory():
     def __init__(self) -> None:
         self.optimizers_dict = {
             "adam": AdamOptimizer,
@@ -160,7 +163,8 @@ class StepScheduler(Scheduler):
         self.lr_scheduler = StepLR(optimizer, **kwargs)
 
 
-class SchedulerFactory(metaclass=MetaSingleton):
+@singleton
+class SchedulerFactory():
     def __init__(self) -> None:
         self.schedulers_dict = {"step": StepScheduler}
 
@@ -188,7 +192,8 @@ class SchedulerFactory(metaclass=MetaSingleton):
         return scheduler
 
 
-class LossFactory(metaclass=MetaSingleton):
+@singleton
+class LossFactory():
     def __init__(self) -> None:
         self.loss_dict = {
             "mse": nn.MSELoss,

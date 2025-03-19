@@ -20,7 +20,7 @@ training:
   loss: "wasserstein"
 
 model:
-  model: "gan"
+  type: "gan"
   generator: generator
   discriminator: critic
   n_critic: 1
