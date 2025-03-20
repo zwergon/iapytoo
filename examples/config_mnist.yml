@@ -14,7 +14,11 @@ training:
   optimizer: "adam"
   scheduler: "step"
   epochs: 11
+
+metrics:
+  names: ['accuracy']
  
 model:
+  type: "default"
   model: "mnist"
   kernel_size: 3

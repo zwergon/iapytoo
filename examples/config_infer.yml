@@ -8,6 +8,8 @@ dataset:
   num_workers: 2
   batch_size: 64
  
+metrics:
+  names: ['accuracy']
 model:
   type: "mlflow"
   run_id: "eb22ed3db7064e0c8c4513e4ac26486b"

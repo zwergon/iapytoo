@@ -1,17 +1,11 @@
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Type, Union, Literal
 from iapytoo.utils.singleton import singleton
 
 
-class ModelConfig(BaseModel):
-    type: Optional[str] = "default"
-
-    def _network(self) -> str:
-        pass
-
-
-class DefaultModelConfig(ModelConfig):
+class DefaultModelConfig(BaseModel):
+    type: Literal['default']
     model: str
     hidden_size: Optional[int] = 128
     num_layers: Optional[int] = 3
@@ -22,7 +16,8 @@ class DefaultModelConfig(ModelConfig):
         return str(self.model)
 
 
-class GanConfig(ModelConfig):
+class GanConfig(BaseModel):
+    type: Literal['gan']
     generator: str
     discriminator: str
     lambda_gp: Optional[float] = 10.
@@ -33,7 +28,8 @@ class GanConfig(ModelConfig):
         return f"{self.discriminator} & {self.generator}"
 
 
-class MLFlowConfig(ModelConfig):
+class MLFlowConfig(BaseModel):
+    type: Literal['mlflow']
     run_id: str
 
     def _network(self) -> str:
@@ -54,10 +50,13 @@ class ModelConfigFactory:
             "gan": GanConfig
         }
 
-    def create_model_config(self, kind, **kwargs) -> ModelConfig:
+    def get_union_type(self):
+        return Union[tuple(v for v in self.model_dict.values())]
+
+    def create_model_config(self, kind, **kwargs) -> BaseModel:
 
         try:
-            model_config: ModelConfig = self.model_dict[kind](**kwargs)
+            model_config: BaseModel = self.model_dict[kind](**kwargs)
         except KeyError:
             raise ConfigError(f"Config for model {kind} doesn't exist")
 

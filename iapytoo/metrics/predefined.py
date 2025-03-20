@@ -8,7 +8,7 @@ from iapytoo.metrics.metric import Metric
 class AccuracyMetric(Metric):
     def __init__(self, config: Config):
         super(AccuracyMetric, self).__init__("accuracy", config)
-        self.k = config.training.top_accuracy
+        self.k = config.metrics.top_accuracy
 
     def compute(self):
 

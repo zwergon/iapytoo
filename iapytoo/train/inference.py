@@ -1,14 +1,11 @@
-import torch
-
-
 import mlflow
 
 from iapytoo.utils.config import Config
 from iapytoo.train.logger import Logger
-from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.utils.model_config import MLFlowConfig
-from iapytoo.predictions import Predictions, Predictor, Valuator
+from iapytoo.predictions import Predictor, PredictionType
 from iapytoo.train.training import Inference
+from iapytoo.metrics import MetricsCollection
 
 
 class MLFlowInference(Inference):
@@ -18,29 +15,22 @@ class MLFlowInference(Inference):
         config: Config,
         predictor: Predictor = Predictor()
     ) -> None:
-
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self._config = config
-        self.logger = None
-        self.predictions = Predictions(predictor)
-
-        self._model = None
-
-    def _valuator(self, loader):
-        return MLFlowValuator(self, loader)
+        super().__init__(config, predictor=predictor)
 
     def _create_models(self, loader):
         model_config: MLFlowConfig = self._config.model
 
         logged_model = f"runs:/{model_config.run_id}/model"
         model = mlflow.pytorch.load_model(logged_model)
+        model = model.to(device=self.device)
         return [model]
 
     def predict(self, loader):
 
-        model_config: MLFlowConfig = self._config.model
+        metrics = MetricsCollection("inference", self._config)
+        # metrics.to(self.device)
 
-        with Logger(self._config, run_id=model_config.run_id) as self.logger:
+        with Logger(self._config) as self.logger:
             self._display_device()
             self.logger.summary()
 
@@ -51,20 +41,7 @@ class MLFlowInference(Inference):
             assert self.predictions is not None, "no predictions defined for this training"
             self.predictions.compute(valuator=self._valuator(loader))
             self.logger.report_prediction(0, self.predictions)
-
-
-class MLFlowValuator(Valuator):
-
-    def __init__(self, inference: MLFlowInference, loader):
-        super().__init__(loader, device=inference.device)
-        self.inference: MLFlowInference = inference
-
-    def evaluate(self):
-        model = self.inference.model
-        for X, Y in self.loader:
-            X = X.to(self.device)
-            model_output = model.predict(X)
-
-            outputs = model_output.detach().cpu()
-            actual = Y.detach().cpu()
-            yield outputs, actual
+            metrics.update(self.predictions.tensor(PredictionType.OUTPUTS),
+                           self.predictions.tensor(PredictionType.ACTUAL))
+            metrics.compute()
+            self.logger.report_metrics(0, metrics)

@@ -58,7 +58,7 @@ class MnistScheduler(Scheduler):
 
 class MnistTraining(Training):
     def __init__(self, config: Config) -> None:
-        super().__init__(config, predictor=MaxPredictor(), metric_names=[])
+        super().__init__(config, predictor=MaxPredictor())
         self.predictions.add_plotter(ConfusionPlotter())
 
 
@@ -81,7 +81,6 @@ if __name__ == "__main__":
 
     Training.seed(config)
 
-    
     training = MnistTraining(config)
 
     transform = transforms.Compose(
@@ -89,25 +88,25 @@ if __name__ == "__main__":
     )
 
     dataset1 = datasets.MNIST(
-        config.dataset.path, 
-        train=True, 
-        download=True, 
+        config.dataset.path,
+        train=True,
+        download=True,
         transform=transform
     )
-    
+
     dataset2 = datasets.MNIST(
-        config.dataset.path, 
-        train=False, 
+        config.dataset.path,
+        train=False,
         transform=transform
     )
 
     train_loader = torch.utils.data.DataLoader(
-        dataset1, 
-        batch_size=config.dataset.batch_size, 
+        dataset1,
+        batch_size=config.dataset.batch_size,
         num_workers=config.training.num_workers
     )
     test_loader = torch.utils.data.DataLoader(
-        dataset2, batch_size=config.dataset.batch_size, 
+        dataset2, batch_size=config.dataset.batch_size,
         num_workers=config.training.num_workers
     )
 

@@ -64,14 +64,33 @@ class Inference:
     def model(self):
         return self._models[0]
 
-    def _create_models(self, loader):
-        pass
+    def _valuator(self, loader):
+        return InferenceValuator(self, loader)
 
-    def _valuator(self, loader) -> Valuator:
+    def _create_models(self, loader):
         pass
 
     def predict(self, loader, run_id=None):
         pass
+
+
+class InferenceValuator(Valuator):
+
+    def __init__(self, inference: Inference, loader):
+        super().__init__(loader, device=inference.device)
+        self.inference = inference
+
+    def evaluate(self):
+        model = self.inference.model
+        model.eval()
+        with torch.no_grad():
+            for X, Y in self.loader:
+                X = X.to(self.inference.device)
+                model_output = model(X)
+
+                outputs = model_output.detach().cpu()
+                actual = Y.detach().cpu()
+                yield outputs, actual
 
 
 class Training(Inference):
@@ -85,8 +104,7 @@ class Training(Inference):
     def __init__(
         self,
         config: Config,
-        predictor: Predictor = Predictor(),
-        metric_names: list = []
+        predictor: Predictor = Predictor()
     ) -> None:
         super().__init__(config=config, predictor=predictor)
 
@@ -108,7 +126,6 @@ class Training(Inference):
         self.loss = Loss(n_losses=2)
         self._optimizers = []
         self._schedulers = []
-        self.metric_names = metric_names
 
     @property
     def scheduler(self):
@@ -215,10 +232,6 @@ class Training(Inference):
 
         return loss.item()
 
-    # overwrite
-    def _valuator(self, loader):
-        return TrainingValuator(self, loader)
-
     def _on_epoch_ended(self, epoch, checkpoint, **kwargs):
         lr = self._get_lr(self.optimizer)
         self.logger.report_metric(epoch=epoch, metrics={"learning_rate": lr})
@@ -258,7 +271,7 @@ class Training(Inference):
 
         def new_function(epoch, loader, description, mean: Mean):
             metrics = MetricsCollection(
-                description, self.metric_names, self._config)
+                description, self._config)
             metrics.to(self.device)
 
             timer = Timer()
@@ -295,7 +308,7 @@ class Training(Inference):
                        self._config.training.n_steps_by_batch, 1)
 
             metrics = MetricsCollection(
-                description, self.metric_names, self._config)
+                description, self._config)
             metrics.to(self.device)
 
             for batch_idx, batch in enumerate(loader):
@@ -444,22 +457,3 @@ class Training(Inference):
 
         assert self.predictions is not None, "no predictions defined for this training"
         self.predictions.compute(self, valuator=self._valuator(loader))
-
-
-class TrainingValuator(Valuator):
-
-    def __init__(self, training: Training, loader):
-        super().__init__(loader, device=training.device)
-        self.training = training
-
-    def evaluate(self):
-        model = self.training.model
-        model.eval()
-        with torch.no_grad():
-            for X, Y in self.loader:
-                X = X.to(self.training.device)
-                model_output = model(X)
-
-                outputs = model_output.detach().cpu()
-                actual = Y.detach().cpu()
-                yield outputs, actual

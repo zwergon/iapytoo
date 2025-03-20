@@ -4,10 +4,10 @@ import logging
 import mlflow
 import tempfile
 import yaml
-from pydantic import BaseModel, BeforeValidator
+from pydantic import BaseModel, BeforeValidator, Field
 from typing import List, Optional, Dict
 from typing_extensions import Annotated
-from iapytoo.utils.model_config import ModelConfig, ModelConfigFactory
+from iapytoo.utils.model_config import DefaultModelConfig, ModelConfigFactory
 
 os.environ["MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR"] = "false"
 
@@ -48,6 +48,10 @@ class TrainingConfig(BaseModel):
     step_size: Optional[int] = 10
     gamma: Optional[float] = 0.9
     groups: Optional[int] = 1
+
+
+class MetricsConfig(BaseModel):
+    names: Optional[List[str]] = Field(default=[])
     top_accuracy: Optional[int] = 3
 
 
@@ -60,7 +64,8 @@ class Config(BaseModel):
     seed: Optional[int] = 42
     dataset: DatasetConfig
     training: Optional[TrainingConfig] = None
-    model: ModelConfig
+    metrics: MetricsConfig = Field(default=MetricsConfig())
+    model: DefaultModelConfig
 
     def to_flat_dict(self, exclude_unset=False) -> Dict[str, str]:
         """Export the config as a flattened key/value dictionary."""
@@ -79,14 +84,19 @@ class Config(BaseModel):
     @classmethod
     def create_from_args(cls, args: dict):
 
-        # Enlève "model" du dictionnaire principal
-        model_data = args.pop("model", {})
-        model_type = model_data.get("type", "default")
+        model_data = args.pop("model")
+        if "type" not in model_data:
+            model_data['type'] = "default"
+        model_type = model_data["type"]
 
         factory = ModelConfigFactory()
-        model_instance = factory.create_model_config(model_type, **model_data)
+        cls.__annotations__["model"] = factory.model_dict[model_type]
+        cls.model_fields['model'].annotation = factory.model_dict[model_type]
+        cls.model_rebuild(force=True)
 
-        return cls(**args, model=model_instance)  # On passe un objet instancié
+        model = factory.create_model_config(model_type, **model_data)
+
+        return cls(**args, model=model)
 
     @classmethod
     def create_from_yaml(cls, yaml_path):

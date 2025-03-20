@@ -30,10 +30,10 @@ class Metric:
 
     def reset(self):
         device = self.device
-        self.predicted = torch.zeros(size=self.output_size, device=device)
+        self.predicted = torch.zeros(size=(0,), device=device)
         if self.with_target:
             self.target = torch.zeros(
-                size=self.output_size, device=self.device)
+                size=(0,), device=self.device)
 
     def compute(self):
         pass

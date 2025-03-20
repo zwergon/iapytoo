@@ -15,7 +15,7 @@ import mlflow
 from mlflow.models import ModelSignature
 from mlflow.types.schema import TensorSpec, Schema
 
-from iapytoo.utils.config import Config, ModelConfig
+from iapytoo.utils.config import Config
 from iapytoo.utils.display import lrfind_plot
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.train.context import Context
@@ -104,7 +104,8 @@ class Logger:
             'training.tqdm',
             'project',
             'run',
-                'tracking_uri']:
+                'tracking_uri'
+        ]:
             if key in params:
                 del params[key]
 
@@ -113,7 +114,7 @@ class Logger:
     def __str__(self):
         msg = "\nLogger:\n"
 
-        model_config: ModelConfig = self.config.model
+        model_config = self.config.model
 
         msg += f"Network: {model_config._network()}\n"
         msg += f"matplotlib backend: {matplotlib.rcParams['backend']}, interactive: {matplotlib.is_interactive()}\n"

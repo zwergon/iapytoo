@@ -8,10 +8,11 @@ from .metric import Metric
 
 
 class MetricsCollection(Metric):
-    def __init__(self, tag: str, metric_names: list, config: Config):
+    def __init__(self, tag: str, config: Config):
         super().__init__(tag, config)
         self.metrics = {}
         factory = MetricFactory()
+        metric_names = config.metrics.names
         try:
             for n in metric_names:
                 self.metrics[f"{tag}_{n}"] = factory.create_metric(n, config)
