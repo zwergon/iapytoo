@@ -58,7 +58,7 @@ class MnistScheduler(Scheduler):
 
 class MnistTraining(Training):
     def __init__(self, config: Config) -> None:
-        super().__init__(config, predictor=MaxPredictor())
+        super().__init__(config)
         self.predictions.add_plotter(ConfusionPlotter())
 
 

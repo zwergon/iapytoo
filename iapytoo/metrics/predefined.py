@@ -15,7 +15,7 @@ class AccuracyMetric(Metric):
         # Take care, for this metrics predicted and target do not have the same shape.
         # predicted : ouputs of the models - kind of probabilities
         # Target : label of the class
-        _, top_pred = self.predicted.topk(self.k, 1)
+        _, top_pred = self.outputs.topk(self.k, 1)
         top_pred = top_pred.t()
         correct = top_pred.eq(self.target.view(1, -1).expand_as(top_pred))
         correct_1 = correct[:1].reshape(-1).float().sum(0, keepdim=True)

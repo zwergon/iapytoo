@@ -9,7 +9,9 @@ dataset:
   batch_size: 64
  
 metrics:
-  names: ['accuracy']
+  names: ['accuracy', 'r2']
+
 model:
   type: "mlflow"
+  predictor: "max"
   run_id: "eb22ed3db7064e0c8c4513e4ac26486b"

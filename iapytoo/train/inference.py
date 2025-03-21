@@ -12,10 +12,9 @@ class MLFlowInference(Inference):
 
     def __init__(
         self,
-        config: Config,
-        predictor: Predictor = Predictor()
+        config: Config
     ) -> None:
-        super().__init__(config, predictor=predictor)
+        super().__init__(config)
 
     def _create_models(self, loader):
         model_config: MLFlowConfig = self._config.model

@@ -21,8 +21,7 @@ from iapytoo.train.factories import (
 )
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
-from iapytoo.train.context import Context
-from iapytoo.predictions import Predictions, Predictor, Valuator
+from iapytoo.predictions import Predictions, Valuator
 from iapytoo.metrics import MetricsCollection
 
 from enum import IntEnum
@@ -37,14 +36,13 @@ class Inference:
 
     def __init__(
         self,
-        config: Config,
-        predictor: Predictor = Predictor()
+        config: Config
     ) -> None:
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self._config = config
         self.logger = None
-        self.predictions = Predictions(predictor)
+        self.predictions = Predictions(config)
         self._models = []
 
     def _display_device(self):
@@ -103,11 +101,9 @@ class Training(Inference):
 
     def __init__(
         self,
-        config: Config,
-        predictor: Predictor = Predictor()
+        config: Config
     ) -> None:
-        super().__init__(config=config, predictor=predictor)
-
+        super().__init__(config=config)
         # first init all random seeds
         seed = config.seed
         random.seed(seed)

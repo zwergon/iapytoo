@@ -1,9 +1,10 @@
 import torch
 import numpy as np
 
+from iapytoo.utils.config import Config
 from .types import PredictionType
 from .plotters import CollectionPlotters
-from .predictors import Predictor
+from .predictors import Predictor, PredictorFactory
 
 
 class Valuator:
@@ -17,10 +18,12 @@ class Valuator:
 
 
 class Predictions:
-    def __init__(self, predictor: Predictor):
+    def __init__(self, config: Config):
         self.outputs = None  # dimension is assigned in compute
         self.actual = None
-        self.predictor = predictor
+
+        self.predictor = PredictorFactory().create_predictor(config)
+
         self.prediction_plotter: CollectionPlotters = CollectionPlotters()
         self.prediction_plotter.connect(self)
 
@@ -44,7 +47,7 @@ class Predictions:
 
     def tensor(self, type: PredictionType = PredictionType.PREDICTED):
         if type == PredictionType.PREDICTED:
-            return self.predictor(self.outputs)
+            return self.predictor(self.outputs) if self.predictor else self.outputs
         elif type == PredictionType.ACTUAL:
             return self.actual
         else:

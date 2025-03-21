@@ -4,8 +4,15 @@ from typing import Optional, Dict, Type, Union, Literal
 from iapytoo.utils.singleton import singleton
 
 
-class DefaultModelConfig(BaseModel):
-    type: Literal['default']
+class ModelConfig(BaseModel):
+    type: str
+    predictor: Optional[str] = None
+
+    def _network(self) -> str:
+        pass
+
+
+class DefaultModelConfig(ModelConfig):
     model: str
     hidden_size: Optional[int] = 128
     num_layers: Optional[int] = 3
@@ -16,8 +23,7 @@ class DefaultModelConfig(BaseModel):
         return str(self.model)
 
 
-class GanConfig(BaseModel):
-    type: Literal['gan']
+class GanConfig(ModelConfig):
     generator: str
     discriminator: str
     lambda_gp: Optional[float] = 10.
@@ -28,8 +34,7 @@ class GanConfig(BaseModel):
         return f"{self.discriminator} & {self.generator}"
 
 
-class MLFlowConfig(BaseModel):
-    type: Literal['mlflow']
+class MLFlowConfig(ModelConfig):
     run_id: str
 
     def _network(self) -> str:
@@ -53,10 +58,10 @@ class ModelConfigFactory:
     def get_union_type(self):
         return Union[tuple(v for v in self.model_dict.values())]
 
-    def create_model_config(self, kind, **kwargs) -> BaseModel:
+    def create_model_config(self, kind, **kwargs) -> ModelConfig:
 
         try:
-            model_config: BaseModel = self.model_dict[kind](**kwargs)
+            model_config: ModelConfig = self.model_dict[kind](**kwargs)
         except KeyError:
             raise ConfigError(f"Config for model {kind} doesn't exist")
 

@@ -19,6 +19,6 @@ metrics:
   names: ['accuracy']
  
 model:
-  type: "default"
   model: "mnist"
+  predictor: "max"
   kernel_size: 3

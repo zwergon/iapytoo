@@ -7,7 +7,7 @@ import yaml
 from pydantic import BaseModel, BeforeValidator, Field
 from typing import List, Optional, Dict
 from typing_extensions import Annotated
-from iapytoo.utils.model_config import DefaultModelConfig, ModelConfigFactory
+from iapytoo.utils.model_config import ModelConfig, ModelConfigFactory
 
 os.environ["MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR"] = "false"
 
@@ -65,7 +65,7 @@ class Config(BaseModel):
     dataset: DatasetConfig
     training: Optional[TrainingConfig] = None
     metrics: MetricsConfig = Field(default=MetricsConfig())
-    model: DefaultModelConfig
+    model: ModelConfig
 
     def to_flat_dict(self, exclude_unset=False) -> Dict[str, str]:
         """Export the config as a flattened key/value dictionary."""

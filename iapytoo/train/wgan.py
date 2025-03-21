@@ -4,19 +4,17 @@ from torch.autograd import grad
 from tqdm import tqdm
 import logging
 
-from iapytoo.dataset.scaling import Scaling
-from iapytoo.predictions import Predictor
-from iapytoo.train.training import Training, TrainingValuator
+from iapytoo.train.training import Training
 from iapytoo.utils.config import Config
 from iapytoo.train.factories import (
     ModelFactory,
-    OptimizerFactory,
-    LossFactory,
+    OptimizerFactory
 )
 from iapytoo.train.loss import Loss
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.utils.timer import Timer
+from iapytoo.train.training import InferenceValuator
 from enum import IntEnum
 
 
@@ -28,12 +26,9 @@ class WGAN_FCT(IntEnum):
 class WGAN(Training):
     def __init__(
         self,
-        config: Config,
-        predictor: Predictor = Predictor(),
-        metric_creators: list = ...,
-        y_scaling: Scaling = None,
+        config: Config
     ) -> None:
-        super().__init__(config, predictor, metric_creators, y_scaling)
+        super().__init__(config)
         # one for generator, one for discriminator
         self.loss = Loss(n_losses=2)
         if self._config.training.tqdm:
@@ -327,11 +322,12 @@ class WGAN(Training):
         }
 
 
-class WGANValuator(TrainingValuator):
+class WGANValuator(InferenceValuator):
 
     def evaluate(self):
-        device = self.training.device
-        generator = self.training.generator
+        training: WGAN = self.inference
+        device = training.device
+        generator = training.generator
         generator.eval()
         with torch.no_grad():
             for X in self.loader:
