@@ -2,8 +2,6 @@ import sys
 import random
 import numpy
 import torch
-from torch import nn
-import torch.optim as optim
 from tqdm import tqdm
 import logging
 
@@ -11,7 +9,6 @@ import logging
 from iapytoo.utils.config import Config
 from iapytoo.utils.timer import Timer
 from iapytoo.utils.iterative_mean import Mean
-from iapytoo.dataset.scaling import Scaling
 from iapytoo.train.loss import Loss
 from iapytoo.train.factories import (
     ModelFactory,
@@ -98,17 +95,18 @@ class Training(Inference):
         random.seed(seed)
         numpy.random.seed(seed)
         torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
     def __init__(
         self,
         config: Config
     ) -> None:
         super().__init__(config=config)
+
         # first init all random seeds
-        seed = config.seed
-        random.seed(seed)
-        numpy.random.seed(seed)
-        torch.manual_seed(seed)
+        self.seed(config)
 
         self.criterion = self._create_criterion()
 
@@ -242,11 +240,11 @@ class Training(Inference):
 
             for item in self.loss(LossType.TRAIN).buffer:
                 self.logger.report_metric(
-                    epoch=item[0], metrics={f"train_loss": item[1]}
+                    epoch=item[0], metrics={"train_loss": item[1]}
                 )
             for item in self.loss(LossType.VALID).buffer:
                 self.logger.report_metric(
-                    epoch=item[0], metrics={f"valid_loss": item[1]}
+                    epoch=item[0], metrics={"valid_loss": item[1]}
                 )
             self.loss.flush()
 

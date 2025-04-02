@@ -1,7 +1,5 @@
 import argparse
 
-from iapytoo.utils.config import Config
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run with either a config file or individual parameters.")
