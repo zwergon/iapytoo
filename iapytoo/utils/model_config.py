@@ -54,6 +54,11 @@ class ModelConfigFactory:
             "mlflow": MLFlowConfig,
             "gan": GanConfig
         }
+    
+    def register_model_config(
+        self, key: str, model_config_cls: type[ModelConfig]
+    ) -> None:
+        self.model_dict[key] = model_config_cls
 
     def get_union_type(self):
         return Union[tuple(v for v in self.model_dict.values())]
