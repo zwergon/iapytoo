@@ -36,11 +36,11 @@ class Inference:
         config: Config
     ) -> None:
 
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self._config = config
         self.logger = None
         self.predictions = Predictions(config)
         self._models = []
+        self.device = "cuda" if self._config.cuda else "cpu"
 
     def _display_device(self):
         use_cuda = torch.cuda.is_available()
