@@ -10,6 +10,7 @@ import typing as t
 from typing import List, Optional, Dict
 from typing_extensions import Annotated
 from iapytoo.utils.model_config import ModelConfig, ModelConfigFactory
+from iapytoo.utils.singleton import singleton
 
 os.environ["MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR"] = "false"
 
@@ -22,7 +23,9 @@ def ensure_list(value):
         return value
 
 
+# region: Sub-configs
 class DatasetConfig(BaseModel):
+    type: str = "default"
     path: str
     normalization: Optional[bool] = True
     batch_size: int
@@ -35,6 +38,7 @@ class DatasetConfig(BaseModel):
 
 
 class TrainingConfig(BaseModel):
+    type: str = "default"
     epochs: int = 10
     tqdm: Optional[bool] = True
     n_steps_by_batch: Optional[int] = 10
@@ -53,58 +57,18 @@ class TrainingConfig(BaseModel):
 
 
 class MetricsConfig(BaseModel):
-    names: Optional[List[str]] = Field(default=[])
+    type: str = "default"
+    names: Optional[List[str]] = Field(default_factory=list)
     top_accuracy: Optional[int] = 3
+# endregion
 
-DataT = t.TypeVar("DataT", bound = DatasetConfig)
-TrainingT = t.TypeVar("TrainingT", bound = TrainingConfig)
-MetricsT = t.TypeVar("MetricsT", bound = MetricsConfig)
-ModelT = t.TypeVar("ModelT", bound = ModelConfig)
+_DataT = t.TypeVar("_DataT", bound = DatasetConfig)
+_TrainingT = t.TypeVar("_TrainingT", bound = TrainingConfig)
+_ModelT = t.TypeVar("_ModelT", bound = ModelConfig)
+_MetricsT = t.TypeVar("_MetricsT", bound = MetricsConfig)
 
-class MetricsConfigFactory:
-    def __init__(self) -> None:
-        self.metrics_dict: dict[str, type[MetricsConfig]] = {
-            "default": MetricsConfig
-        }
-    
-    def register_metrics_config(
-        self, key: str, metrics_config_cls: type[MetricsConfig]
-    ) -> None:
-        self.metrics_dict[key] = metrics_config_cls
-
-    def get_union_type(self):
-        return t.Union[tuple(v for v in self.metrics_dict.values())]
-
-    def create_metrics_config(self, kind, **kwargs) -> MetricsConfig:
-        try:
-            metrics_config: MetricsConfig = self.metrics_dict[kind](**kwargs)
-        except KeyError:
-            raise KeyError(f"Config for metrics {kind} doesn't exist")
-
-        return metrics_config
-
-class TrainingConfigFactory:
-    def __init__(self) -> None:
-        self.training_dict: dict[str, type[TrainingConfig]] = {
-            "default": TrainingConfig
-        }
-    
-    def register_training_config(
-        self, key: str, training_config_cls: type[TrainingConfig]
-    ) -> None:
-        self.training_dict[key] = training_config_cls
-
-    def get_union_type(self):
-        return t.Union[tuple(v for v in self.training_dict.values())]
-
-    def create_training_config(self, kind, **kwargs) -> TrainingConfig:
-        try:
-            training_config: TrainingConfig = self.training_dict[kind](**kwargs)
-        except KeyError:
-            raise KeyError(f"Config for training {kind} doesn't exist")
-
-        return training_config
-
+# region: Sub-factories
+@singleton
 class DatasetConfigFactory:
     def __init__(self) -> None:
         self.dataset_dict: dict[str, type[DatasetConfig]] = {
@@ -116,9 +80,6 @@ class DatasetConfigFactory:
     ) -> None:
         self.dataset_dict[key] = dataset_config_cls
 
-    def get_union_type(self):
-        return t.Union[tuple(v for v in self.dataset_dict.values())]
-
     def create_dataset_config(self, kind, **kwargs) -> DatasetConfig:
         try:
             dataset_config: DatasetConfig = self.dataset_dict[kind](**kwargs)
@@ -127,17 +88,58 @@ class DatasetConfigFactory:
 
         return dataset_config
 
-class Config(BaseModel, t.Generic[DataT, TrainingT, MetricsT, ModelT]):
+@singleton
+class TrainingConfigFactory:
+    def __init__(self) -> None:
+        self.training_dict: dict[str, type[TrainingConfig]] = {
+            "default": TrainingConfig
+        }
+    
+    def register_training_config(
+        self, key: str, training_config_cls: type[TrainingConfig]
+    ) -> None:
+        self.training_dict[key] = training_config_cls
+
+    def create_training_config(self, kind, **kwargs) -> TrainingConfig:
+        try:
+            training_config: TrainingConfig = self.training_dict[kind](**kwargs)
+        except KeyError:
+            raise KeyError(f"Config for training {kind} doesn't exist")
+
+        return training_config
+
+@singleton
+class MetricsConfigFactory:
+    def __init__(self) -> None:
+        self.metrics_dict: dict[str, type[TrainingConfig]] = {
+            "default": MetricsConfig
+        }
+    
+    def register_metrics_config(
+        self, key: str, metrics_config_cls: type[MetricsConfig]
+    ) -> None:
+        self.metrics_dict[key] = metrics_config_cls
+    
+    def create_metrics_config(self, kind: str, **kwargs) -> MetricsConfig:
+        try:
+            metrics_config: MetricsConfig = self.metrics_dict[kind](**kwargs)
+        except KeyError:
+            raise KeyError(f"Config for metrics {kind} doesn't exist")
+        return metrics_config
+# endregion
+
+# region: Config
+class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _ModelT]):
     project: str
     run: str
     tracking_uri: Optional[str] = None
     sensors: Optional[str] = None
     cuda: Optional[bool] = True
     seed: Optional[int] = 42
-    dataset: DataT
-    training: Optional[TrainingT] = None
-    metrics: SerializeAsAny[MetricsT] = Field(default=MetricsConfig())
-    model: ModelT
+    dataset: _DataT
+    training: Optional[_TrainingT] = None
+    metrics: _MetricsT = Field(default_factory = MetricsConfig)
+    model: _ModelT
 
     def to_flat_dict(self, exclude_unset=False) -> Dict[str, str]:
         """Export the config as a flattened key/value dictionary."""
@@ -152,63 +154,6 @@ class Config(BaseModel, t.Generic[DataT, TrainingT, MetricsT, ModelT]):
             return dict(items)
 
         return flatten(self.model_dump(exclude_unset=exclude_unset))
-
-    @classmethod
-    def create_from_args(cls, args: dict):
-
-        model_data = args.pop("model")
-        if "type" not in model_data:
-            model_data['type'] = "default"
-        model_type = model_data["type"]
-
-        factory = ModelConfigFactory()
-        cls.__annotations__["model"] = factory.model_dict[model_type]
-        cls.model_fields['model'].annotation = factory.model_dict[model_type]
-        cls.model_rebuild(force=True)
-
-        model = factory.create_model_config(model_type, **model_data)
-
-        return cls(**args, model=model)
-
-    @classmethod
-    def create_from_yaml(cls, yaml_path):
-        with open(yaml_path, "r") as file:
-            data = yaml.safe_load(file)
-
-        return cls.create_from_args(data)
-
-    @classmethod
-    def create_from_run_id(cls, run_id, tracking_uri=None):
-        cf = {}
-
-        if tracking_uri is not None:
-            mlflow.set_tracking_uri(tracking_uri)
-
-        nested_dict = {}
-
-        run = mlflow.get_run(run_id)
-        experiment_id = run.info.experiment_id
-        experiment = mlflow.get_experiment(experiment_id)
-
-        nested_dict['project'] = experiment.name
-        nested_dict['run'] = run.info.run_name
-
-        for raw_key, raw_value in run.data.params.items():
-            try:
-                value = eval(raw_value)
-            except (SyntaxError, NameError):
-                value = raw_value
-            if value is None:
-                continue
-            keys: list[str] = raw_key.split(".")
-            d: dict = nested_dict
-            for raw_key in keys[:-1]:
-                if raw_key not in d:
-                    d[raw_key] = {}
-                d = d[raw_key]
-            d[keys[-1]] = value
-
-        return cls.create_from_args(nested_dict)
 
     def __repr__(self) -> str:
         str = "\nConfig:\n"
@@ -250,13 +195,51 @@ class Config(BaseModel, t.Generic[DataT, TrainingT, MetricsT, ModelT]):
     @property
     def is_gan(self) -> bool:
         return self.model.model.lower() == "gan"
-    
+# endregion
+
+# region: Config factory
 class ConfigFactory:
     @staticmethod
+    def from_args(kwargs: dict)-> Config:
+        dataset_data: dict | DatasetConfig = kwargs["dataset"]
+        if isinstance(dataset_data, dict):
+            dataset_type: str = dataset_data.get("type", "default")
+            kwargs["dataset"] = (
+                DatasetConfigFactory()
+                .create_dataset_config(kind = dataset_type, **dataset_data)
+            )
+        
+        training_data: dict | TrainingConfig | None = kwargs.get("training")
+        if isinstance(training_data, dict):
+            training_type: str = training_data.get("training", "default")
+            kwargs["training"] = (
+                TrainingConfigFactory()
+                .create_training_config(kind = training_type, **training_data)
+            )
+        
+        metrics_data: dict | MetricsConfig | None = kwargs.get("metrics")
+        if isinstance(metrics_data, dict):
+            metrics_kind: str = metrics_data.get("type", "default")
+            kwargs["metrics"] = (
+                MetricsConfigFactory()
+                .create_metrics_config(kind = metrics_kind, **metrics_data)
+            )
+        
+        model_data: dict | ModelConfig = kwargs["model"]
+        if isinstance(model_data, dict):
+            model_type: str = model_data.get("type", "default")
+            kwargs["model"] = (
+                ModelConfigFactory().create_model_config(model_type, **model_data)
+            )
+
+        return ConfigFactory.from_fields(**kwargs)
+    
+    @staticmethod
     def from_fields[DataT, TrainingT, MetricsT, ModelT](
+        *,
         dataset: DataT,
-        training: TrainingT,
-        metrics: MetricsT,
+        training: t.Optional[TrainingT] = None,
+        metrics: t.Optional[MetricsT] = None,
         model: ModelT,
         **kwargs
     ) -> Config[DataT, TrainingT, MetricsT, ModelT]:
@@ -267,50 +250,45 @@ class ConfigFactory:
             model = model,
             **kwargs
         )
-    
-    @staticmethod
-    def from_args(kwargs: dict)-> Config:
-        dataset_data: dict | DatasetConfig = kwargs["dataset"]
-        if isinstance(dataset_data, dict):
-            dataset_type: str = "default"
-            if "type" in dataset_data:
-                dataset_type = dataset_data.pop("type")
-            
-            kwargs["dataset"] = (
-                DatasetConfigFactory()
-                .create_dataset_config(dataset_type, **dataset_data)
-            )
-        
-        training_data: dict | TrainingConfig = kwargs["training"]
-        if isinstance(training_data, dict):
-            training_type: str = "default"
-            if "type" in training_data:
-                training_type = training_data.pop("type")
-            
-            kwargs["training"] = (
-                TrainingConfigFactory()
-                .create_training_config(training_type, **training_data)
-            )
-        
-        if "metrics" in kwargs:
-            metrics_data: dict | MetricsConfig = kwargs["metrics"]
-            if isinstance(metrics_data, dict):
-                metrics_type: str = "default"
-                if "type" in metrics_data:
-                    metrics_type = metrics_data.pop("type")
-                
-                kwargs["metrics"] = (
-                    MetricsConfigFactory()
-                    .create_metrics_config(metrics_type, **metrics_data)
-                )
-        else:
-            kwargs["metrics"] = MetricsConfigFactory().create_metrics_config("default")
-        
-        model_data: dict | ModelConfig = kwargs["model"]
-        if isinstance(model_data, dict):
-            model_type: str = model_data.get("type", "default")
-            kwargs["model"] = (
-                ModelConfigFactory().create_model_config(model_type, **model_data)
-            )
 
-        return ConfigFactory.from_fields(**kwargs)
+    @staticmethod
+    def from_run_id(run_id, tracking_uri = None):
+        cf = {}
+
+        if tracking_uri is not None:
+            mlflow.set_tracking_uri(tracking_uri)
+
+        nested_dict = {}
+
+        run = mlflow.get_run(run_id)
+        experiment_id = run.info.experiment_id
+        experiment = mlflow.get_experiment(experiment_id)
+
+        nested_dict['project'] = experiment.name
+        nested_dict['run'] = run.info.run_name
+
+        for raw_key, raw_value in run.data.params.items():
+            # convert raw strings to python types
+            try:
+                value = eval(raw_value)
+            except (SyntaxError, NameError):
+                value = raw_value
+            if value is None:
+                continue
+            keys: list[str] = raw_key.split(".")
+            d: dict = nested_dict
+            for raw_key in keys[:-1]:
+                if raw_key not in d:
+                    d[raw_key] = {}
+                d = d[raw_key]
+            d[keys[-1]] = value
+        
+        return ConfigFactory.from_args(nested_dict)
+
+    @staticmethod
+    def create_from_yaml(yaml_path):
+        with open(yaml_path, "r") as file:
+            data = yaml.safe_load(file)
+
+        return ConfigFactory.from_args(data)
+# endregion
