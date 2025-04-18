@@ -12,10 +12,18 @@ from iapytoo.utils.model_config import ModelConfig, ModelConfigFactory
 os.environ["MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR"] = "false"
 
 
-def ensure_list(value):
+def ensure_int_list(value):
     if isinstance(value, str):
         v_list = value[1:-1].split(",")
         return [int(v) for v in v_list]
+    else:
+        return value
+
+
+def ensure_str_list(value):
+    if isinstance(value, str):
+        v_list = value[1:-1].split(",")
+        return [v for v in v_list]
     else:
         return value
 
@@ -24,7 +32,7 @@ class DatasetConfig(BaseModel):
     path: str
     normalization: Optional[bool] = True
     batch_size: int
-    indices: Annotated[List[int], BeforeValidator(ensure_list)] = [0]
+    indices: Annotated[List[int], BeforeValidator(ensure_int_list)] = [0]
     padding: Optional[int] = 2
     image_size: Optional[int] = 224
     rotation: Optional[float] = 15
@@ -51,7 +59,8 @@ class TrainingConfig(BaseModel):
 
 
 class MetricsConfig(BaseModel):
-    names: Optional[List[str]] = Field(default=[])
+    names: Annotated[List[str], BeforeValidator(
+        ensure_str_list)] = Field(default=[])
     top_accuracy: Optional[int] = 3
 
 

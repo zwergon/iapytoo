@@ -24,8 +24,12 @@ class PredictorFactory():
             "max": MaxPredictor
         }
 
-    def create_predictor(self, config: Config):
-        kind = config.model.predictor
+    def create_predictor(self, key: Config | str):
+        if isinstance(key, Config):
+            config: Config = key
+            kind = config.model.predictor
+        else:
+            kind = key
         if kind is not None:
             return self.predictor_dict[kind]()
 

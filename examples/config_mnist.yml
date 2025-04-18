@@ -13,7 +13,7 @@ training:
   loss: "nll"
   optimizer: "adam"
   scheduler: "step"
-  epochs: 11
+  epochs: 2
 
 metrics:
   names: ['accuracy']

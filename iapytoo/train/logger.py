@@ -12,14 +12,15 @@ import logging
 from threading import Lock
 
 import mlflow
-from mlflow.models import ModelSignature
-from mlflow.types.schema import TensorSpec, Schema
+import mlflow.pyfunc
+
 
 from iapytoo.utils.config import Config
 from iapytoo.utils.display import lrfind_plot
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.train.context import Context
 from iapytoo.predictions import Predictions
+from iapytoo.train.mlflow_model import ModelWrapper, Transform
 
 
 class Logger:
@@ -35,6 +36,14 @@ class Logger:
         else:
             return experiment.experiment_id
 
+    @property
+    def artifact_uri(self):
+        if self.run_id is None:
+            return None
+        run = mlflow.get_run(self.run_id)
+        assert run is not None, f"unable to find run {self.run_id}"
+        return run.info.artifact_uri
+
     def active_run_name(self):
         active_run = mlflow.active_run()
         if active_run:
@@ -46,7 +55,6 @@ class Logger:
         self.config = config
         self.run_id = run_id
         self.agg = matplotlib.rcParams["backend"]
-        self.signature = None
         self.lock = Lock()
         if self.config.tracking_uri is not None:
             logging.info(f".. set tracking uri to {self.config.tracking_uri}")
@@ -80,20 +88,6 @@ class Logger:
         matplotlib.use(self.agg)
         mlflow.end_run()
 
-    def set_signature(self, loader):
-        X, Y = next(iter(loader))
-        x_shape = list(X.shape)
-        x_shape[0] = -1
-        y_shape = list(Y.shape)
-        y_shape[0] = -1
-
-        input_schema = Schema(
-            [TensorSpec(type=np.dtype(np.float32), shape=x_shape)])
-        output_schema = Schema(
-            [TensorSpec(type=np.dtype(np.float32), shape=y_shape)])
-        self.signature = ModelSignature(
-            inputs=input_schema, outputs=output_schema)
-
     def _params(self):
         # take care, some config parameters are saved by mlflow.
         # When you run it again, these parameters can not change between two runs.
@@ -124,8 +118,6 @@ class Logger:
             msg += f"Name: {active_run.info.run_name}\n"
             msg += f"Experiment_id: {active_run.info.experiment_id}\n"
             msg += f"Run_id: {self.run_id}\n"
-        if self.signature is not None:
-            msg += f"Signature {str(self.signature)}\n"
 
         return msg
 
@@ -142,6 +134,15 @@ class Logger:
             ctx_path = self.context.save(tmpdirname)
             mlflow.log_artifact(ctx_path)
 
+    def log_transform(self, transform: Transform):
+        if transform is None:
+            return
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            transform_name = os.path.join(tmpdirname, "transforms.pt")
+            torch.save(transform.infer_transform, transform_name)
+            mlflow.log_artifact(local_path=transform_name,
+                                artifact_path="checkpoints")
+
     def log_checkpoint(self, checkpoint: CheckPoint):
         with tempfile.TemporaryDirectory() as tmpdirname:
             ckp_name = os.path.join(tmpdirname, "checkpoint.pt")
@@ -149,17 +150,21 @@ class Logger:
             mlflow.log_artifact(local_path=ckp_name,
                                 artifact_path="checkpoints")
 
-    def save_model(self, model: nn.Module):
+    def save_model(self, model_wrapper: ModelWrapper):
+        assert model_wrapper is not None, "no model_wrapper instance ?"
+
+        signature = model_wrapper.signature
+        transform = model_wrapper.transform
+        input_example = model_wrapper.input_example
+
+        self.log_transform(transform)
+
         with self.lock:
-            # model for deployment don't need a GPU device
-            # store it on gpu
-            device = torch.device("cpu")
-            mlflow.pytorch.log_model(
-                model.to(device),
-                "model",
-                signature=self.signature,
-                extra_pip_requirements=[
-                    "--extra-index-url https://zwergon.github.io"],
+            mlflow.pyfunc.log_model(
+                artifact_path="model",
+                python_model=model_wrapper,
+                signature=signature,
+                input_example=input_example
             )
 
     def can_report(self):
