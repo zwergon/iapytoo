@@ -7,10 +7,12 @@ from scipy.signal import welch
 import numpy as np
 
 from iapytoo.predictions.types import PredictionType
+from iapytoo.utils.config import Config
+from iapytoo.utils.singleton import singleton
 
 
 class PredictionPlotter:
-    def __init__(self, title=None):
+    def __init__(self, title=None, config: Config | None = None):
         self.predictions = None
         self.title = title
 
@@ -23,7 +25,7 @@ class PredictionPlotter:
 
 class CollectionPlotters(PredictionPlotter):
 
-    def __init__(self, title=None):
+    def __init__(self, title=None, config: Config | None = None):
         super(CollectionPlotters, self).__init__(title)
         self.plotters = []
 
@@ -43,7 +45,7 @@ class CollectionPlotters(PredictionPlotter):
 
 
 class ScatterPlotter(PredictionPlotter):
-    def __init__(self):
+    def __init__(self, config: Config | None = None):
         super().__init__(title="actual_versus_predicted")
 
     def plot(self, epoch):
@@ -56,7 +58,7 @@ class ScatterPlotter(PredictionPlotter):
 
 
 class ConfusionPlotter(PredictionPlotter):
-    def __init__(self):
+    def __init__(self, config: Config | None = None):
         super().__init__(title="confusion_matrix")
 
     def plot(self, epoch):
@@ -72,7 +74,7 @@ class ConfusionPlotter(PredictionPlotter):
 
 class TSNEPlotter(PredictionPlotter):
 
-    def __init__(self):
+    def __init__(self, config: Config | None = None):
         super().__init__(title="tsne")
 
     def plot(self, epoch):
@@ -98,7 +100,7 @@ class TSNEPlotter(PredictionPlotter):
 
 
 class Fake1DPlotter(PredictionPlotter):
-    def __init__(self, n_plot=4):
+    def __init__(self, n_plot=4, config: Config | None = None):
         super().__init__(title="generated_fake1d")
         self.n_plot = n_plot
 
@@ -115,7 +117,7 @@ class Fake1DPlotter(PredictionPlotter):
 
 
 class DSPPlotter(PredictionPlotter):
-    def __init__(self, f_max=4, nperseg=200):
+    def __init__(self, f_max=4, nperseg=200, config: Config | None = None):
         super().__init__(title="dsp")
         self.f_max = f_max
         self.nperseg = nperseg
@@ -126,14 +128,15 @@ class DSPPlotter(PredictionPlotter):
         f, ax = plt.subplots()
 
         frequencies, power_spectrum = welch(
-            fake[0, 0, :], fs=self.f_max, nperseg=self.nperseg)
+            fake[0, 0, :], fs=self.f_max, nperseg=self.nperseg
+        )
         ax.plot(frequencies, power_spectrum)
 
         return {self.title: f}
 
 
 class Fake2DPlotter(PredictionPlotter):
-    def __init__(self, n_plot=4):
+    def __init__(self, n_plot=4, config: Config | None = None):
         super().__init__("generated_fake2d")
         self.n_plot = n_plot
 
@@ -146,3 +149,26 @@ class Fake2DPlotter(PredictionPlotter):
         ax.imshow(grid_img.permute(1, 2, 0))
 
         return {self.title: f}
+
+
+@singleton
+class PlotterFactory:
+    def __init__(self) -> None:
+        self.plotter_dict: dict[str, type[PredictionPlotter]] = {
+            "scatter": ScatterPlotter,
+            "confusion": ConfusionPlotter,
+            "tsne": TSNEPlotter,
+            "fake1d": Fake1DPlotter,
+            "fake2d": Fake2DPlotter,
+            "dsp": DSPPlotter,
+        }
+
+    def register_plotter(self, key: str, plotter_cls: type[PredictionPlotter]) -> None:
+        self.plotter_dict[key] = plotter_cls
+
+    def create_plotter(self, kind, **kwargs) -> PredictionPlotter:
+        try:
+            plotter: PredictionPlotter = self.plotter_dict[kind](**kwargs)
+        except KeyError:
+            raise KeyError(f"Plotter {kind} doesn't exist")
+        return plotter

@@ -13,8 +13,7 @@ class DummyVisionDataset(VisionDataset):
         np.random.seed(12)
         A = np.array(range(self.dim * self.dim)).reshape((self.dim, self.dim))
         self.images = np.zeros(
-            shape=(self.length, self.n_channels,
-                   self.dim, self.dim), dtype=np.float32
+            shape=(self.length, self.n_channels, self.dim, self.dim), dtype=np.float32
         )
         for idx in range(self.length):
             for c in range(self.n_channels):
@@ -24,10 +23,8 @@ class DummyVisionDataset(VisionDataset):
 
         self.targets = np.vstack(
             [
-                np.array(range(self.length)) +
-                np.random.normal(size=(self.length)),
-                np.array(range(self.length)) +
-                np.random.normal(size=(self.length)),
+                np.array(range(self.length)) + np.random.normal(size=(self.length)),
+                np.array(range(self.length)) + np.random.normal(size=(self.length)),
             ]
         )
 
@@ -49,8 +46,7 @@ class DummyLabelDataset(VisionDataset):
         np.random.seed(12)
         A = np.array(range(self.dim * self.dim)).reshape((self.dim, self.dim))
         self.images = np.zeros(
-            shape=(self.length, self.n_channels,
-                   self.dim, self.dim), dtype=np.float32
+            shape=(self.length, self.n_channels, self.dim, self.dim), dtype=np.float32
         )
         for idx in range(self.length):
             for c in range(self.n_channels):

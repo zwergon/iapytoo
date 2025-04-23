@@ -34,7 +34,7 @@ class MetricsCollection(Metric):
             results = m.compute()
             for name, result in results.items():
                 # prepend the name of the collection to all inner results : validation_accuracy for example
-                self.results[f'{self.name}_{name}'] = result
+                self.results[f"{self.name}_{name}"] = result
         return self.results
 
     # overwrite
@@ -49,7 +49,7 @@ class MetricError(Exception):
 
 
 @singleton
-class MetricFactory():
+class MetricFactory:
     def __init__(self) -> None:
         self.metrics_dict = {
             "r2": R2Metric,

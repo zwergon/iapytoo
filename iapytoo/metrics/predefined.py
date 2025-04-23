@@ -1,4 +1,3 @@
-
 import torch
 
 from iapytoo.utils.config import Config
@@ -19,13 +18,13 @@ class AccuracyMetric(Metric):
         top_pred = top_pred.t()
         correct = top_pred.eq(self.target.view(1, -1).expand_as(top_pred))
         correct_1 = correct[:1].reshape(-1).float().sum(0, keepdim=True)
-        correct_k = correct[:self.k].reshape(-1).float().sum(0, keepdim=True)
+        correct_k = correct[: self.k].reshape(-1).float().sum(0, keepdim=True)
 
         return {
-            'top-1': torch.round(
-                100.0 * correct_1 / self.target.shape[0], decimals=2),
-            f'top-{self.k}': torch.round(
-                100.0 * correct_k / self.target.shape[0], decimals=2)
+            "top-1": torch.round(100.0 * correct_1 / self.target.shape[0], decimals=2),
+            f"top-{self.k}": torch.round(
+                100.0 * correct_k / self.target.shape[0], decimals=2
+            ),
         }
 
 
