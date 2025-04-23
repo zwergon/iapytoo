@@ -24,10 +24,10 @@ class Loss:
         state_dict = {
             f"loss_{i}": self.losses[i].state_dict() for i in range(self.n_losses)
         }
-        state_dict['n_losses'] = self.n_losses
+        state_dict["n_losses"] = self.n_losses
         return state_dict
 
     def load_state_dict(self, state_dict):
-        self.n_losses = state_dict['n_losses']
+        self.n_losses = state_dict["n_losses"]
         for i in range(self.n_losses):
             self.losses[i].load_state_dict(state_dict[f"loss_{i}"])

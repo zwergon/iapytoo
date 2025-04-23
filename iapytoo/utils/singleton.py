@@ -7,7 +7,6 @@ def singleton(cls):
     lock = threading.RLock()  # Verrou pour synchroniser l'accès aux instances
 
     def get_instance(*args, **kwargs):
-        nonlocal instances
         with lock:
             if cls not in instances:
                 instances[cls] = cls(*args, **kwargs)

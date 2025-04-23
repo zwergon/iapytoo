@@ -6,6 +6,7 @@ import mlflow
 import tempfile
 import yaml
 from pydantic import BaseModel, BeforeValidator, SerializeAsAny, Field
+from pydantic_core import PydanticUndefined
 import typing as t
 from typing import List, Optional, Dict
 from typing_extensions import Annotated
@@ -48,7 +49,7 @@ class TrainingConfig(BaseModel):
     learning_rate: float
     optimizer: Optional[str] = "adam"
     weight_decay: Optional[float] = None
-    betas:  Optional[float] = None
+    betas: Optional[float] = None
     momentum: Optional[float] = 0.9
     scheduler: Optional[str] = "step"
     step_size: Optional[int] = 10
@@ -60,21 +61,28 @@ class MetricsConfig(BaseModel):
     type: str = "default"
     names: Optional[List[str]] = Field(default_factory=list)
     top_accuracy: Optional[int] = 3
+
+
+class PlottersConfig(BaseModel):
+    type: str = "default"
+    names: Optional[list[str]] = Field(default_factory=list)
+
+
 # endregion
 
-_DataT = t.TypeVar("_DataT", bound = DatasetConfig)
-_TrainingT = t.TypeVar("_TrainingT", bound = TrainingConfig)
-_ModelT = t.TypeVar("_ModelT", bound = ModelConfig)
-_MetricsT = t.TypeVar("_MetricsT", bound = MetricsConfig)
+_DataT = t.TypeVar("_DataT", bound=DatasetConfig)
+_TrainingT = t.TypeVar("_TrainingT", bound=TrainingConfig)
+_ModelT = t.TypeVar("_ModelT", bound=ModelConfig)
+_MetricsT = t.TypeVar("_MetricsT", bound=MetricsConfig)
+_PlottersT = t.TypeVar("_PlottersT", bound=PlottersConfig)
+
 
 # region: Sub-factories
 @singleton
 class DatasetConfigFactory:
     def __init__(self) -> None:
-        self.dataset_dict: dict[str, type[DatasetConfig]] = {
-            "default": DatasetConfig
-        }
-    
+        self.dataset_dict: dict[str, type[DatasetConfig]] = {"default": DatasetConfig}
+
     def register_dataset_config(
         self, key: str, dataset_config_cls: type[DatasetConfig]
     ) -> None:
@@ -88,13 +96,14 @@ class DatasetConfigFactory:
 
         return dataset_config
 
+
 @singleton
 class TrainingConfigFactory:
     def __init__(self) -> None:
         self.training_dict: dict[str, type[TrainingConfig]] = {
             "default": TrainingConfig
         }
-    
+
     def register_training_config(
         self, key: str, training_config_cls: type[TrainingConfig]
     ) -> None:
@@ -108,28 +117,50 @@ class TrainingConfigFactory:
 
         return training_config
 
+
 @singleton
 class MetricsConfigFactory:
     def __init__(self) -> None:
-        self.metrics_dict: dict[str, type[TrainingConfig]] = {
-            "default": MetricsConfig
-        }
-    
+        self.metrics_dict: dict[str, type[TrainingConfig]] = {"default": MetricsConfig}
+
     def register_metrics_config(
         self, key: str, metrics_config_cls: type[MetricsConfig]
     ) -> None:
         self.metrics_dict[key] = metrics_config_cls
-    
+
     def create_metrics_config(self, kind: str, **kwargs) -> MetricsConfig:
         try:
             metrics_config: MetricsConfig = self.metrics_dict[kind](**kwargs)
         except KeyError:
             raise KeyError(f"Config for metrics {kind} doesn't exist")
         return metrics_config
+
+
+@singleton
+class PlottersConfigFactory:
+    def __init__(self) -> None:
+        self.plotters_dict: dict[str, type[PlottersConfig]] = {
+            "default": PlottersConfig
+        }
+
+    def register_plotters_config(
+        self, key: str, plotters_config_cls: type[PlottersConfig]
+    ) -> None:
+        self.plotters_dict[key] = plotters_config_cls
+
+    def create_plotters_config(self, kind: str, **kwargs) -> PlottersConfig:
+        try:
+            plotters_config: PlottersConfig = self.plotters_dict[kind](**kwargs)
+        except KeyError:
+            raise KeyError(f"Config for plotter {kind} doesn't exist")
+        return plotters_config
+
+
 # endregion
 
+
 # region: Config
-class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _ModelT]):
+class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _PlottersT, _ModelT]):
     project: str
     run: str
     tracking_uri: Optional[str] = None
@@ -138,11 +169,13 @@ class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _ModelT]):
     seed: Optional[int] = 42
     dataset: _DataT
     training: Optional[_TrainingT] = None
-    metrics: _MetricsT = Field(default_factory = MetricsConfig)
+    metrics: _MetricsT = Field(default_factory=MetricsConfig)
+    plotters: _PlottersT = Field(default_factory=PlottersConfig)
     model: _ModelT
 
     def to_flat_dict(self, exclude_unset=False) -> Dict[str, str]:
         """Export the config as a flattened key/value dictionary."""
+
         def flatten(d, parent_key="", sep="."):
             items = []
             for k, v in d.items():
@@ -195,64 +228,73 @@ class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _ModelT]):
     @property
     def is_gan(self) -> bool:
         return self.model.model.lower() == "gan"
+
+
 # endregion
+
 
 # region: Config factory
 class ConfigFactory:
     @staticmethod
-    def from_args(kwargs: dict)-> Config:
+    def from_args(kwargs: dict) -> Config:
         dataset_data: dict | DatasetConfig = kwargs["dataset"]
         if isinstance(dataset_data, dict):
             dataset_type: str = dataset_data.get("type", "default")
-            kwargs["dataset"] = (
-                DatasetConfigFactory()
-                .create_dataset_config(kind = dataset_type, **dataset_data)
+            kwargs["dataset"] = DatasetConfigFactory().create_dataset_config(
+                kind=dataset_type, **dataset_data
             )
-        
+
         training_data: dict | TrainingConfig | None = kwargs.get("training")
         if isinstance(training_data, dict):
             training_type: str = training_data.get("training", "default")
-            kwargs["training"] = (
-                TrainingConfigFactory()
-                .create_training_config(kind = training_type, **training_data)
+            kwargs["training"] = TrainingConfigFactory().create_training_config(
+                kind=training_type, **training_data
             )
-        
+
         metrics_data: dict | MetricsConfig | None = kwargs.get("metrics")
         if isinstance(metrics_data, dict):
             metrics_kind: str = metrics_data.get("type", "default")
-            kwargs["metrics"] = (
-                MetricsConfigFactory()
-                .create_metrics_config(kind = metrics_kind, **metrics_data)
+            kwargs["metrics"] = MetricsConfigFactory().create_metrics_config(
+                kind=metrics_kind, **metrics_data
             )
-        
+
+        plotters_data: dict | PlottersConfig | None = kwargs.get("plotters")
+        if isinstance(plotters_data, dict):
+            plotters_kind: str = plotters_data.get("type", "default")
+            kwargs["plotters"] = PlottersConfigFactory().create_plotters_config(
+                kind=plotters_kind, **plotters_data
+            )
+
         model_data: dict | ModelConfig = kwargs["model"]
         if isinstance(model_data, dict):
             model_type: str = model_data.get("type", "default")
-            kwargs["model"] = (
-                ModelConfigFactory().create_model_config(model_type, **model_data)
+            kwargs["model"] = ModelConfigFactory().create_model_config(
+                model_type, **model_data
             )
 
         return ConfigFactory.from_fields(**kwargs)
-    
+
     @staticmethod
-    def from_fields[DataT, TrainingT, MetricsT, ModelT](
+    def from_fields(
         *,
-        dataset: DataT,
-        training: t.Optional[TrainingT] = None,
-        metrics: t.Optional[MetricsT] = None,
-        model: ModelT,
-        **kwargs
-    ) -> Config[DataT, TrainingT, MetricsT, ModelT]:
-        return Config[DataT, TrainingT, MetricsT, ModelT](
-            dataset = dataset,
-            training = training,
-            metrics = metrics,
-            model = model,
-            **kwargs
+        dataset: _DataT,
+        training: t.Optional[_TrainingT] = None,
+        metrics: _MetricsT = PydanticUndefined,
+        plotters: _PlottersT = PydanticUndefined,
+        model: _ModelT,
+        **kwargs,
+    ) -> Config[_DataT, _TrainingT, _MetricsT, _PlottersT, _ModelT]:
+        return Config[_DataT, _TrainingT, _MetricsT, _PlottersT, _ModelT](
+            dataset=dataset,
+            training=training,
+            metrics=metrics,
+            plotters=plotters,
+            model=model,
+            **kwargs,
         )
 
     @staticmethod
-    def from_run_id(run_id, tracking_uri = None):
+    def from_run_id(run_id, tracking_uri=None):
         cf = {}
 
         if tracking_uri is not None:
@@ -264,8 +306,8 @@ class ConfigFactory:
         experiment_id = run.info.experiment_id
         experiment = mlflow.get_experiment(experiment_id)
 
-        nested_dict['project'] = experiment.name
-        nested_dict['run'] = run.info.run_name
+        nested_dict["project"] = experiment.name
+        nested_dict["run"] = run.info.run_name
 
         for raw_key, raw_value in run.data.params.items():
             # convert raw strings to python types
@@ -282,7 +324,7 @@ class ConfigFactory:
                     d[raw_key] = {}
                 d = d[raw_key]
             d[keys[-1]] = value
-        
+
         return ConfigFactory.from_args(nested_dict)
 
     @staticmethod
@@ -291,4 +333,6 @@ class ConfigFactory:
             data = yaml.safe_load(file)
 
         return ConfigFactory.from_args(data)
+
+
 # endregion

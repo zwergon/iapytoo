@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel
 from typing import Optional, Dict, Type, Union, Literal
 from iapytoo.utils.singleton import singleton
@@ -26,7 +25,7 @@ class DefaultModelConfig(ModelConfig):
 class GanConfig(ModelConfig):
     generator: str
     discriminator: str
-    lambda_gp: Optional[float] = 10.
+    lambda_gp: Optional[float] = 10.0
     noise_dim: Optional[int] = 100
     n_critic: Optional[int] = 5
 
@@ -52,9 +51,9 @@ class ModelConfigFactory:
         self.model_dict = {
             "default": DefaultModelConfig,
             "mlflow": MLFlowConfig,
-            "gan": GanConfig
+            "gan": GanConfig,
         }
-    
+
     def register_model_config(
         self, key: str, model_config_cls: type[ModelConfig]
     ) -> None:

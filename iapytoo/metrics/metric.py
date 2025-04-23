@@ -40,8 +40,7 @@ class Metric:
         device = self.device
         self.outputs = torch.zeros(size=(0,), device=device)
         if self.with_target:
-            self.target = torch.zeros(
-                size=(0,), device=self.device)
+            self.target = torch.zeros(size=(0,), device=self.device)
 
     def compute(self):
         pass
