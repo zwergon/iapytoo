@@ -4,7 +4,6 @@ import os
 import sys
 import logging
 import mlflow
-import tempfile
 import yaml
 from pydantic import BaseModel, BeforeValidator, SerializeAsAny, Field
 from pydantic_core import PydanticUndefined
@@ -42,6 +41,8 @@ class DatasetConfig(BaseModel):
     rotation: Optional[float] = 15
     version_number: Optional[str] = "1.0.0"
     version_type: Optional[str] = "stable"
+    ratio_train_test: Optional[float] = 0.8
+    num_workers: Optional[int] = 2
 
 
 class TrainingConfig(BaseModel):
@@ -49,8 +50,6 @@ class TrainingConfig(BaseModel):
     epochs: int = 10
     tqdm: Optional[bool] = True
     n_steps_by_batch: Optional[int] = 10
-    ratio_train_test: Optional[float] = 0.8
-    num_workers: Optional[int] = 2
     loss: str
     learning_rate: float
     optimizer: Optional[str] = "adam"
