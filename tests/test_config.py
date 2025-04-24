@@ -1,7 +1,7 @@
 import unittest
 import tempfile
 import yaml
-from iapytoo.utils.config import Config, ModelConfig
+from iapytoo.utils.config import ConfigFactory, ModelConfig
 from unittest.mock import patch, MagicMock
 
 
@@ -36,7 +36,7 @@ class TestConfig(unittest.TestCase):
         os.unlink(self.temp_file.name)
 
     def test_config_loading(self):
-        config = Config.create_from_yaml(self.temp_file.name)
+        config = ConfigFactory.create_from_yaml(self.temp_file.name)
         self.assertEqual(config.project, "iapytoo")
         self.assertEqual(config.run, "test_run")
         self.assertEqual(config.sensors, "sensor_1")
@@ -47,7 +47,7 @@ class TestConfig(unittest.TestCase):
         print(config)
 
     def test_config_types(self):
-        config = Config.create_from_args(self.config_data)
+        config = ConfigFactory.from_args(self.config_data)
         self.assertIsInstance(config.dataset.batch_size, int)
         self.assertIsInstance(config.training.learning_rate, float)
         self.assertIsInstance(config.cuda, bool)
@@ -59,7 +59,7 @@ class TestConfig(unittest.TestCase):
     @patch("mlflow.get_experiment")
     @patch("mlflow.get_run")
     def test_create_from_run_id(self, mock_get_run, mock_get_experiment):
-        config_ini = Config.create_from_args(self.config_data)
+        config_ini = ConfigFactory.from_args(self.config_data)
 
         flat_dict = config_ini.to_flat_dict()
         print(flat_dict)
@@ -82,7 +82,7 @@ class TestConfig(unittest.TestCase):
         mock_get_run.return_value = mock_run
 
         # Appelle la méthode avec un run_id fictif
-        config = Config.create_from_run_id(run_id="12345")
+        config = ConfigFactory.from_run_id(run_id="12345")
 
         # Vérifie que mlflow.get_run a été appelé avec le bon run_id
         mock_get_run.assert_called_once_with("12345")
