@@ -62,7 +62,7 @@ class Logger:
         else:
             logging.info(f"no tracking_uri set")
 
-        self.context = Context(run_id)
+        # self.context = Context(run_id)
 
     def __enter__(self):
         self.start()
@@ -94,11 +94,11 @@ class Logger:
         params = self.config.to_flat_dict(exclude_unset=True)
 
         for key in [
-            'training.epochs',
-            'training.tqdm',
-            'project',
-            'run',
-                'tracking_uri'
+            "training.epochs",
+            "training.tqdm",
+            "project",
+            "run",
+            "tracking_uri",
         ]:
             if key in params:
                 del params[key]

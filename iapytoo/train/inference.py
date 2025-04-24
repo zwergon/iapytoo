@@ -58,10 +58,7 @@ class Inference(ABC):
 
 class MLFlowInference(Inference):
 
-    def __init__(
-        self,
-        config: Config
-    ) -> None:
+    def __init__(self, config: Config) -> None:
         super().__init__(config)
 
     def _create_models(self, loader):
@@ -85,10 +82,19 @@ class MLFlowInference(Inference):
 
             assert self.model is not None, "no model loaded for prediction"
 
+<<<<<<< HEAD
             assert self.predictions is not None, "no predictions defined for this training"
             self.predictions.compute(loader=loader, valuator=self._valuator())
+=======
+            assert (
+                self.predictions is not None
+            ), "no predictions defined for this training"
+            self.predictions.compute(valuator=self._valuator(loader))
+>>>>>>> develop
             self.logger.report_prediction(0, self.predictions)
-            metrics.update(self.predictions.tensor(PredictionType.OUTPUTS),
-                           self.predictions.tensor(PredictionType.ACTUAL))
+            metrics.update(
+                self.predictions.tensor(PredictionType.OUTPUTS),
+                self.predictions.tensor(PredictionType.ACTUAL),
+            )
             metrics.compute()
             self.logger.report_metrics(0, metrics)

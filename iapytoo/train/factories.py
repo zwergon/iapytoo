@@ -33,7 +33,7 @@ class Model(nn.Module):
 
 
 @singleton
-class ModelFactory():
+class ModelFactory:
     def __init__(self) -> None:
         self.models_dict = {}
 
@@ -111,7 +111,7 @@ class SGDOptimizer(Optimizer):
 
 
 @singleton
-class OptimizerFactory():
+class OptimizerFactory:
     def __init__(self) -> None:
         self.optimizers_dict = {
             "adam": AdamOptimizer,
@@ -164,7 +164,7 @@ class StepScheduler(Scheduler):
 
 
 @singleton
-class SchedulerFactory():
+class SchedulerFactory:
     def __init__(self) -> None:
         self.schedulers_dict = {"step": StepScheduler}
 
@@ -193,7 +193,7 @@ class SchedulerFactory():
 
 
 @singleton
-class LossFactory():
+class LossFactory:
     def __init__(self) -> None:
         self.loss_dict = {
             "mse": nn.MSELoss,

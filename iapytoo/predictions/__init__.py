@@ -2,7 +2,6 @@ import torch
 import numpy as np
 
 from iapytoo.utils.config import Config
-from iapytoo.train.valuator import Valuator
 from .types import PredictionType
 from .plotters import CollectionPlotters
 from .predictors import Predictor, PredictorFactory
