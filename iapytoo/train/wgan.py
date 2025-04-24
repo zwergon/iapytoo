@@ -6,10 +6,7 @@ import logging
 
 from iapytoo.train.training import Training
 from iapytoo.utils.config import Config
-from iapytoo.train.factories import (
-    ModelFactory,
-    OptimizerFactory
-)
+from iapytoo.train.factories import ModelFactory, OptimizerFactory
 from iapytoo.train.loss import Loss
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
@@ -24,19 +21,14 @@ class WGAN_FCT(IntEnum):
 
 
 class WGAN(Training):
-    def __init__(
-        self,
-        config: Config
-    ) -> None:
+    def __init__(self, config: Config) -> None:
         super().__init__(config)
         # one for generator, one for discriminator
         self.loss = Loss(n_losses=2)
         if self._config.training.tqdm:
-            self.train_loop = self.__tqdm_gan_loop(
-                self._update_g, self._update_d)
+            self.train_loop = self.__tqdm_gan_loop(self._update_g, self._update_d)
         else:
-            self.train_loop = self.__batch_gan_loop(
-                self._update_g, self._update_d)
+            self.train_loop = self.__batch_gan_loop(self._update_g, self._update_d)
 
     @property
     def generator(self):
@@ -92,8 +84,7 @@ class WGAN(Training):
         epsilon_shape[0] = real.shape[0]
 
         # epsilon: a vector of the uniformly random proportions of real/fake per mixed image
-        epsilon = torch.rand(
-            epsilon_shape, device=real.device, requires_grad=True)
+        epsilon = torch.rand(epsilon_shape, device=real.device, requires_grad=True)
 
         # Mix the images together
         mixed_images = real * epsilon + fake * (1 - epsilon)
@@ -154,8 +145,7 @@ class WGAN(Training):
         batch_size = self._config.dataset.batch_size
 
         # Mise à jour du générateur
-        noise = self.generator.get_noise(
-            batch_size, noise_dim, device=self.device)
+        noise = self.generator.get_noise(batch_size, noise_dim, device=self.device)
         fake_data = self.generator(noise)
 
         g_loss = -self.discriminator(fake_data).mean()
@@ -171,11 +161,9 @@ class WGAN(Training):
                 self.logger.report_prediction(epoch, self.predictions)
 
         for item in self.loss(WGAN_FCT.GENERATOR).buffer:
-            self.logger.report_metric(
-                epoch=item[0], metrics={f"g_loss": item[1]})
+            self.logger.report_metric(epoch=item[0], metrics={f"g_loss": item[1]})
         for item in self.loss(WGAN_FCT.DISCRIMINATOR).buffer:
-            self.logger.report_metric(
-                epoch=item[0], metrics={f"d_loss": item[1]})
+            self.logger.report_metric(epoch=item[0], metrics={f"d_loss": item[1]})
         self.loss.flush()
 
     def __tqdm_gan_loop(self, update_g, update_d):
@@ -215,8 +203,7 @@ class WGAN(Training):
 
                     timer.tick()
 
-                    tepoch.set_postfix(d_loss=d_mean.value,
-                                       g_loss=g_mean.value)
+                    tepoch.set_postfix(d_loss=d_mean.value, g_loss=g_mean.value)
 
             timer.log()
             timer.stop()
@@ -236,13 +223,10 @@ class WGAN(Training):
             d_mean = self.loss(WGAN_FCT.DISCRIMINATOR)
             g_mean = self.loss(WGAN_FCT.GENERATOR)
 
-            logging.info(
-                f"Epoch {epoch} {description}"
-            )
+            logging.info(f"Epoch {epoch} {description}")
 
             size_by_batch = len(loader)
-            step = max(size_by_batch //
-                       self._config.training.n_steps_by_batch, 1)
+            step = max(size_by_batch // self._config.training.n_steps_by_batch, 1)
             for i, (real_data, _) in enumerate(loader):
 
                 if i % step == 0:
@@ -272,7 +256,8 @@ class WGAN(Training):
 
                 if i % step == 0:
                     logging.info(
-                        f"Step {i+1}/{size_by_batch} - d_loss: {d_mean.value:.6f}, g_loss: {g_mean.value:.6f}")
+                        f"Step {i+1}/{size_by_batch} - d_loss: {d_mean.value:.6f}, g_loss: {g_mean.value:.6f}"
+                    )
 
             timer.log()
             timer.stop()

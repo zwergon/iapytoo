@@ -31,10 +31,7 @@ class LossType(IntEnum):
 
 class Inference:
 
-    def __init__(
-        self,
-        config: Config
-    ) -> None:
+    def __init__(self, config: Config) -> None:
 
         self._config = config
         self.logger = None
@@ -99,10 +96,7 @@ class Training(Inference):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-    def __init__(
-        self,
-        config: Config
-    ) -> None:
+    def __init__(self, config: Config) -> None:
         super().__init__(config=config)
 
         # first init all random seeds
@@ -234,8 +228,7 @@ class Training(Inference):
         if epoch % 10 == 0 or epoch == num_epochs - 1:
             if "valid_loader" in kwargs and len(self.predictions) > 0:
 
-                self.predictions.compute(
-                    self._valuator(kwargs["valid_loader"]))
+                self.predictions.compute(self._valuator(kwargs["valid_loader"]))
                 self.logger.report_prediction(epoch, self.predictions)
 
             for item in self.loss(LossType.TRAIN).buffer:
@@ -248,8 +241,7 @@ class Training(Inference):
                 )
             self.loss.flush()
 
-            checkpoint.update(run_id=self.logger.run_id,
-                              epoch=epoch, training=self)
+            checkpoint.update(run_id=self.logger.run_id, epoch=epoch, training=self)
             self.logger.log_checkpoint(checkpoint=checkpoint)
 
     # ----------------------------------------
@@ -264,8 +256,7 @@ class Training(Inference):
         """
 
         def new_function(epoch, loader, description, mean: Mean):
-            metrics = MetricsCollection(
-                description, self._config)
+            metrics = MetricsCollection(description, self._config)
             metrics.to(self.device)
 
             timer = Timer()
@@ -298,11 +289,9 @@ class Training(Inference):
 
         def new_function(epoch, loader, description, mean: Mean):
             size_by_batch = len(loader)
-            step = max(size_by_batch //
-                       self._config.training.n_steps_by_batch, 1)
+            step = max(size_by_batch // self._config.training.n_steps_by_batch, 1)
 
-            metrics = MetricsCollection(
-                description, self._config)
+            metrics = MetricsCollection(description, self._config)
             metrics.to(self.device)
 
             for batch_idx, batch in enumerate(loader):
@@ -345,8 +334,9 @@ class Training(Inference):
         self._optimizers = self._create_optimizers()
 
         lr = self._config.training.learning_rate
-        self._config.training.gamma = (
-            lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
+        self._config.training.gamma = (lr / 1e-8) ** (
+            1 / ((num_batch * num_epochs) - 1)
+        )
         self._config.training.step_size = 1
         self.optimizer.param_groups[0]["lr"] = 1e-8
         self._schedulers = [
@@ -425,8 +415,7 @@ class Training(Inference):
                 if self.scheduler is not None:
                     self.scheduler.step()
 
-                self._on_epoch_ended(
-                    epoch, checkpoint, valid_loader=valid_loader)
+                self._on_epoch_ended(epoch, checkpoint, valid_loader=valid_loader)
 
             self.logger.save_model(self.model)
 

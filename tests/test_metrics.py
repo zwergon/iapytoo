@@ -3,7 +3,7 @@ import unittest
 
 import numpy as np
 
-from iapytoo.utils.config import Config
+from iapytoo.utils.config import ConfigFactory
 from iapytoo.dataset import DummyVisionDataset, DummyLabelDataset
 from iapytoo.metrics import MetricsCollection
 
@@ -43,7 +43,7 @@ class TestMetrics(unittest.TestCase):
         return Y_hat
 
     def test_regression(self):
-        config = Config.create_from_args(self.config_data)
+        config = ConfigFactory.from_args(self.config_data)
 
         dataset = DummyVisionDataset()
         loader = torch.utils.data.DataLoader(
@@ -60,7 +60,7 @@ class TestMetrics(unittest.TestCase):
         print(collection.results)
 
     def test_classification(self):
-        config = Config.create_from_args(self.config_data)
+        config = ConfigFactory.from_args(self.config_data)
 
         dataset = DummyLabelDataset()
         loader = torch.utils.data.DataLoader(

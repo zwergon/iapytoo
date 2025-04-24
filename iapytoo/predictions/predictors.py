@@ -1,4 +1,3 @@
-
 import torch
 
 from iapytoo.utils.singleton import singleton
@@ -18,11 +17,9 @@ class MaxPredictor(Predictor):
 
 
 @singleton
-class PredictorFactory():
+class PredictorFactory:
     def __init__(self) -> None:
-        self.predictor_dict = {
-            "max": MaxPredictor
-        }
+        self.predictor_dict = {"max": MaxPredictor}
 
     def create_predictor(self, config: Config):
         kind = config.model.predictor

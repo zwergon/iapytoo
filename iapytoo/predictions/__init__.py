@@ -9,7 +9,7 @@ from .predictors import Predictor, PredictorFactory
 
 class Valuator:
 
-    def __init__(self, loader, device='cpu'):
+    def __init__(self, loader, device="cpu"):
         self.loader = loader
         self.device = device
 

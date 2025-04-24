@@ -54,7 +54,7 @@ class Logger:
         else:
             logging.info(f"no tracking_uri set")
 
-        self.context = Context(run_id)
+        # self.context = Context(run_id)
 
     def __enter__(self):
         self.start()
@@ -87,12 +87,9 @@ class Logger:
         y_shape = list(Y.shape)
         y_shape[0] = -1
 
-        input_schema = Schema(
-            [TensorSpec(type=np.dtype(np.float32), shape=x_shape)])
-        output_schema = Schema(
-            [TensorSpec(type=np.dtype(np.float32), shape=y_shape)])
-        self.signature = ModelSignature(
-            inputs=input_schema, outputs=output_schema)
+        input_schema = Schema([TensorSpec(type=np.dtype(np.float32), shape=x_shape)])
+        output_schema = Schema([TensorSpec(type=np.dtype(np.float32), shape=y_shape)])
+        self.signature = ModelSignature(inputs=input_schema, outputs=output_schema)
 
     def _params(self):
         # take care, some config parameters are saved by mlflow.
@@ -100,11 +97,11 @@ class Logger:
         params = self.config.to_flat_dict(exclude_unset=True)
 
         for key in [
-            'training.epochs',
-            'training.tqdm',
-            'project',
-            'run',
-                'tracking_uri'
+            "training.epochs",
+            "training.tqdm",
+            "project",
+            "run",
+            "tracking_uri",
         ]:
             if key in params:
                 del params[key]
@@ -146,8 +143,7 @@ class Logger:
         with tempfile.TemporaryDirectory() as tmpdirname:
             ckp_name = os.path.join(tmpdirname, "checkpoint.pt")
             torch.save(checkpoint.params, ckp_name)
-            mlflow.log_artifact(local_path=ckp_name,
-                                artifact_path="checkpoints")
+            mlflow.log_artifact(local_path=ckp_name, artifact_path="checkpoints")
 
     def save_model(self, model: nn.Module):
         with self.lock:
@@ -158,8 +154,7 @@ class Logger:
                 model.to(device),
                 "model",
                 signature=self.signature,
-                extra_pip_requirements=[
-                    "--extra-index-url https://zwergon.github.io"],
+                extra_pip_requirements=["--extra-index-url https://zwergon.github.io"],
             )
 
     def can_report(self):
@@ -187,8 +182,7 @@ class Logger:
             plots = predictions.plot(epoch)
             for name, fig in plots.items():
                 if fig is not None:
-                    mlflow.log_figure(
-                        fig, artifact_file=f"{name}/{name}_{epoch}.png")
+                    mlflow.log_figure(fig, artifact_file=f"{name}/{name}_{epoch}.png")
                     plt.close(fig)
 
     def report_findlr(self, lrs, losses):
