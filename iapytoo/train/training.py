@@ -5,6 +5,16 @@ import torch
 from tqdm import tqdm
 import logging
 
+from torch.utils.data import DataLoader
+
+from enum import IntEnum
+
+from tqdm import tqdm
+from enum import IntEnum
+
+
+from mlflow.models import ModelSignature
+from mlflow.types.schema import TensorSpec, Schema
 
 from iapytoo.utils.config import Config
 from iapytoo.utils.timer import Timer
@@ -18,71 +28,14 @@ from iapytoo.train.factories import (
 )
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
-from iapytoo.predictions import Predictions, Valuator
+from iapytoo.train.mlflow_model import ModelWrapper, Transform
+from iapytoo.train.inference import Inference
 from iapytoo.metrics import MetricsCollection
-
-from enum import IntEnum
 
 
 class LossType(IntEnum):
     TRAIN = 0
     VALID = 1
-
-
-class Inference:
-
-    def __init__(self, config: Config) -> None:
-
-        self._config = config
-        self.logger = None
-        self.predictions = Predictions(config)
-        self._models = []
-        self.device = "cuda" if self._config.cuda else "cpu"
-
-    def _display_device(self):
-        use_cuda = torch.cuda.is_available()
-        if self._config.cuda and use_cuda:
-            msg = "\n__CUDA\n"
-            msg += f"__CUDNN VERSION: {torch.backends.cudnn.version()}\n"
-            msg += f"__Number CUDA Devices: {torch.cuda.device_count()}\n"
-            msg += f"__CUDA Device Name: {torch.cuda.get_device_name(0)}\n"
-            msg += f"__CUDA Device Total Memory [GB]: {torch.cuda.get_device_properties(0).total_memory / 1e9}\n"
-            msg += "-----------\n"
-            logging.info(msg)
-        else:
-            logging.info("__CPU")
-
-    @property
-    def model(self):
-        return self._models[0]
-
-    def _valuator(self, loader):
-        return InferenceValuator(self, loader)
-
-    def _create_models(self, loader):
-        pass
-
-    def predict(self, loader, run_id=None):
-        pass
-
-
-class InferenceValuator(Valuator):
-
-    def __init__(self, inference: Inference, loader):
-        super().__init__(loader, device=inference.device)
-        self.inference = inference
-
-    def evaluate(self):
-        model = self.inference.model
-        model.eval()
-        with torch.no_grad():
-            for X, Y in self.loader:
-                X = X.to(self.inference.device)
-                model_output = model(X)
-
-                outputs = model_output.detach().cpu()
-                actual = Y.detach().cpu()
-                yield outputs, actual
 
 
 class Training(Inference):
@@ -114,6 +67,7 @@ class Training(Inference):
         self.loss = Loss(n_losses=2)
         self._optimizers = []
         self._schedulers = []
+        self.model_wrapper: ModelWrapper = None
 
     @property
     def scheduler(self):
@@ -193,6 +147,36 @@ class Training(Inference):
         )
         return [scheduler]
 
+    def _create_model_wrapper(self, loader: DataLoader, transform: Transform = None):
+
+        def guess_signature(loader):
+            X, Y = next(iter(loader))
+            x_shape = list(X.shape)
+            x_shape[0] = -1
+            y_shape = list(Y.shape)
+            y_shape[0] = -1
+
+            input_example = X.cpu().numpy()
+            output_example = Y.cpu().numpy()
+
+            input_schema = Schema(
+                [TensorSpec(type=input_example.dtype, shape=x_shape)])
+            output_schema = Schema(
+                [TensorSpec(type=output_example.dtype, shape=y_shape)])
+            return ModelSignature(
+                inputs=input_schema,
+                outputs=output_schema
+            ), input_example
+
+        model_wrapper = ModelWrapper()
+        model_wrapper.model = self.model
+        model_wrapper.transform = transform
+        model_wrapper.predictor_key = self._config.model.predictor
+        model_wrapper.signature, model_wrapper.input_example = guess_signature(
+            loader)
+
+        return model_wrapper
+
     def _inner_train(self, batch, batch_idx, metrics: MetricsCollection):
         X, Y = batch
         X = X.to(self.device)
@@ -228,7 +212,10 @@ class Training(Inference):
         if epoch % 10 == 0 or epoch == num_epochs - 1:
             if "valid_loader" in kwargs and len(self.predictions) > 0:
 
-                self.predictions.compute(self._valuator(kwargs["valid_loader"]))
+                self.predictions.compute(
+                    loader=kwargs["valid_loader"],
+                    valuator=self._valuator()
+                )
                 self.logger.report_prediction(epoch, self.predictions)
 
             for item in self.loss(LossType.TRAIN).buffer:
@@ -241,7 +228,8 @@ class Training(Inference):
                 )
             self.loss.flush()
 
-            checkpoint.update(run_id=self.logger.run_id, epoch=epoch, training=self)
+            checkpoint.update(run_id=self.logger.run_id,
+                              epoch=epoch, training=self)
             self.logger.log_checkpoint(checkpoint=checkpoint)
 
     # ----------------------------------------
@@ -256,7 +244,10 @@ class Training(Inference):
         """
 
         def new_function(epoch, loader, description, mean: Mean):
-            metrics = MetricsCollection(description, self._config)
+            metrics = MetricsCollection(
+                description,
+                self._config.metrics.names,
+                self._config)
             metrics.to(self.device)
 
             timer = Timer()
@@ -289,9 +280,13 @@ class Training(Inference):
 
         def new_function(epoch, loader, description, mean: Mean):
             size_by_batch = len(loader)
-            step = max(size_by_batch // self._config.training.n_steps_by_batch, 1)
+            step = max(size_by_batch //
+                       self._config.training.n_steps_by_batch, 1)
 
-            metrics = MetricsCollection(description, self._config)
+            metrics = MetricsCollection(
+                description,
+                self._config.metrics.names,
+                self._config)
             metrics.to(self.device)
 
             for batch_idx, batch in enumerate(loader):
@@ -384,7 +379,11 @@ class Training(Inference):
         train_time.log()
         train_time.stop()
 
-    def fit(self, train_loader, valid_loader, run_id=None):
+    def fit(self,
+            train_loader: DataLoader,
+            valid_loader: DataLoader,
+            transform: Transform = None,
+            run_id=None):
         num_epochs = self._config.training.epochs
 
         self.loss.reset()
@@ -393,13 +392,15 @@ class Training(Inference):
         self._optimizers = self._create_optimizers()
         self._schedulers = self._create_schedulers(self.optimizer)
 
+        self.model_wrapper = self._create_model_wrapper(
+            train_loader, transform)
+
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
 
         with Logger(self._config, run_id=checkpoint.run_id) as self.logger:
             active_run_name = self.logger.active_run_name()
             self._display_device()
-            self.logger.set_signature(train_loader)
             self.logger.summary()
 
             for epoch in range(checkpoint.epoch + 1, num_epochs):
@@ -415,9 +416,10 @@ class Training(Inference):
                 if self.scheduler is not None:
                     self.scheduler.step()
 
-                self._on_epoch_ended(epoch, checkpoint, valid_loader=valid_loader)
+                self._on_epoch_ended(
+                    epoch, checkpoint, valid_loader=valid_loader)
 
-            self.logger.save_model(self.model)
+            self.logger.save_model(self.model_wrapper)
 
         return {
             "run_id": self.logger.run_id,
@@ -439,4 +441,7 @@ class Training(Inference):
             assert self.model is not None, "no model loaded for prediction"
 
         assert self.predictions is not None, "no predictions defined for this training"
-        self.predictions.compute(self, valuator=self._valuator(loader))
+        self.predictions.compute(
+            loader=loader,
+            valuator=self._valuator()
+        )

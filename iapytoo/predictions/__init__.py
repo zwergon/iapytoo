@@ -5,16 +5,7 @@ from iapytoo.utils.config import Config
 from .types import PredictionType
 from .plotters import CollectionPlotters
 from .predictors import Predictor, PredictorFactory
-
-
-class Valuator:
-
-    def __init__(self, loader, device="cpu"):
-        self.loader = loader
-        self.device = device
-
-    def evaluate(self):
-        pass
+from iapytoo.train.valuator import Valuator
 
 
 class Predictions:
@@ -34,12 +25,12 @@ class Predictions:
     def add_plotter(self, prediction_plotter):
         self.prediction_plotter.add(prediction_plotter)
 
-    def compute(self, valuator: Valuator):
+    def compute(self, loader, valuator: Valuator):
 
         self.outputs = torch.zeros(size=(0,))
         self.actual = torch.zeros(size=(0,))
 
-        for outputs, actual in valuator.evaluate():
+        for outputs, actual in valuator.evaluate_loader(loader):
             self.outputs = torch.cat((self.outputs, outputs), dim=0)
 
             if actual is not None:

@@ -16,26 +16,23 @@ from iapytoo.utils.singleton import singleton
 os.environ["MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR"] = "false"
 
 
-T = t.TypeVar("T")
-def list_coercer(
-    converter: abc.Callable[[str], T]
-) -> abc.Callable[[object], list[T] | object]:
-    def coercer(value: object):
-        if isinstance(value, str):
-            v_list = value[1:-1].split(",")
-            return [converter(v) for v in v_list]
-        else:
-            return value
-    return coercer
+def ensure_list(value, target_type):
+    if isinstance(value, str):
+        parsed_list = ast.literal_eval(value)
+        if isinstance(parsed_list, list):
+            return [target_type(v.strip()) for v in parsed_list]
+        return parsed_list
+    else:
+        return value
 
 
-# region: Sub-configs
 class DatasetConfig(BaseModel):
     type: str = "default"
     path: str
     normalization: Optional[bool] = True
     batch_size: int
-    indices: Annotated[List[int], BeforeValidator(list_coercer(int))] = [0]
+    indices: Annotated[List[int], BeforeValidator(
+        lambda v: ensure_list(v, int))] = [0]
     padding: Optional[int] = 2
     image_size: Optional[int] = 224
     rotation: Optional[float] = 15
@@ -64,7 +61,8 @@ class TrainingConfig(BaseModel):
 
 class MetricsConfig(BaseModel):
     type: str = "default"
-    names: Optional[List[str]] = Field(default_factory=list)
+    names: Optional[Annotated[List[str], BeforeValidator(
+        lambda v: ensure_list(v, str))]] = Field(default=None)
     top_accuracy: Optional[int] = 3
 
 
@@ -86,7 +84,8 @@ _PlottersT = t.TypeVar("_PlottersT", bound=PlottersConfig)
 @singleton
 class DatasetConfigFactory:
     def __init__(self) -> None:
-        self.dataset_dict: dict[str, type[DatasetConfig]] = {"default": DatasetConfig}
+        self.dataset_dict: dict[str, type[DatasetConfig]] = {
+            "default": DatasetConfig}
 
     def register_dataset_config(
         self, key: str, dataset_config_cls: type[DatasetConfig]
@@ -116,7 +115,8 @@ class TrainingConfigFactory:
 
     def create_training_config(self, kind, **kwargs) -> TrainingConfig:
         try:
-            training_config: TrainingConfig = self.training_dict[kind](**kwargs)
+            training_config: TrainingConfig = self.training_dict[kind](
+                **kwargs)
         except KeyError:
             raise KeyError(f"Config for training {kind} doesn't exist")
 
@@ -126,7 +126,8 @@ class TrainingConfigFactory:
 @singleton
 class MetricsConfigFactory:
     def __init__(self) -> None:
-        self.metrics_dict: dict[str, type[TrainingConfig]] = {"default": MetricsConfig}
+        self.metrics_dict: dict[str, type[TrainingConfig]] = {
+            "default": MetricsConfig}
 
     def register_metrics_config(
         self, key: str, metrics_config_cls: type[MetricsConfig]
@@ -155,7 +156,8 @@ class PlottersConfigFactory:
 
     def create_plotters_config(self, kind: str, **kwargs) -> PlottersConfig:
         try:
-            plotters_config: PlottersConfig = self.plotters_dict[kind](**kwargs)
+            plotters_config: PlottersConfig = self.plotters_dict[kind](
+                **kwargs)
         except KeyError:
             raise KeyError(f"Config for plotter {kind} doesn't exist")
         return plotters_config

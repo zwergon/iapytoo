@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -9,8 +10,9 @@ from iapytoo.dataset.scaling import Scaling
 from iapytoo.predictions.predictors import MaxPredictor
 from iapytoo.predictions.plotters import ConfusionPlotter
 from iapytoo.train.factories import Model, ModelFactory, SchedulerFactory, Scheduler
-from iapytoo.utils.config import Config
+from iapytoo.utils.config import ConfigFactory, Config
 from iapytoo.train.training import Training
+from iapytoo.train.mlflow_model import Transform
 
 
 import matplotlib.pyplot as plt
@@ -62,9 +64,30 @@ class MnistTraining(Training):
         self.predictions.add_plotter(ConfusionPlotter())
 
 
-if __name__ == "__main__":
-    import os
+class MnistTransform(Transform):
+    def __init__(self):
+        super().__init__(
+            train_transform=transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.1307,), (0.3081,))
+                ]
+            )
+        )
 
+    # override
+    def transform(self, context, model_input, params=None):
+        model_input_transformed = [
+            self.infer_transform(img) for img in model_input]
+        print(model_input_transformed[0].permute(1, 0, 2).shape)
+
+        model_input_tensor = torch.stack(
+            [img.permute(1, 0, 2) for img in model_input_transformed])
+
+        return model_input_tensor
+
+
+if __name__ == "__main__":
     from iapytoo.utils.arguments import parse_args
 
     ModelFactory().register_model("mnist", MnistModel)
@@ -73,43 +96,45 @@ if __name__ == "__main__":
     args = parse_args()
 
     if args.run_id is not None:
-        config = Config.create_from_run_id(args.run_id, args.tracking_uri)
+        config = ConfigFactory.from_run_id(args.run_id, args.tracking_uri)
         config.training.epochs = args.epochs
     else:
         # INPUT Parameters
-        config = Config.create_from_yaml(args.yaml)
+        config = ConfigFactory.from_yaml(args.yaml)
 
     Training.seed(config)
 
-    training = MnistTraining(config)
+    transform = MnistTransform()
 
-    transform = transforms.Compose(
-        [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
-    )
+    training = MnistTraining(config)
+    training.tranform = transform
 
     dataset1 = datasets.MNIST(
         config.dataset.path,
         train=True,
         download=True,
-        transform=transform
+        transform=transform.train_transform
     )
 
     dataset2 = datasets.MNIST(
         config.dataset.path,
         train=False,
-        transform=transform
+        transform=transform.infer_transform
     )
 
-    train_loader = torch.utils.data.DataLoader(
+    train_loader = DataLoader(
         dataset1,
         batch_size=config.dataset.batch_size,
-        num_workers=config.training.num_workers
+        num_workers=config.dataset.num_workers
     )
-    test_loader = torch.utils.data.DataLoader(
+    test_loader = DataLoader(
         dataset2, batch_size=config.dataset.batch_size,
-        num_workers=config.training.num_workers
+        num_workers=config.dataset.num_workers
     )
 
     training.fit(
-        train_loader=train_loader, valid_loader=test_loader, run_id=args.run_id
+        train_loader=train_loader,
+        valid_loader=test_loader,
+        transform=transform,
+        run_id=args.run_id
     )
