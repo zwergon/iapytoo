@@ -1,0 +1,6 @@
+tqdm
+numpy 
+matplotlib
+mlflow
+seaborn
+iapytoo
