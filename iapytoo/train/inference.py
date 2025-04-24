@@ -82,15 +82,8 @@ class MLFlowInference(Inference):
 
             assert self.model is not None, "no model loaded for prediction"
 
-<<<<<<< HEAD
             assert self.predictions is not None, "no predictions defined for this training"
             self.predictions.compute(loader=loader, valuator=self._valuator())
-=======
-            assert (
-                self.predictions is not None
-            ), "no predictions defined for this training"
-            self.predictions.compute(valuator=self._valuator(loader))
->>>>>>> develop
             self.logger.report_prediction(0, self.predictions)
             metrics.update(
                 self.predictions.tensor(PredictionType.OUTPUTS),

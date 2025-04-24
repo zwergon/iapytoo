@@ -5,6 +5,7 @@ from iapytoo.utils.config import Config
 from .types import PredictionType
 from .plotters import CollectionPlotters
 from .predictors import Predictor, PredictorFactory
+from iapytoo.train.valuator import Valuator
 
 
 class Predictions:

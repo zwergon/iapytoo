@@ -62,7 +62,7 @@ class Logger:
         else:
             logging.info(f"no tracking_uri set")
 
-        # self.context = Context(run_id)
+        self.context = Context(run_id)
 
     def __enter__(self):
         self.start()

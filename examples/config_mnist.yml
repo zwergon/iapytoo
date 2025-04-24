@@ -14,6 +14,8 @@ training:
   optimizer: "adam"
   scheduler: "step"
   epochs: 2
+  tqdm: false
+
 
 metrics:
   names: ['accuracy']

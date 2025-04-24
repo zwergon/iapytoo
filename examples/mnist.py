@@ -10,7 +10,7 @@ from iapytoo.dataset.scaling import Scaling
 from iapytoo.predictions.predictors import MaxPredictor
 from iapytoo.predictions.plotters import ConfusionPlotter
 from iapytoo.train.factories import Model, ModelFactory, SchedulerFactory, Scheduler
-from iapytoo.utils.config import Config
+from iapytoo.utils.config import ConfigFactory, Config
 from iapytoo.train.training import Training
 from iapytoo.train.mlflow_model import Transform
 
@@ -88,8 +88,6 @@ class MnistTransform(Transform):
 
 
 if __name__ == "__main__":
-    import os
-
     from iapytoo.utils.arguments import parse_args
 
     ModelFactory().register_model("mnist", MnistModel)
@@ -98,11 +96,11 @@ if __name__ == "__main__":
     args = parse_args()
 
     if args.run_id is not None:
-        config = Config.create_from_run_id(args.run_id, args.tracking_uri)
+        config = ConfigFactory.from_run_id(args.run_id, args.tracking_uri)
         config.training.epochs = args.epochs
     else:
         # INPUT Parameters
-        config = Config.create_from_yaml(args.yaml)
+        config = ConfigFactory.from_yaml(args.yaml)
 
     Training.seed(config)
 
@@ -127,11 +125,11 @@ if __name__ == "__main__":
     train_loader = DataLoader(
         dataset1,
         batch_size=config.dataset.batch_size,
-        num_workers=config.training.num_workers
+        num_workers=config.dataset.num_workers
     )
     test_loader = DataLoader(
         dataset2, batch_size=config.dataset.batch_size,
-        num_workers=config.training.num_workers
+        num_workers=config.dataset.num_workers
     )
 
     training.fit(

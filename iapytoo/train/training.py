@@ -2,10 +2,7 @@ import sys
 import random
 import numpy
 import torch
-<<<<<<< HEAD
-=======
 from tqdm import tqdm
->>>>>>> develop
 import logging
 
 from torch.utils.data import DataLoader
@@ -41,65 +38,6 @@ class LossType(IntEnum):
     VALID = 1
 
 
-<<<<<<< HEAD
-=======
-class Inference:
-
-    def __init__(self, config: Config) -> None:
-
-        self._config = config
-        self.logger = None
-        self.predictions = Predictions(config)
-        self._models = []
-        self.device = "cuda" if self._config.cuda else "cpu"
-
-    def _display_device(self):
-        use_cuda = torch.cuda.is_available()
-        if self._config.cuda and use_cuda:
-            msg = "\n__CUDA\n"
-            msg += f"__CUDNN VERSION: {torch.backends.cudnn.version()}\n"
-            msg += f"__Number CUDA Devices: {torch.cuda.device_count()}\n"
-            msg += f"__CUDA Device Name: {torch.cuda.get_device_name(0)}\n"
-            msg += f"__CUDA Device Total Memory [GB]: {torch.cuda.get_device_properties(0).total_memory / 1e9}\n"
-            msg += "-----------\n"
-            logging.info(msg)
-        else:
-            logging.info("__CPU")
-
-    @property
-    def model(self):
-        return self._models[0]
-
-    def _valuator(self, loader):
-        return InferenceValuator(self, loader)
-
-    def _create_models(self, loader):
-        pass
-
-    def predict(self, loader, run_id=None):
-        pass
-
-
-class InferenceValuator(Valuator):
-
-    def __init__(self, inference: Inference, loader):
-        super().__init__(loader, device=inference.device)
-        self.inference = inference
-
-    def evaluate(self):
-        model = self.inference.model
-        model.eval()
-        with torch.no_grad():
-            for X, Y in self.loader:
-                X = X.to(self.inference.device)
-                model_output = model(X)
-
-                outputs = model_output.detach().cpu()
-                actual = Y.detach().cpu()
-                yield outputs, actual
-
-
->>>>>>> develop
 class Training(Inference):
     @staticmethod
     def seed(config: Config):
@@ -274,14 +212,10 @@ class Training(Inference):
         if epoch % 10 == 0 or epoch == num_epochs - 1:
             if "valid_loader" in kwargs and len(self.predictions) > 0:
 
-<<<<<<< HEAD
                 self.predictions.compute(
                     loader=kwargs["valid_loader"],
                     valuator=self._valuator()
                 )
-=======
-                self.predictions.compute(self._valuator(kwargs["valid_loader"]))
->>>>>>> develop
                 self.logger.report_prediction(epoch, self.predictions)
 
             for item in self.loss(LossType.TRAIN).buffer:
@@ -294,7 +228,8 @@ class Training(Inference):
                 )
             self.loss.flush()
 
-            checkpoint.update(run_id=self.logger.run_id, epoch=epoch, training=self)
+            checkpoint.update(run_id=self.logger.run_id,
+                              epoch=epoch, training=self)
             self.logger.log_checkpoint(checkpoint=checkpoint)
 
     # ----------------------------------------
@@ -309,7 +244,10 @@ class Training(Inference):
         """
 
         def new_function(epoch, loader, description, mean: Mean):
-            metrics = MetricsCollection(description, self._config)
+            metrics = MetricsCollection(
+                description,
+                self._config.metrics.names,
+                self._config)
             metrics.to(self.device)
 
             timer = Timer()
@@ -342,9 +280,13 @@ class Training(Inference):
 
         def new_function(epoch, loader, description, mean: Mean):
             size_by_batch = len(loader)
-            step = max(size_by_batch // self._config.training.n_steps_by_batch, 1)
+            step = max(size_by_batch //
+                       self._config.training.n_steps_by_batch, 1)
 
-            metrics = MetricsCollection(description, self._config)
+            metrics = MetricsCollection(
+                description,
+                self._config.metrics.names,
+                self._config)
             metrics.to(self.device)
 
             for batch_idx, batch in enumerate(loader):
@@ -474,7 +416,8 @@ class Training(Inference):
                 if self.scheduler is not None:
                     self.scheduler.step()
 
-                self._on_epoch_ended(epoch, checkpoint, valid_loader=valid_loader)
+                self._on_epoch_ended(
+                    epoch, checkpoint, valid_loader=valid_loader)
 
             self.logger.save_model(self.model_wrapper)
 

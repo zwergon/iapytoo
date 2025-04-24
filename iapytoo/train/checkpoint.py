@@ -17,11 +17,12 @@ class CheckPoint:
                 files = []
                 for f in os.listdir(ck_path):
                     ck_name = os.path.join(ck_path, f)
-                    if os.path.isfile(ck_name):
+                    if "checkpoint" in f and os.path.isfile(ck_name):
                         files.append(ck_name)
                 files.sort(key=lambda x: os.path.getmtime(x))
                 ck_name = files[-1]
-                self.params = torch.load(ck_name, weights_only=False)
+                self.params = torch.load(
+                    ck_name, weights_only=False)
         else:
             self.params["epoch"] = -1
 
