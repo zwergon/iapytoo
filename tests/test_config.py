@@ -36,7 +36,7 @@ class TestConfig(unittest.TestCase):
         os.unlink(self.temp_file.name)
 
     def test_config_loading(self):
-        config = ConfigFactory.create_from_yaml(self.temp_file.name)
+        config = ConfigFactory.from_yaml(self.temp_file.name)
         self.assertEqual(config.project, "iapytoo")
         self.assertEqual(config.run, "test_run")
         self.assertEqual(config.sensors, "sensor_1")

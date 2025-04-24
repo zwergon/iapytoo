@@ -1,4 +1,5 @@
 import ast
+from collections import abc
 import os
 import sys
 import logging
@@ -16,12 +17,17 @@ from iapytoo.utils.singleton import singleton
 os.environ["MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR"] = "false"
 
 
-def ensure_list(value):
-    if isinstance(value, str):
-        v_list = value[1:-1].split(",")
-        return [int(v) for v in v_list]
-    else:
-        return value
+T = t.TypeVar("T")
+def list_coercer(
+    converter: abc.Callable[[str], T]
+) -> abc.Callable[[object], list[T] | object]:
+    def coercer(value: object):
+        if isinstance(value, str):
+            v_list = value[1:-1].split(",")
+            return [converter(v) for v in v_list]
+        else:
+            return value
+    return coercer
 
 
 # region: Sub-configs
@@ -30,7 +36,7 @@ class DatasetConfig(BaseModel):
     path: str
     normalization: Optional[bool] = True
     batch_size: int
-    indices: Annotated[List[int], BeforeValidator(ensure_list)] = [0]
+    indices: Annotated[List[int], BeforeValidator(list_coercer(int))] = [0]
     padding: Optional[int] = 2
     image_size: Optional[int] = 224
     rotation: Optional[float] = 15
@@ -239,21 +245,24 @@ class ConfigFactory:
     def from_args(kwargs: dict) -> Config:
         dataset_data: dict | DatasetConfig = kwargs["dataset"]
         if isinstance(dataset_data, dict):
-            dataset_type: str = dataset_data.get("type", "default")
+            dataset_kind: str = dataset_data.get("type", "default")
+            dataset_data["type"] = dataset_kind
             kwargs["dataset"] = DatasetConfigFactory().create_dataset_config(
-                kind=dataset_type, **dataset_data
+                kind=dataset_kind, **dataset_data
             )
 
         training_data: dict | TrainingConfig | None = kwargs.get("training")
         if isinstance(training_data, dict):
-            training_type: str = training_data.get("training", "default")
+            traininig_kind: str = training_data.get("type", "default")
+            training_data["type"] = traininig_kind
             kwargs["training"] = TrainingConfigFactory().create_training_config(
-                kind=training_type, **training_data
+                kind=traininig_kind, **training_data
             )
 
         metrics_data: dict | MetricsConfig | None = kwargs.get("metrics")
         if isinstance(metrics_data, dict):
             metrics_kind: str = metrics_data.get("type", "default")
+            metrics_data["type"] = metrics_kind
             kwargs["metrics"] = MetricsConfigFactory().create_metrics_config(
                 kind=metrics_kind, **metrics_data
             )
@@ -261,15 +270,17 @@ class ConfigFactory:
         plotters_data: dict | PlottersConfig | None = kwargs.get("plotters")
         if isinstance(plotters_data, dict):
             plotters_kind: str = plotters_data.get("type", "default")
+            plotters_data["type"] = plotters_kind
             kwargs["plotters"] = PlottersConfigFactory().create_plotters_config(
                 kind=plotters_kind, **plotters_data
             )
 
         model_data: dict | ModelConfig = kwargs["model"]
         if isinstance(model_data, dict):
-            model_type: str = model_data.get("type", "default")
+            model_kind: str = model_data.get("type", "default")
+            model_data["type"] = model_kind
             kwargs["model"] = ModelConfigFactory().create_model_config(
-                model_type, **model_data
+                model_kind, **model_data
             )
 
         return ConfigFactory.from_fields(**kwargs)
@@ -309,13 +320,9 @@ class ConfigFactory:
         nested_dict["project"] = experiment.name
         nested_dict["run"] = run.info.run_name
 
-        for raw_key, raw_value in run.data.params.items():
+        for raw_key, value in run.data.params.items():
             # convert raw strings to python types
-            try:
-                value = eval(raw_value)
-            except (SyntaxError, NameError):
-                value = raw_value
-            if value is None:
+            if isinstance(value, str) and value == 'None':
                 continue
             keys: list[str] = raw_key.split(".")
             d: dict = nested_dict
@@ -328,7 +335,7 @@ class ConfigFactory:
         return ConfigFactory.from_args(nested_dict)
 
     @staticmethod
-    def create_from_yaml(yaml_path):
+    def from_yaml(yaml_path):
         with open(yaml_path, "r") as file:
             data = yaml.safe_load(file)
 
