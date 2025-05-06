@@ -65,7 +65,7 @@ class MLFlowInference(Inference):
         model_config: MLFlowConfig = self._config.model
 
         logged_model = f"runs:/{model_config.run_id}/model"
-        model = mlflow.pytorch.load_model(logged_model)
+        model = mlflow.pyfunc.load_model(logged_model).unwrap_python_model().model
         model = model.to(device=self.device)
         return [model]
 
