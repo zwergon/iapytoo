@@ -71,7 +71,7 @@ class MLFlowInference(Inference):
 
     def predict(self, loader):
 
-        metrics = MetricsCollection("inference", self._config)
+        metrics = MetricsCollection("inference", self._config.metrics, self._config)
         # metrics.to(self.device)
 
         with Logger(self._config) as self.logger:

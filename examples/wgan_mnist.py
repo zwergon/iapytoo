@@ -1,21 +1,16 @@
 import os
-import numpy as np
-import matplotlib.pyplot as plt
 
 import torch
-import torchvision
 import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import Dataset
-from torch.autograd import grad
 from torchvision.datasets import MNIST
 import torchvision.transforms as transforms
 
 
 from iapytoo.train.wgan import WGAN
 from iapytoo.utils.config import Config
-from iapytoo.train.factories import Model, ModelFactory, OptimizerFactory
-from iapytoo.predictions.plotters import PredictionPlotter, Fake2DPlotter
+from iapytoo.train.factories import Model, ModelFactory
+from iapytoo.predictions.plotters import Fake2DPlotter
 from iapytoo.train.factories import WeightInitiator
 
 

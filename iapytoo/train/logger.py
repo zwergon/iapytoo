@@ -1,10 +1,8 @@
 import os
 import torch
-import torch.nn as nn
 
 import uuid
 import tempfile
-import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import logging
@@ -60,7 +58,7 @@ class Logger:
             logging.info(f".. set tracking uri to {self.config.tracking_uri}")
             mlflow.set_tracking_uri(self.config.tracking_uri)
         else:
-            logging.info(f"no tracking_uri set")
+            logging.info("no tracking_uri set")
 
         self.context = Context(run_id)
 
