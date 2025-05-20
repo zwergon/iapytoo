@@ -7,16 +7,12 @@ from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import LambdaLR
 
 
-from iapytoo.dataset.scaling import Scaling
-from iapytoo.predictions.predictors import MaxPredictor
 from iapytoo.predictions.plotters import ConfusionPlotter
 from iapytoo.train.factories import Model, ModelFactory, SchedulerFactory, Scheduler
 from iapytoo.utils.config import ConfigFactory, Config
 from iapytoo.train.training import Training
 from iapytoo.train.mlflow_model import Transform
 
-
-import matplotlib.pyplot as plt
 
 from mlflow.types.schema import TensorSpec, Schema
 from mlflow.models import ModelSignature

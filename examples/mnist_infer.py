@@ -26,14 +26,14 @@ if __name__ == "__main__":
         [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
     )
 
-    dataset2 = datasets.MNIST(
+    test_dataset = datasets.MNIST(
         config.dataset.path,
         train=False,
         transform=transform
     )
 
     test_loader = torch.utils.data.DataLoader(
-        dataset2, batch_size=config.dataset.batch_size,
+        test_dataset, batch_size=config.dataset.batch_size,
         num_workers=2
     )
 
