@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,8 +7,6 @@ from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import LambdaLR
 
 
-from iapytoo.dataset.scaling import Scaling
-from iapytoo.predictions.predictors import MaxPredictor
 from iapytoo.predictions.plotters import ConfusionPlotter
 from iapytoo.train.factories import Model, ModelFactory, SchedulerFactory, Scheduler
 from iapytoo.utils.config import ConfigFactory, Config
@@ -15,7 +14,8 @@ from iapytoo.train.training import Training
 from iapytoo.train.mlflow_model import Transform
 
 
-import matplotlib.pyplot as plt
+from mlflow.types.schema import TensorSpec, Schema
+from mlflow.models import ModelSignature
 
 
 class MnistModel(Model):
@@ -65,18 +65,43 @@ class MnistTraining(Training):
 
 
 class MnistTransform(Transform):
-    def __init__(self):
+
+    def __init__(self, dataset):
         super().__init__(
             train_transform=transforms.Compose(
                 [
                     transforms.ToTensor(),
                     transforms.Normalize((0.1307,), (0.3081,))
                 ]
-            )
+            ),
+            dataset=dataset
         )
 
     # override
+    def set_signature(self, dataset):
+        img, Y = dataset[0]
+        X = Transform.img_to_numpy(img)
+        # add batch size
+        X = np.expand_dims(X, axis=0)
+        Y = np.expand_dims(Y, axis=0)
+        x_shape = list(X.shape)
+        x_shape[0] = -1
+        y_shape = list(Y.shape)
+        y_shape[0] = -1
+
+        input_schema = Schema(
+            [TensorSpec(type=X.dtype, shape=x_shape)])
+        output_schema = Schema(
+            [TensorSpec(type=Y.dtype, shape=y_shape)])
+
+        self.signature = ModelSignature(
+            inputs=input_schema, outputs=output_schema)
+        self.input_example = X
+
+    # override
+
     def transform(self, context, model_input, params=None):
+
         model_input_transformed = [
             self.infer_transform(img) for img in model_input]
         print(model_input_transformed[0].permute(1, 0, 2).shape)
@@ -104,31 +129,33 @@ if __name__ == "__main__":
 
     Training.seed(config)
 
-    transform = MnistTransform()
+    signature_dataset = datasets.MNIST(
+        config.dataset.path,
+        train=False
+    )
+    transform = MnistTransform(signature_dataset)
 
     training = MnistTraining(config)
-    training.tranform = transform
-
-    dataset1 = datasets.MNIST(
+    train_dataset = datasets.MNIST(
         config.dataset.path,
         train=True,
         download=True,
         transform=transform.train_transform
     )
 
-    dataset2 = datasets.MNIST(
+    train_dataset = datasets.MNIST(
         config.dataset.path,
         train=False,
         transform=transform.infer_transform
     )
 
     train_loader = DataLoader(
-        dataset1,
+        train_dataset,
         batch_size=config.dataset.batch_size,
         num_workers=config.dataset.num_workers
     )
     test_loader = DataLoader(
-        dataset2, batch_size=config.dataset.batch_size,
+        train_dataset, batch_size=config.dataset.batch_size,
         num_workers=config.dataset.num_workers
     )
 

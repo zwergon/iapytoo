@@ -2,19 +2,11 @@ import sys
 import random
 import numpy
 import torch
-from tqdm import tqdm
 import logging
+from tqdm import tqdm
+from enum import IntEnum
 
 from torch.utils.data import DataLoader
-
-from enum import IntEnum
-
-from tqdm import tqdm
-from enum import IntEnum
-
-
-from mlflow.models import ModelSignature
-from mlflow.types.schema import TensorSpec, Schema
 
 from iapytoo.utils.config import Config
 from iapytoo.utils.timer import Timer
@@ -106,13 +98,11 @@ class Training(Inference):
             n_optimizers = state_dict["n_optimizers"]
             for i in range(n_optimizers):
                 self._optimizers[i].torch_optimizer.load_state_dict(
-                    state_dict[f"optimizer_{i}"]
-                )
+                    state_dict[f"optimizer_{i}"])
             n_schedulers = state_dict["n_schedulers"]
             for i in range(n_schedulers):
                 self._schedulers[i].lr_scheduler.load_state_dict(
-                    state_dict[f"scheduler_{i}"]
-                )
+                    state_dict[f"scheduler_{i}"])
             self.loss.load_state_dict(state_dict["loss"])
 
     # ----------------------------------------
@@ -135,9 +125,8 @@ class Training(Inference):
 
     # overwrite
     def _create_models(self, loader):
-        model = ModelFactory().create_model(
-            self._config.model.model, self._config, loader, self.device
-        )
+        model = ModelFactory().create_model(self._config.model.model,
+                                            self._config, loader, self.device)
 
         return [model]
 
@@ -147,33 +136,15 @@ class Training(Inference):
         )
         return [scheduler]
 
-    def _create_model_wrapper(self, loader: DataLoader, transform: Transform = None):
-
-        def guess_signature(loader):
-            X, Y = next(iter(loader))
-            x_shape = list(X.shape)
-            x_shape[0] = -1
-            y_shape = list(Y.shape)
-            y_shape[0] = -1
-
-            input_example = X.cpu().numpy()
-            output_example = Y.cpu().numpy()
-
-            input_schema = Schema(
-                [TensorSpec(type=input_example.dtype, shape=x_shape)])
-            output_schema = Schema(
-                [TensorSpec(type=output_example.dtype, shape=y_shape)])
-            return ModelSignature(
-                inputs=input_schema,
-                outputs=output_schema
-            ), input_example
+    def _create_model_wrapper(self, loader: DataLoader = None, transform: Transform = None):
 
         model_wrapper = ModelWrapper()
-        model_wrapper.model = self.model
-        model_wrapper.transform = transform
-        model_wrapper.predictor_key = self._config.model.predictor
-        model_wrapper.signature, model_wrapper.input_example = guess_signature(
-            loader)
+        model_wrapper.setattr(
+            model=self.model,
+            transform=transform,
+            predictor_key=self._config.model.predictor,
+            loader=loader
+        )
 
         return model_wrapper
 
@@ -213,19 +184,15 @@ class Training(Inference):
             if "valid_loader" in kwargs and len(self.predictions) > 0:
 
                 self.predictions.compute(
-                    loader=kwargs["valid_loader"],
-                    valuator=self._valuator()
-                )
+                    loader=kwargs["valid_loader"], valuator=self._valuator())
                 self.logger.report_prediction(epoch, self.predictions)
 
             for item in self.loss(LossType.TRAIN).buffer:
-                self.logger.report_metric(
-                    epoch=item[0], metrics={"train_loss": item[1]}
-                )
+                self.logger.report_metric(epoch=item[0], metrics={
+                                          "train_loss": item[1]})
             for item in self.loss(LossType.VALID).buffer:
-                self.logger.report_metric(
-                    epoch=item[0], metrics={"valid_loss": item[1]}
-                )
+                self.logger.report_metric(epoch=item[0], metrics={
+                                          "valid_loss": item[1]})
             self.loss.flush()
 
             checkpoint.update(run_id=self.logger.run_id,
@@ -245,9 +212,7 @@ class Training(Inference):
 
         def new_function(epoch, loader, description, mean: Mean):
             metrics = MetricsCollection(
-                description,
-                self._config.metrics.names,
-                self._config)
+                description, self._config.metrics.names, self._config)
             metrics.to(self.device)
 
             timer = Timer()
@@ -284,9 +249,7 @@ class Training(Inference):
                        self._config.training.n_steps_by_batch, 1)
 
             metrics = MetricsCollection(
-                description,
-                self._config.metrics.names,
-                self._config)
+                description, self._config.metrics.names, self._config)
             metrics.to(self.device)
 
             for batch_idx, batch in enumerate(loader):
@@ -296,8 +259,7 @@ class Training(Inference):
 
                 if mean.iter % step == 0:
                     logging.info(
-                        f"Epoch {epoch} {description} iter {mean.iter} loss: {mean.value}"
-                    )
+                        f"Epoch {epoch} {description} iter {mean.iter} loss: {mean.value}")
 
             if self.logger.can_report():
                 metrics.compute()
@@ -313,9 +275,7 @@ class Training(Inference):
     def __validate(self, epoch, valid_loader):
         self.model.eval()
         with torch.no_grad():
-            return self.valid_loop(
-                epoch, valid_loader, "Valid", self.loss(LossType.VALID)
-            )
+            return self.valid_loop(epoch, valid_loader, "Valid", self.loss(LossType.VALID))
 
     # ----------------------------------------
     # Public methods
@@ -329,14 +289,12 @@ class Training(Inference):
         self._optimizers = self._create_optimizers()
 
         lr = self._config.training.learning_rate
-        self._config.training.gamma = (lr / 1e-8) ** (
-            1 / ((num_batch * num_epochs) - 1)
-        )
+        self._config.training.gamma = (
+            lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
         self._config.training.step_size = 1
         self.optimizer.param_groups[0]["lr"] = 1e-8
-        self._schedulers = [
-            SchedulerFactory().create_scheduler("step", self.optimizer, self._config)
-        ]
+        self._schedulers = [SchedulerFactory().create_scheduler(
+            "step", self.optimizer, self._config)]
 
         train_time = Timer()
         with Logger(self._config) as self.logger:
@@ -365,8 +323,7 @@ class Training(Inference):
                         losses.append(lv)
 
                         self.logger.report_metric(
-                            mean_loss.iter, {"lr": lr, "loss": lv}
-                        )
+                            mean_loss.iter, {"lr": lr, "loss": lv})
 
                         tepoch.set_postfix(loss=lv, lr=lr)
 
@@ -379,11 +336,9 @@ class Training(Inference):
         train_time.log()
         train_time.stop()
 
-    def fit(self,
-            train_loader: DataLoader,
-            valid_loader: DataLoader,
-            transform: Transform = None,
-            run_id=None):
+    def fit(
+        self, train_loader: DataLoader, valid_loader: DataLoader, transform: Transform = None, run_id=None
+    ):
         num_epochs = self._config.training.epochs
 
         self.loss.reset()
@@ -392,8 +347,7 @@ class Training(Inference):
         self._optimizers = self._create_optimizers()
         self._schedulers = self._create_schedulers(self.optimizer)
 
-        self.model_wrapper = self._create_model_wrapper(
-            train_loader, transform)
+        self.model_wrapper = self._create_model_wrapper(transform=transform)
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
@@ -441,7 +395,4 @@ class Training(Inference):
             assert self.model is not None, "no model loaded for prediction"
 
         assert self.predictions is not None, "no predictions defined for this training"
-        self.predictions.compute(
-            loader=loader,
-            valuator=self._valuator()
-        )
+        self.predictions.compute(loader=loader, valuator=self._valuator())

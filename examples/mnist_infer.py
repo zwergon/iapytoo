@@ -1,9 +1,9 @@
 import torch
 from torchvision import datasets, transforms
 
-from iapytoo.predictions.predictors import MaxPredictor
 from iapytoo.predictions.plotters import ConfusionPlotter
-from iapytoo.utils.config import Config
+from iapytoo.utils.config import Config, ConfigFactory
+
 from iapytoo.train.inference import MLFlowInference
 
 
@@ -17,7 +17,7 @@ if __name__ == "__main__":
     import os
 
     # INPUT Parameters
-    config = Config.create_from_yaml(os.path.join(
+    config = ConfigFactory.from_yaml(os.path.join(
         os.path.dirname(__file__), "config_infer.yml"))
 
     inference = MnistInference(config)
@@ -26,14 +26,14 @@ if __name__ == "__main__":
         [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
     )
 
-    dataset2 = datasets.MNIST(
+    test_dataset = datasets.MNIST(
         config.dataset.path,
         train=False,
         transform=transform
     )
 
     test_loader = torch.utils.data.DataLoader(
-        dataset2, batch_size=config.dataset.batch_size,
+        test_dataset, batch_size=config.dataset.batch_size,
         num_workers=2
     )
 

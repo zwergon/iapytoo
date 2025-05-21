@@ -1,6 +1,6 @@
 project: "iapytoo"
 run: "infer"
-tracking_uri: /work/lecomtje/Repositories/iapy/iapytoo/mlruns
+tracking_uri: null
 
 dataset:
   path: "../data"
@@ -14,4 +14,4 @@ metrics:
 model:
   type: "mlflow"
   predictor: "max"
-  run_id: "eb22ed3db7064e0c8c4513e4ac26486b"
+  run_id: "59606474825b41b68b536f80d0b1911e"

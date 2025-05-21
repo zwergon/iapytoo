@@ -1,21 +1,16 @@
 import os
-import numpy as np
-import matplotlib.pyplot as plt
 
 import torch
-import torchvision
 import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import Dataset
-from torch.autograd import grad
 from torchvision.datasets import MNIST
 import torchvision.transforms as transforms
 
 
 from iapytoo.train.wgan import WGAN
 from iapytoo.utils.config import Config
-from iapytoo.train.factories import Model, ModelFactory, OptimizerFactory
-from iapytoo.predictions.plotters import PredictionPlotter, Fake2DPlotter
+from iapytoo.train.factories import Model, ModelFactory
+from iapytoo.predictions.plotters import Fake2DPlotter
 from iapytoo.train.factories import WeightInitiator
 
 
@@ -103,15 +98,18 @@ class Generator(Model):
 
 
 class Discriminator(Model):
-    def __init__(self, loader, config : Config):
+    def __init__(self, loader, config: Config):
         super(Discriminator, self).__init__(loader, config)
         # Filters [256, 512, 1024]
         # Input_dim = 1 (Cx64x64)
         # Output_dim = 1
         self.main_module = nn.Sequential(
-            # Omitting batch normalization in critic because our new penalized training objective (WGAN with gradient penalty) is no longer valid
-            # in this setting, since we penalize the norm of the critic's gradient with respect to each input independently and not the enitre batch.
-            # There is not good & fast implementation of layer normalization --> using per instance normalization nn.InstanceNorm2d()
+            # Omitting batch normalization in critic because our new penalized training objective
+            # (WGAN with gradient penalty) is no longer valid
+            # in this setting, since we penalize the norm of the critic's gradient with respect
+            # to each input independently and not the enitre batch.
+            # There is not good & fast implementation of layer normalization -->
+            # using per instance normalization nn.InstanceNorm2d()
             # Image (Cx32x32)
             nn.Conv2d(
                 in_channels=1, out_channels=256, kernel_size=4, stride=2, padding=1
@@ -163,7 +161,8 @@ class LatentDataset(Dataset):
 
 
 if __name__ == "__main__":
-    config = Config.create_from_yaml(os.path.join(os.path.dirname(__file__), "config_wgan.yml"))
+    config = Config.create_from_yaml(os.path.join(
+        os.path.dirname(__file__), "config_wgan.yml"))
 
     transform = transforms.Compose(
         [
@@ -174,7 +173,8 @@ if __name__ == "__main__":
     )
 
     # load training data
-    trainset = MNIST(config.dataset.path, download=True, train=True, transform=transform)
+    trainset = MNIST(config.dataset.path, download=True,
+                     train=True, transform=transform)
 
     trainloader = torch.utils.data.DataLoader(
         trainset, batch_size=config.dataset.batch_size, shuffle=True, drop_last=True
@@ -182,7 +182,8 @@ if __name__ == "__main__":
 
     latentset = LatentDataset(config.model.noise_dim, size=16)
 
-    valid_loader = torch.utils.data.DataLoader(latentset, batch_size=1, shuffle=False)
+    valid_loader = torch.utils.data.DataLoader(
+        latentset, batch_size=1, shuffle=False)
 
     item = next(iter(valid_loader))
     print(item.shape)

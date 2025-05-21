@@ -1,8 +1,6 @@
 import torch
 import unittest
 
-import numpy as np
-
 from iapytoo.utils.config import ConfigFactory
 from iapytoo.dataset import DummyVisionDataset, DummyLabelDataset
 from iapytoo.metrics import MetricsCollection
