@@ -1,11 +1,10 @@
 import ast
-from collections import abc
 import os
 import sys
 import logging
 import mlflow
 import yaml
-from pydantic import BaseModel, BeforeValidator, SerializeAsAny, Field
+from pydantic import BaseModel, BeforeValidator, Field
 from pydantic_core import PydanticUndefined
 import typing as t
 from typing import List, Optional, Dict
@@ -307,7 +306,6 @@ class ConfigFactory:
 
     @staticmethod
     def from_run_id(run_id, tracking_uri=None):
-        cf = {}
 
         if tracking_uri is not None:
             mlflow.set_tracking_uri(tracking_uri)

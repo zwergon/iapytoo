@@ -1,5 +1,3 @@
-import torch
-
 
 from iapytoo.utils.config import Config
 from iapytoo.utils.singleton import singleton
