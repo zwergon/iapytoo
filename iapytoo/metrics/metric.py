@@ -1,7 +1,7 @@
 import torch
 
 from iapytoo.utils.config import Config
-from iapytoo.predictions.predictors import PredictorFactory
+from iapytoo.train.factories import Factory
 
 
 class Metric:
@@ -9,7 +9,7 @@ class Metric:
         self.with_target = with_target
         self.name = name
         self.config = config
-        self.predictor = PredictorFactory().create_predictor(config)
+        self.predictor = Factory().create_predictor(config)
 
         # First dimension is for the concatenation.
         self.outputs = torch.zeros(size=(0,))

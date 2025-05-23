@@ -2,14 +2,12 @@ import torch.nn as nn
 from iapytoo.utils.singleton import singleton
 import torch.optim as to
 from torch.optim.lr_scheduler import StepLR
+from iapytoo.predictions.predictors import MaxPredictor
 
 from iapytoo.utils.config import Config
 
 
-class ModelError(Exception):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
-
+# Model
 
 class WeightInitiator:
     def __call__(self, m):
@@ -32,46 +30,7 @@ class Model(nn.Module):
         return model_output
 
 
-@singleton
-class ModelFactory:
-    def __init__(self) -> None:
-        self.models_dict = {}
-
-    def register_model(self, key, model_cls):
-        self.models_dict[key] = model_cls
-
-    def create_model(self, kind: str, config: Config, loader, device="cpu"):
-        """Creates an architecture of NN
-
-        Args:
-            kind (str): kind of NN, key for the factory
-            config (dict): config dict to use to initialize model
-            loader (DataLoader): a dataloader to have input/output dimensions
-            device (str, optional): Defaults to "cpu".
-
-        Raises:
-            ModelError: error raised if no architecture fit kind key
-
-        Returns:
-            nn.Module: pytorch model
-        """
-        try:
-            model: Model = self.models_dict[kind](loader, config)
-        except KeyError:
-            raise ModelError(f"model {kind} is not handled")
-
-        initiator = model.weight_initiator()
-        if initiator is not None:
-            model.apply(initiator)
-
-        model = model.to(device=device)
-        return model
-
-
-class OptimizerError(Exception):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
-
+# Optimizer
 
 class Optimizer:
     def __init__(self, model, config: Config) -> None:
@@ -109,43 +68,7 @@ class SGDOptimizer(Optimizer):
             kwargs["momentum"] = config.training.momentum
         self.torch_optimizer = to.SGD(model.parameters(), **kwargs)
 
-
-@singleton
-class OptimizerFactory:
-    def __init__(self) -> None:
-        self.optimizers_dict = {
-            "adam": AdamOptimizer,
-            "sgd": SGDOptimizer,
-            "rmsprop": RMSpropOptimizer,
-        }
-
-    def register_optimizer(self, key, optimizer_cls):
-        self.optimizers_dict[key] = optimizer_cls
-
-    def create_optimizer(self, kind: str, model, config: Config):
-        """Creates an optimizer for the NN
-
-        Args:
-            kind (str): kind of optimizer, key for the factory
-            config (dict): config dict to use to initialize optimizer
-
-        Raises:
-            OptimizerError: error raised if no architecture fit kind key
-
-        Returns:
-            nn.Module: pytorch optimizer
-        """
-        try:
-            optimizer = self.optimizers_dict[kind](model, config)
-        except KeyError:
-            raise OptimizerError(f"optimizer {kind} is not handled")
-
-        return optimizer
-
-
-class SchedulerError(Exception):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
+# Scheduler
 
 
 class Scheduler:
@@ -162,11 +85,68 @@ class StepScheduler(Scheduler):
         kwargs["step_size"] = config.training.step_size
         self.lr_scheduler = StepLR(optimizer, **kwargs)
 
+# Factories
+
+
+class OptimizerError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
+class ModelError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
+class SchedulerError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
 
 @singleton
-class SchedulerFactory:
+class Factory:
     def __init__(self) -> None:
-        self.schedulers_dict = {"step": StepScheduler}
+        self.loss_dict = {
+            "mse": nn.MSELoss,
+            "nll": nn.NLLLoss,
+            "cel": nn.CrossEntropyLoss,
+        }
+
+        self.schedulers_dict = {
+            "step": StepScheduler
+        }
+
+        self.optimizers_dict = {
+            "adam": AdamOptimizer,
+            "sgd": SGDOptimizer,
+            "rmsprop": RMSpropOptimizer,
+        }
+
+        self.models_dict = {
+        }
+
+        self.predictor_dict = {
+            "max": MaxPredictor
+        }
+
+    def register_loss(self, key, loss_cls):
+        self.loss_dict[key] = loss_cls
+
+    def create_loss(self, kind: str):
+        """Creates a loss criterion
+
+        Args:
+            kind (str): kind of loss, key for the factory
+
+        Returns:
+            nn.Module: pytorch loss function
+        """
+        try:
+            criterion = self.loss_dict[kind]()
+        except KeyError:
+            raise Exception(f"loss {kind} is not handled")
+
+        return criterion
 
     def register_scheduler(self, key, scheduler_cls):
         self.schedulers_dict[key] = scheduler_cls
@@ -191,31 +171,66 @@ class SchedulerFactory:
 
         return scheduler
 
+    def register_optimizer(self, key, optimizer_cls):
+        self.optimizers_dict[key] = optimizer_cls
 
-@singleton
-class LossFactory:
-    def __init__(self) -> None:
-        self.loss_dict = {
-            "mse": nn.MSELoss,
-            "nll": nn.NLLLoss,
-            "cel": nn.CrossEntropyLoss,
-        }
-
-    def register_loss(self, key, loss_cls):
-        self.loss_dict[key] = loss_cls
-
-    def create_loss(self, kind: str):
-        """Creates a loss criterion
+    def create_optimizer(self, kind: str, model, config: Config):
+        """Creates an optimizer for the NN
 
         Args:
-            kind (str): kind of loss, key for the factory
+            kind (str): kind of optimizer, key for the factory
+            config (dict): config dict to use to initialize optimizer
+
+        Raises:
+            OptimizerError: error raised if no architecture fit kind key
 
         Returns:
-            nn.Module: pytorch loss function
+            nn.Module: pytorch optimizer
         """
         try:
-            criterion = self.loss_dict[kind]()
+            optimizer = self.optimizers_dict[kind](model, config)
         except KeyError:
-            raise Exception(f"loss {kind} is not handled")
+            raise OptimizerError(f"optimizer {kind} is not handled")
 
-        return criterion
+        return optimizer
+
+    def register_model(self, key, model_cls):
+        self.models_dict[key] = model_cls
+
+    def create_model(self, kind: str, config: Config, loader, device="cpu"):
+        """Creates an architecture of NN
+
+        Args:
+            kind (str): kind of NN, key for the factory
+            config (dict): config dict to use to initialize model
+            loader (DataLoader): a dataloader to have input/output dimensions
+            device (str, optional): Defaults to "cpu".
+
+        Raises:
+            ModelError: error raised if no architecture fit kind key
+
+        Returns:
+            nn.Module: pytorch model
+        """
+        try:
+            model: Model = self.models_dict[kind](loader, config)
+        except KeyError:
+            raise ModelError(f"model {kind} is not handled")
+
+        initiator = model.weight_initiator()
+        if initiator is not None:
+            model.apply(initiator)
+
+        model = model.to(device=device)
+        return model
+
+    def create_predictor(self, key: Config | str):
+        if isinstance(key, Config):
+            config: Config = key
+            kind = config.model.predictor
+        else:
+            kind = key
+        if kind is not None:
+            return self.predictor_dict[kind]()
+
+        return None

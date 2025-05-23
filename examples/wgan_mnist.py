@@ -8,8 +8,8 @@ import torchvision.transforms as transforms
 
 
 from iapytoo.train.wgan import WGAN
-from iapytoo.utils.config import Config
-from iapytoo.train.factories import Model, ModelFactory
+from iapytoo.utils.config import ConfigFactory, Config
+from iapytoo.train.factories import Model, Factory
 from iapytoo.predictions.plotters import Fake2DPlotter
 from iapytoo.train.factories import WeightInitiator
 
@@ -161,7 +161,7 @@ class LatentDataset(Dataset):
 
 
 if __name__ == "__main__":
-    config = Config.create_from_yaml(os.path.join(
+    config = ConfigFactory.from_yaml(os.path.join(
         os.path.dirname(__file__), "config_wgan.yml"))
 
     transform = transforms.Compose(
@@ -188,9 +188,9 @@ if __name__ == "__main__":
     item = next(iter(valid_loader))
     print(item.shape)
 
-    model_factory = ModelFactory()
-    model_factory.register_model("generator", Generator)
-    model_factory.register_model("critic", Discriminator)
+    factory = Factory()
+    factory.register_model("generator", Generator)
+    factory.register_model("critic", Discriminator)
 
     wgan = WGAN(config)
     wgan.predictions.add_plotter(Fake2DPlotter())

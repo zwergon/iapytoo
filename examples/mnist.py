@@ -5,13 +5,14 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import LambdaLR
+from PIL import Image
 
 
 from iapytoo.predictions.plotters import ConfusionPlotter
-from iapytoo.train.factories import Model, ModelFactory, SchedulerFactory, Scheduler
+from iapytoo.train.factories import Model, Scheduler, Factory
 from iapytoo.utils.config import ConfigFactory, Config
 from iapytoo.train.training import Training
-from iapytoo.train.mlflow_model import Transform
+from iapytoo.train.mlflow_model import MlflowTransform, IMlfowModelProvider
 
 
 from mlflow.types.schema import TensorSpec, Schema
@@ -58,32 +59,45 @@ class MnistScheduler(Scheduler):
         self.lr_scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
 
 
-class MnistTraining(Training):
-    def __init__(self, config: Config) -> None:
-        super().__init__(config)
-        self.predictions.add_plotter(ConfusionPlotter())
+class MnistTransform(MlflowTransform):
 
-
-class MnistTransform(Transform):
-
-    def __init__(self, dataset):
-        super().__init__(
-            train_transform=transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Normalize((0.1307,), (0.3081,))
-                ]
-            ),
-            dataset=dataset
-        )
+    def __init__(self) -> None:
+        super().__init__(transform=transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize((0.1307,), (0.3081,))
+            ]
+        ))
 
     # override
-    def set_signature(self, dataset):
-        img, Y = dataset[0]
-        X = Transform.img_to_numpy(img)
+    def __call__(self, model_input, *args, **kwds):
+
+        images_pil = []
+        for i in range(model_input.shape[0]):
+            # Extraire l'image (en supprimant la dimension du canal si nécessaire)
+            # Supposons que l'image est en niveaux de gris
+            img_array = model_input[i, 0, :, :]
+
+            # Normaliser l'image si nécessaire (par exemple, si les valeurs sont entre 0 et 1)
+            img_array = (img_array * 255).astype(np.uint8)
+
+            # Créer une image PIL
+            # 'L' pour les niveaux de gris
+            img_pil = Image.fromarray(img_array, 'L')
+            images_pil.append(img_pil)
+
+        model_input_tensor = torch.stack(
+            [self.transform(img) for img in images_pil])
+
+        return model_input_tensor
+
+
+class MnistMlfowModel(IMlfowModelProvider):
+
+    def __init__(self):
+        X = np.random.rand(1, 1, 28, 28)
+        Y = np.zeros(shape=(1,), dtype=np.int64)
         # add batch size
-        X = np.expand_dims(X, axis=0)
-        Y = np.expand_dims(Y, axis=0)
         x_shape = list(X.shape)
         x_shape[0] = -1
         y_shape = list(Y.shape)
@@ -97,26 +111,40 @@ class MnistTransform(Transform):
         self.signature = ModelSignature(
             inputs=input_schema, outputs=output_schema)
         self.input_example = X
+        self.transform: MlflowTransform = MnistTransform()
 
     # override
+    def get_transform(self) -> MlflowTransform:
+        return self.transform
 
-    def transform(self, context, model_input, params=None):
+    # override
+    def get_signature(self):
+        return self.signature
 
-        model_input_transformed = [
-            self.infer_transform(img) for img in model_input]
-        print(model_input_transformed[0].permute(1, 0, 2).shape)
+    # override
+    def get_input_example(self):
+        return self.input_example
 
-        model_input_tensor = torch.stack(
-            [img.permute(1, 0, 2) for img in model_input_transformed])
 
-        return model_input_tensor
+class MnistTraining(Training):
+
+    def __init__(self, config: Config) -> None:
+        super().__init__(config)
+        self.predictions.add_plotter(ConfusionPlotter())
+
+        self.mlflow_model_provider: IMlfowModelProvider = MnistMlfowModel()
+
+    @property
+    def mlflow_transform(self):
+        return training.mlflow_model_provider.get_transform()
 
 
 if __name__ == "__main__":
     from iapytoo.utils.arguments import parse_args
 
-    ModelFactory().register_model("mnist", MnistModel)
-    SchedulerFactory().register_scheduler("mnist", MnistScheduler)
+    factory = Factory()
+    factory.register_model("mnist", MnistModel)
+    factory.register_scheduler("mnist", MnistScheduler)
 
     args = parse_args()
 
@@ -129,24 +157,19 @@ if __name__ == "__main__":
 
     Training.seed(config)
 
-    signature_dataset = datasets.MNIST(
-        config.dataset.path,
-        train=False
-    )
-    transform = MnistTransform(signature_dataset)
-
     training = MnistTraining(config)
+    mflow_transform: MlflowTransform = training.mlflow_transform
     train_dataset = datasets.MNIST(
         config.dataset.path,
         train=True,
         download=True,
-        transform=transform.train_transform
+        transform=mflow_transform.transform
     )
 
-    train_dataset = datasets.MNIST(
+    test_dataset = datasets.MNIST(
         config.dataset.path,
         train=False,
-        transform=transform.infer_transform
+        transform=mflow_transform.transform
     )
 
     train_loader = DataLoader(
@@ -162,6 +185,5 @@ if __name__ == "__main__":
     training.fit(
         train_loader=train_loader,
         valid_loader=test_loader,
-        transform=transform,
         run_id=args.run_id
     )

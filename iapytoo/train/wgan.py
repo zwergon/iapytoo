@@ -1,17 +1,22 @@
 import sys
 import torch
-from tqdm import tqdm
 import logging
+import numpy as np
+from enum import IntEnum
+import mlflow.pyfunc as mp
+from typing import Any
+from tqdm import tqdm
 
 from iapytoo.train.training import Training
 from iapytoo.utils.config import Config
-from iapytoo.train.factories import ModelFactory, OptimizerFactory
+from iapytoo.train.factories import Factory
 from iapytoo.train.loss import Loss
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.utils.timer import Timer
-from iapytoo.train.training import InferenceValuator
-from enum import IntEnum
+from iapytoo.train.inference import ModelValuator
+from iapytoo.train.mlflow_model import MlflowModel
+from iapytoo.predictions.predictors import PredictorFactory
 
 
 class WGAN_FCT(IntEnum):
@@ -51,27 +56,41 @@ class WGAN(Training):
         return None
 
     def _create_models(self, loader):
-        generator = ModelFactory().create_model(
+        factory = Factory()
+        generator = factory.create_model(
             self._config.model.generator, self._config, loader, self.device
         )
-        discriminator = ModelFactory().create_model(
+        discriminator = factory.create_model(
             self._config.model.discriminator, self._config, loader, self.device
         )
 
         return [generator, discriminator]
 
     def _create_optimizers(self):
-        g_optimizer = OptimizerFactory().create_optimizer(
+        factory = Factory()
+        g_optimizer = factory.create_optimizer(
             self._config.training.optimizer, self.generator, self._config
         )
-        d_optimizer = OptimizerFactory().create_optimizer(
+        d_optimizer = factory.create_optimizer(
             self._config.training.optimizer, self.discriminator, self._config
         )
 
         return [g_optimizer, d_optimizer]
 
-    def _valuator(self, loader):
-        return WGANValuator(self, loader)
+    # override
+    def _valuator(self):
+        return WGANValuator(model=self.generator, device=self.device)
+
+    def _create_model_wrapper(self, transform: Transform = None):
+
+        model_wrapper = WGANWrapper()
+        model_wrapper.setattr(
+            model=self.model,
+            transform=transform,
+            predictor_key=self._config.model.predictor
+        )
+
+        return model_wrapper
 
     @staticmethod
     def freeze_params(model, freeze: bool):
@@ -160,7 +179,10 @@ class WGAN(Training):
     def _on_epoch_ended(self, epoch, checkpoint, **kwargs):
         if epoch % 10 == 0:
             if "loader" in kwargs:
-                self.predictions.compute(self._valuator(kwargs["loader"]))
+                self.predictions.compute(
+                    loader=kwargs["loader"],
+                    valuator=self._valuator()
+                )
                 self.logger.report_prediction(epoch, self.predictions)
 
         for item in self.loss(WGAN_FCT.GENERATOR).buffer:
@@ -284,6 +306,7 @@ class WGAN(Training):
 
         self._models = self._create_models(train_loader)
         self._optimizers = self._create_optimizers()
+        self.model_wrapper = self._create_model_wrapper()
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
@@ -291,7 +314,6 @@ class WGAN(Training):
         with Logger(self._config, run_id=checkpoint.run_id) as self.logger:
             active_run_name = self.logger.active_run_name()
             self._display_device()
-            self.logger.set_signature(train_loader)
             self.logger.summary()
 
             for epoch in range(checkpoint.epoch + 1, num_epochs):
@@ -304,7 +326,7 @@ class WGAN(Training):
 
                 self._on_epoch_ended(epoch, checkpoint, loader=valid_loader)
 
-            self.logger.save_model(self.model)
+            self.logger.save_model(self.model_wrapper)
 
         return {
             "run_id": self.logger.run_id,
@@ -314,18 +336,40 @@ class WGAN(Training):
         }
 
 
-class WGANValuator(InferenceValuator):
+class WGANValuator(ModelValuator):
 
-    def evaluate(self):
-        training: WGAN = self.inference
-        device = training.device
-        generator = training.generator
+    # override
+    def evaluate_one(self, input):
+        raise NotImplementedError()
+
+    # override
+    def evaluate_loader(self, loader):
+
+        device = self.device
+        generator = self.model
         generator.eval()
         with torch.no_grad():
-            for X in self.loader:
+            for X in loader:
                 X = X.to(device)
                 gen_output = generator(X)
 
                 outputs = gen_output.detach().cpu()
 
                 yield outputs, None
+
+
+class WGANWrapper(MlflowModel):
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def load_context(self, context: mp.PythonModelContext):
+        # Prédire avec le modèle sur cpu
+        self.valuator = WGANValuator(self.model, "cpu")
+        self.predictor = PredictorFactory().create_predictor(self.predictor_key)
+
+    def predict(
+        self, context: mp.PythonModelContext, model_input: np.ndarray, params: dict[str, Any] | None = None
+    ):
+        print(f"predict called with input shape: {model_input.shape}")
+        raise NotImplementedError()

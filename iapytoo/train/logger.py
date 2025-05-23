@@ -18,7 +18,7 @@ from iapytoo.utils.display import lrfind_plot
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.train.context import Context
 from iapytoo.predictions import Predictions
-from iapytoo.train.mlflow_model import ModelWrapper, Transform
+from iapytoo.train.mlflow_model import MlflowModel
 
 
 class Logger:
@@ -132,15 +132,6 @@ class Logger:
             ctx_path = self.context.save(tmpdirname)
             mlflow.log_artifact(ctx_path)
 
-    def log_transform(self, transform: Transform):
-        if transform is None:
-            return
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            transform_name = os.path.join(tmpdirname, "transforms.pt")
-            torch.save(transform.infer_transform, transform_name)
-            mlflow.log_artifact(local_path=transform_name,
-                                artifact_path="checkpoints")
-
     def log_checkpoint(self, checkpoint: CheckPoint):
         with tempfile.TemporaryDirectory() as tmpdirname:
             ckp_name = os.path.join(tmpdirname, "checkpoint.pt")
@@ -148,14 +139,11 @@ class Logger:
             mlflow.log_artifact(local_path=ckp_name,
                                 artifact_path="checkpoints")
 
-    def save_model(self, model_wrapper: ModelWrapper):
+    def save_model(self, model_wrapper: MlflowModel):
         assert model_wrapper is not None, "no model_wrapper instance ?"
 
         signature = model_wrapper.signature
-        transform = model_wrapper.transform
         input_example = model_wrapper.input_example
-
-        self.log_transform(transform)
 
         with self.lock:
             mlflow.pyfunc.log_model(

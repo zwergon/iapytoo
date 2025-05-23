@@ -25,6 +25,7 @@ class DefaultModelConfig(ModelConfig):
 class GanConfig(ModelConfig):
     generator: str
     discriminator: str
+    hidden_size: Optional[int] = 128
     lambda_gp: Optional[float] = 10.0
     noise_dim: Optional[int] = 100
     n_critic: Optional[int] = 5

@@ -12,15 +12,9 @@ from iapytoo.utils.config import Config
 from iapytoo.utils.timer import Timer
 from iapytoo.utils.iterative_mean import Mean
 from iapytoo.train.loss import Loss
-from iapytoo.train.factories import (
-    ModelFactory,
-    OptimizerFactory,
-    SchedulerFactory,
-    LossFactory,
-)
+from iapytoo.train.factories import Factory
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
-from iapytoo.train.mlflow_model import ModelWrapper, Transform
 from iapytoo.train.inference import Inference
 from iapytoo.metrics import MetricsCollection
 
@@ -59,7 +53,6 @@ class Training(Inference):
         self.loss = Loss(n_losses=2)
         self._optimizers = []
         self._schedulers = []
-        self.model_wrapper: ModelWrapper = None
 
     @property
     def scheduler(self):
@@ -110,14 +103,14 @@ class Training(Inference):
     # ----------------------------------------
 
     def _create_criterion(self):
-        return LossFactory().create_loss(self._config.training.loss)
+        return Factory().create_loss(self._config.training.loss)
 
     def _get_lr(self, optimizer):
         for param_group in optimizer.param_groups:
             return param_group["lr"]
 
     def _create_optimizers(self):
-        optimizer = OptimizerFactory().create_optimizer(
+        optimizer = Factory().create_optimizer(
             self._config.training.optimizer, self.model, self._config
         )
 
@@ -125,28 +118,16 @@ class Training(Inference):
 
     # overwrite
     def _create_models(self, loader):
-        model = ModelFactory().create_model(self._config.model.model,
-                                            self._config, loader, self.device)
+        model = Factory().create_model(self._config.model.model,
+                                       self._config, loader, self.device)
 
         return [model]
 
     def _create_schedulers(self, optimizer):
-        scheduler = SchedulerFactory().create_scheduler(
+        scheduler = Factory().create_scheduler(
             self._config.training.scheduler, optimizer, self._config
         )
         return [scheduler]
-
-    def _create_model_wrapper(self, loader: DataLoader = None, transform: Transform = None):
-
-        model_wrapper = ModelWrapper()
-        model_wrapper.setattr(
-            model=self.model,
-            transform=transform,
-            predictor_key=self._config.model.predictor,
-            loader=loader
-        )
-
-        return model_wrapper
 
     def _inner_train(self, batch, batch_idx, metrics: MetricsCollection):
         X, Y = batch
@@ -183,8 +164,7 @@ class Training(Inference):
         if epoch % 10 == 0 or epoch == num_epochs - 1:
             if "valid_loader" in kwargs and len(self.predictions) > 0:
 
-                self.predictions.compute(
-                    loader=kwargs["valid_loader"], valuator=self._valuator())
+                self.predictions.compute(loader=kwargs["valid_loader"])
                 self.logger.report_prediction(epoch, self.predictions)
 
             for item in self.loss(LossType.TRAIN).buffer:
@@ -293,7 +273,7 @@ class Training(Inference):
             lr / 1e-8) ** (1 / ((num_batch * num_epochs) - 1))
         self._config.training.step_size = 1
         self.optimizer.param_groups[0]["lr"] = 1e-8
-        self._schedulers = [SchedulerFactory().create_scheduler(
+        self._schedulers = [Factory().create_scheduler(
             "step", self.optimizer, self._config)]
 
         train_time = Timer()
@@ -337,17 +317,16 @@ class Training(Inference):
         train_time.stop()
 
     def fit(
-        self, train_loader: DataLoader, valid_loader: DataLoader, transform: Transform = None, run_id=None
+        self, train_loader: DataLoader, valid_loader: DataLoader, run_id=None
     ):
         num_epochs = self._config.training.epochs
 
         self.loss.reset()
 
-        self._models = self._create_models(train_loader)
+        self._models = self._create_models(loader=train_loader)
         self._optimizers = self._create_optimizers()
         self._schedulers = self._create_schedulers(self.optimizer)
-
-        self.model_wrapper = self._create_model_wrapper(transform=transform)
+        self._init_mlflow_model()
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
@@ -373,7 +352,7 @@ class Training(Inference):
                 self._on_epoch_ended(
                     epoch, checkpoint, valid_loader=valid_loader)
 
-            self.logger.save_model(self.model_wrapper)
+            self.logger.save_model(self.mlflow_model)
 
         return {
             "run_id": self.logger.run_id,
@@ -395,4 +374,4 @@ class Training(Inference):
             assert self.model is not None, "no model loaded for prediction"
 
         assert self.predictions is not None, "no predictions defined for this training"
-        self.predictions.compute(loader=loader, valuator=self._valuator())
+        self.predictions.compute(loader=loader)

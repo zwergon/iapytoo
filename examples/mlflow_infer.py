@@ -23,12 +23,13 @@ def get_model_input(idx=0):
 
 
 if __name__ == "__main__":
+    import mlflow.pyfunc as mp
     run_id = "a821dbc9a0974bb0815479634c0e845c"
 
     logged_model = f'runs:/{run_id}/model'
 
     # Load model as a PyFuncModel.
-    loaded_model = mlflow.pyfunc.load_model(logged_model)
+    loaded_model: mp.PyFuncModel = mlflow.pyfunc.load_model(logged_model)
 
     model_input = get_model_input()
     predicted = loaded_model.predict(model_input)
