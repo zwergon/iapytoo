@@ -41,3 +41,21 @@ class ModelValuator(Valuator):
                 outputs = model_output.detach().cpu()
                 actual = Y.detach().cpu()
                 yield outputs, actual
+
+
+class WGANValuator(ModelValuator):
+
+    # override
+    def evaluate_loader(self, loader: DataLoader):
+
+        device = self.device
+        generator = self.model
+        generator.eval()
+        with torch.no_grad():
+            for X in loader:
+                X = X.to(device)
+                gen_output = generator(X)
+
+                outputs = gen_output.detach().cpu()
+
+                yield outputs, None

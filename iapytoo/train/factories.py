@@ -2,7 +2,10 @@ import torch.nn as nn
 from iapytoo.utils.singleton import singleton
 import torch.optim as to
 from torch.optim.lr_scheduler import StepLR
-from iapytoo.predictions.predictors import MaxPredictor
+from iapytoo.predictions.predictors import Predictor, MaxPredictor
+from iapytoo.train.valuator import ModelValuator, WGANValuator
+from iapytoo.metrics.metric import Metric
+from iapytoo.metrics.predefined import R2Metric, RMSMetric, AccuracyMetric, MSMetric
 
 from iapytoo.utils.config import Config
 
@@ -103,6 +106,11 @@ class SchedulerError(Exception):
         super().__init__(*args)
 
 
+class MetricError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
 @singleton
 class Factory:
     def __init__(self) -> None:
@@ -125,8 +133,21 @@ class Factory:
         self.models_dict = {
         }
 
+        self.metrics_dict = {
+            "r2": R2Metric,
+            "rms": RMSMetric,
+            "ms": MSMetric,
+            "accuracy": AccuracyMetric,
+        }
+
         self.predictor_dict = {
+            "default": Predictor,
             "max": MaxPredictor
+        }
+
+        self.valuator_dict = {
+            "model": ModelValuator,
+            "gan": WGANValuator
         }
 
     def register_loss(self, key, loss_cls):
@@ -224,13 +245,47 @@ class Factory:
         model = model.to(device=device)
         return model
 
+    def register_metric(self, key, metric_cls):
+        self.metrics_dict[key] = metric_cls
+
+    def create_metric(self, kind: str, config: Config, device="cpu") -> Metric:
+        """Creates an architecture of NN
+
+        Args:
+            kind (str): kind of metric, key for the factory
+            config (dict): config dict to use to initialize metric
+            device (str, optional): Defaults to "cpu".
+
+        Raises:
+            MetricError: error raised if no architecture fit kind key
+
+        Returns:
+            iapytoo.metrics.Metric: metric
+        """
+        try:
+            metric: Metric = self.metrics_dict[kind](config)
+        except KeyError:
+            raise MetricError(f"metric {kind} is not handled")
+
+        metric = metric.to(device=device)
+        return metric
+
     def create_predictor(self, key: Config | str):
         if isinstance(key, Config):
             config: Config = key
             kind = config.model.predictor
         else:
             kind = key
-        if kind is not None:
-            return self.predictor_dict[kind]()
+        assert kind is not None, "no default predictor defined ?"
 
-        return None
+        return self.predictor_dict[kind]()
+
+    def create_valuator(self, key: Config | str, model, device):
+        if isinstance(key, Config):
+            config: Config = key
+            kind = config.model.valuator
+        else:
+            kind = key
+        assert kind is not None, "no default valuator defined ?"
+
+        return self.valuator_dict[kind](model, device)

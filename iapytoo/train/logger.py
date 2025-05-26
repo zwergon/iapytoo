@@ -93,7 +93,6 @@ class Logger:
 
         for key in [
             "training.epochs",
-            "training.tqdm",
             "project",
             "run",
             "tracking_uri",

@@ -21,6 +21,7 @@ training:
 
 model:
   type: "gan"
+  valuator: "gan"
   generator: generator
   discriminator: critic
   n_critic: 1

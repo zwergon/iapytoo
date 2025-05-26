@@ -62,12 +62,14 @@ class MnistScheduler(Scheduler):
 class MnistTransform(MlflowTransform):
 
     def __init__(self) -> None:
-        super().__init__(transform=transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Normalize((0.1307,), (0.3081,))
-            ]
-        ))
+        super().__init__(
+            transform=transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.1307,), (0.3081,))
+                ]
+            )
+        )
 
     # override
     def __call__(self, model_input, *args, **kwds):
@@ -118,11 +120,11 @@ class MnistMlfowModel(IMlfowModelProvider):
         return self.transform
 
     # override
-    def get_signature(self):
+    def get_signature(self) -> ModelSignature:
         return self.signature
 
     # override
-    def get_input_example(self):
+    def get_input_example(self) -> np.array:
         return self.input_example
 
 
@@ -131,12 +133,7 @@ class MnistTraining(Training):
     def __init__(self, config: Config) -> None:
         super().__init__(config)
         self.predictions.add_plotter(ConfusionPlotter())
-
         self.mlflow_model_provider: IMlfowModelProvider = MnistMlfowModel()
-
-    @property
-    def mlflow_transform(self):
-        return training.mlflow_model_provider.get_transform()
 
 
 if __name__ == "__main__":
@@ -158,7 +155,7 @@ if __name__ == "__main__":
     Training.seed(config)
 
     training = MnistTraining(config)
-    mflow_transform: MlflowTransform = training.mlflow_transform
+    mflow_transform: MlflowTransform = training.get_transform()
     train_dataset = datasets.MNIST(
         config.dataset.path,
         train=True,
@@ -178,7 +175,7 @@ if __name__ == "__main__":
         num_workers=config.dataset.num_workers
     )
     test_loader = DataLoader(
-        train_dataset, batch_size=config.dataset.batch_size,
+        test_dataset, batch_size=config.dataset.batch_size,
         num_workers=config.dataset.num_workers
     )
 

@@ -1,11 +1,11 @@
 import torch
 
 from iapytoo.utils.config import Config
-from iapytoo.train.factories import Factory
 
 
 class Metric:
     def __init__(self, name, config: Config, with_target=True):
+        from iapytoo.train.factories import Factory
         self.with_target = with_target
         self.name = name
         self.config = config
@@ -23,7 +23,7 @@ class Metric:
 
     @property
     def predicted(self):
-        return self.predictor(self.outputs) if self.predictor else self.outputs
+        return self.predictor(self.outputs)
 
     def to(self, device):
         self.outputs = self.outputs.to(device)

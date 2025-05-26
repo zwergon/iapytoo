@@ -1,10 +1,10 @@
-import torch
-from torchvision import datasets, transforms
-
+from torchvision import datasets
+from torch.utils.data import DataLoader
 from iapytoo.predictions.plotters import ConfusionPlotter
-from iapytoo.utils.config import Config, ConfigFactory
+from iapytoo.utils.config import Config, ConfigFactory, DatasetConfig
 
 from iapytoo.train.inference import MLFlowInference
+from iapytoo.train.mlflow_model import MlflowTransform
 
 
 class MnistInference(MLFlowInference):
@@ -22,18 +22,19 @@ if __name__ == "__main__":
 
     inference = MnistInference(config)
 
-    transform = transforms.Compose(
-        [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
-    )
+    transform: MlflowTransform = inference.get_transform()
+
+    dataset_config: DatasetConfig = config.dataset
 
     test_dataset = datasets.MNIST(
-        config.dataset.path,
+        dataset_config.path,
         train=False,
-        transform=transform
+        transform=transform.transform
     )
 
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=config.dataset.batch_size,
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=dataset_config.batch_size,
         num_workers=2
     )
 

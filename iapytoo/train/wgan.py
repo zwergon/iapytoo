@@ -1,10 +1,7 @@
 import sys
 import torch
 import logging
-import numpy as np
 from enum import IntEnum
-import mlflow.pyfunc as mp
-from typing import Any
 from tqdm import tqdm
 
 from iapytoo.train.training import Training
@@ -14,9 +11,6 @@ from iapytoo.train.loss import Loss
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.utils.timer import Timer
-from iapytoo.train.inference import ModelValuator
-from iapytoo.train.mlflow_model import MlflowModel
-from iapytoo.predictions.predictors import PredictorFactory
 
 
 class WGAN_FCT(IntEnum):
@@ -76,21 +70,6 @@ class WGAN(Training):
         )
 
         return [g_optimizer, d_optimizer]
-
-    # override
-    def _valuator(self):
-        return WGANValuator(model=self.generator, device=self.device)
-
-    def _create_model_wrapper(self, transform: Transform = None):
-
-        model_wrapper = WGANWrapper()
-        model_wrapper.setattr(
-            model=self.model,
-            transform=transform,
-            predictor_key=self._config.model.predictor
-        )
-
-        return model_wrapper
 
     @staticmethod
     def freeze_params(model, freeze: bool):
@@ -180,8 +159,7 @@ class WGAN(Training):
         if epoch % 10 == 0:
             if "loader" in kwargs:
                 self.predictions.compute(
-                    loader=kwargs["loader"],
-                    valuator=self._valuator()
+                    loader=kwargs["loader"]
                 )
                 self.logger.report_prediction(epoch, self.predictions)
 
@@ -306,7 +284,7 @@ class WGAN(Training):
 
         self._models = self._create_models(train_loader)
         self._optimizers = self._create_optimizers()
-        self.model_wrapper = self._create_model_wrapper()
+        self._init_mlflow_model()
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
@@ -326,7 +304,7 @@ class WGAN(Training):
 
                 self._on_epoch_ended(epoch, checkpoint, loader=valid_loader)
 
-            self.logger.save_model(self.model_wrapper)
+            self.logger.save_model(self.mlflow_model)
 
         return {
             "run_id": self.logger.run_id,
@@ -334,42 +312,3 @@ class WGAN(Training):
             "g_loss": self.loss(WGAN_FCT.GENERATOR).value,
             "d_loss": self.loss(WGAN_FCT.DISCRIMINATOR).value,
         }
-
-
-class WGANValuator(ModelValuator):
-
-    # override
-    def evaluate_one(self, input):
-        raise NotImplementedError()
-
-    # override
-    def evaluate_loader(self, loader):
-
-        device = self.device
-        generator = self.model
-        generator.eval()
-        with torch.no_grad():
-            for X in loader:
-                X = X.to(device)
-                gen_output = generator(X)
-
-                outputs = gen_output.detach().cpu()
-
-                yield outputs, None
-
-
-class WGANWrapper(MlflowModel):
-
-    def __init__(self) -> None:
-        super().__init__()
-
-    def load_context(self, context: mp.PythonModelContext):
-        # Prédire avec le modèle sur cpu
-        self.valuator = WGANValuator(self.model, "cpu")
-        self.predictor = PredictorFactory().create_predictor(self.predictor_key)
-
-    def predict(
-        self, context: mp.PythonModelContext, model_input: np.ndarray, params: dict[str, Any] | None = None
-    ):
-        print(f"predict called with input shape: {model_input.shape}")
-        raise NotImplementedError()

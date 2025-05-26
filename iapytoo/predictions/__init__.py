@@ -1,7 +1,6 @@
 from __future__ import annotations
 import torch
 
-from iapytoo.utils.config import Config
 from .types import PredictionType
 from .plotters import CollectionPlotters
 
@@ -54,7 +53,7 @@ class Predictions:
 
     def tensor(self, type: PredictionType = PredictionType.PREDICTED):
         if type == PredictionType.PREDICTED:
-            return self.predictor(self.outputs) if self.predictor else self.outputs
+            return self.predictor(self.outputs)
         elif type == PredictionType.ACTUAL:
             return self.actual
         else:

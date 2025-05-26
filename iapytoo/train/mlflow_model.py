@@ -1,10 +1,15 @@
 import mlflow.pyfunc as mp
 import numpy as np
 from typing import Any
-from torch.utils.data import DataLoader
+import torch
+
+from torchvision.transforms import ToTensor
+
+from mlflow.models import ModelSignature
+
 
 from iapytoo.train.factories import Factory
-from iapytoo.train.valuator import Valuator, ModelValuator
+from iapytoo.train.valuator import Valuator
 from iapytoo.predictions.predictors import Predictor
 
 
@@ -13,38 +18,61 @@ class MlflowTransform:
     def __init__(self, transform):
         self.transform = transform
 
-    def __call__(self, model_input, *args, **kwds):
-        return model_input
+    def __call__(self, model_input, *args, **kwds) -> torch.Tensor:
+        raise NotImplementedError
+
+
+class TorchTransform(MlflowTransform):
+
+    def __init__(self):
+        super().__init__(transform=ToTensor())
+
+    def __call__(self, model_input, *args, **kwds) -> torch.Tensor:
+        return self.transform(model_input)
 
 
 class IMlfowModelProvider:
 
+    def get_input_example(self) -> np.array:
+        raise NotImplementedError
+
     def get_transform(self) -> MlflowTransform:
-        raise NotImplementedError
+        return TorchTransform()  # default one, only transforms to torch Tensor
 
-    def get_input_example(self):
-        raise NotImplementedError
-
-    def get_signature(self):
-        raise NotImplementedError
+    def get_signature(self) -> ModelSignature:
+        # signature is useless if input_example is simple enough
+        return None
 
 
 class MlflowModel(mp.PythonModel):
 
     def __init__(self) -> None:
         super().__init__()
-        self.transform = None
+
         self.model = None
+        self.predictor_key: str = None
+        self.valuator_key: str = None
+
+        # from IMlfowModelProvider
+        self.transform = TorchTransform()  # default one, only transforms to torch Tensor
         self.signature = None
         self.input_example = None
-        self.predictor_key: str = None
+
+        # from context
         self.predictor: Predictor = None
         self.valuator: Valuator = None
 
     def load_context(self, context: mp.PythonModelContext):
         # Prédire avec le modèle sur cpu
-        self.valuator = ModelValuator(self.model, "cpu")
-        self.predictor = Factory().create_predictor(self.predictor_key)
+        factory = Factory()
+        self.valuator = factory.create_valuator(
+            self.valuator_key,
+            self.model,
+            "cpu"
+        )
+        self.predictor = factory.create_predictor(
+            self.predictor_key
+        )
 
     def predict(
         self, context: mp.PythonModelContext, model_input: np.ndarray, params: dict[str, Any] | None = None
@@ -58,14 +86,3 @@ class MlflowModel(mp.PythonModel):
         predicted_tensor = self.predictor(outputs_tensor)
 
         return predicted_tensor.numpy()
-
-    def setattr(self, **kwargs):
-        for param, value in kwargs.items():
-            if hasattr(self, param):
-                setattr(self, param, value)
-            else:
-                raise Exception(
-                    f'The wrapper class does not have the attribute "{param}"')
-
-        if self.transform is not None:
-            self.signature, self.input_example = self.transform.get_signature()

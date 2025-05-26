@@ -16,7 +16,7 @@ from iapytoo.train.factories import Factory
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.train.inference import Inference
-from iapytoo.metrics import MetricsCollection
+from iapytoo.metrics.collection import MetricsCollection
 
 
 class LossType(IntEnum):

@@ -5,7 +5,8 @@ from iapytoo.utils.singleton import singleton
 
 class ModelConfig(BaseModel):
     type: str
-    predictor: Optional[str] = None
+    predictor: Optional[str] = "default"
+    valuator: Optional[str] = "model"
 
     def _network(self) -> str:
         pass
