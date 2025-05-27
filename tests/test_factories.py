@@ -3,7 +3,6 @@ import torch
 from unittest.mock import MagicMock, patch
 from iapytoo.train.factories import (
     Model,
-    Optimizer,
     Factory,
     OptimizerError,
     ModelError,
