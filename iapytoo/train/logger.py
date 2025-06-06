@@ -1,10 +1,8 @@
 import os
 import torch
-import torch.nn as nn
 
 import uuid
 import tempfile
-import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import logging
@@ -12,14 +10,15 @@ import logging
 from threading import Lock
 
 import mlflow
-from mlflow.models import ModelSignature
-from mlflow.types.schema import TensorSpec, Schema
+import mlflow.pyfunc
+
 
 from iapytoo.utils.config import Config
 from iapytoo.utils.display import lrfind_plot
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.train.context import Context
 from iapytoo.predictions import Predictions
+from iapytoo.train.mlflow_model import MlflowModel
 
 
 class Logger:
@@ -29,11 +28,19 @@ class Logger:
 
     @property
     def experiment_id(self):
-        experiment = mlflow.get_experiment_by_name(self.config["project"])
+        experiment = mlflow.get_experiment_by_name(self.config.project)
         if experiment is None:
-            return mlflow.create_experiment(self.config["project"])
+            return mlflow.create_experiment(self.config.project)
         else:
             return experiment.experiment_id
+
+    @property
+    def artifact_uri(self):
+        if self.run_id is None:
+            return None
+        run = mlflow.get_run(self.run_id)
+        assert run is not None, f"unable to find run {self.run_id}"
+        return run.info.artifact_uri
 
     def active_run_name(self):
         active_run = mlflow.active_run()
@@ -42,20 +49,16 @@ class Logger:
 
         return None
 
-    @property
-    def config(self):
-        return self._config.__dict__
-
     def __init__(self, config: Config, run_id: str = None) -> None:
-        self._config = config
+        self.config = config
         self.run_id = run_id
         self.agg = matplotlib.rcParams["backend"]
-        self.signature = None
         self.lock = Lock()
-        print("tracking_uri", self.config["tracking_uri"])
-        if "tracking_uri" in self.config and self.config["tracking_uri"] is not None:
-            logging.info(f".. set tracking uri to {self.config['tracking_uri']}")
-            mlflow.set_tracking_uri(self.config["tracking_uri"])
+        if self.config.tracking_uri is not None:
+            logging.info(f".. set tracking uri to {self.config.tracking_uri}")
+            mlflow.set_tracking_uri(self.config.tracking_uri)
+        else:
+            logging.info("no tracking_uri set")
 
         self.context = Context(run_id)
 
@@ -72,9 +75,9 @@ class Logger:
         active_run = mlflow.start_run(
             experiment_id=self.experiment_id,
             run_id=self.run_id,
-            run_name=self._run_name(self.config["run"]),
+            run_name=self._run_name(self.config.run),
         )
-        print("active_run", active_run.info.run_id)
+        logging.info(f"active_run {active_run.info.run_id}")
         self.run_id = active_run.info.run_id
         if params_flag:
             mlflow.log_params(self._params())
@@ -83,35 +86,28 @@ class Logger:
         matplotlib.use(self.agg)
         mlflow.end_run()
 
-    def set_signature(self, loader):
-        X, Y = next(iter(loader))
-        x_shape = list(X.shape)
-        x_shape[0] = -1
-        y_shape = list(Y.shape)
-        y_shape[0] = -1
-
-        input_schema = Schema([TensorSpec(type=np.dtype(np.float32), shape=x_shape)])
-        output_schema = Schema([TensorSpec(type=np.dtype(np.float32), shape=y_shape)])
-        self.signature = ModelSignature(inputs=input_schema, outputs=output_schema)
-
     def _params(self):
         # take care, some config parameters are saved by mlflow.
         # When you run it again, these parameters can not change between two runs.
-        params = self._config.__dict__.copy()
-        if "run_id" in params:
-            del params["run_id"]
-        del params["epochs"]
-        del params["tracking_uri"]
+        params = self.config.to_flat_dict(exclude_unset=True)
+
+        for key in [
+            "training.epochs",
+            "project",
+            "run",
+            "tracking_uri",
+        ]:
+            if key in params:
+                del params[key]
+
         return params
 
     def __str__(self):
         msg = "\nLogger:\n"
-        network = (
-            self.config["model"]
-            if "model" in self.config
-            else f"{self.config['discriminator']} & {self.config['generator']}"
-        )
-        msg += f"Network: {network}\n"
+
+        model_config = self.config.model
+
+        msg += f"Network: {model_config._network()}\n"
         msg += f"matplotlib backend: {matplotlib.rcParams['backend']}, interactive: {matplotlib.is_interactive()}\n"
         msg += f"tracking_uri: {mlflow.get_tracking_uri()}\n"
         active_run = mlflow.active_run()
@@ -119,14 +115,12 @@ class Logger:
             msg += f"Name: {active_run.info.run_name}\n"
             msg += f"Experiment_id: {active_run.info.experiment_id}\n"
             msg += f"Run_id: {self.run_id}\n"
-        if self.signature is not None:
-            msg += f"Signature {str(self.signature)}\n"
 
         return msg
 
     def summary(self):
         logging.info(str(self))
-        logging.info(self._config)
+        logging.info(self.config)
 
     def set_epoch(self, epoch):
         self.context.epoch = epoch
@@ -141,18 +135,21 @@ class Logger:
         with tempfile.TemporaryDirectory() as tmpdirname:
             ckp_name = os.path.join(tmpdirname, "checkpoint.pt")
             torch.save(checkpoint.params, ckp_name)
-            mlflow.log_artifact(local_path=ckp_name, artifact_path="checkpoints")
+            mlflow.log_artifact(local_path=ckp_name,
+                                artifact_path="checkpoints")
 
-    def save_model(self, model: nn.Module):
+    def save_model(self, model_wrapper: MlflowModel):
+        assert model_wrapper is not None, "no model_wrapper instance ?"
+
+        signature = model_wrapper.signature
+        input_example = model_wrapper.input_example
+
         with self.lock:
-            # model for deployment don't need a GPU device
-            # store it on gpu
-            device = torch.device("cpu")
-            mlflow.pytorch.log_model(
-                model.to(device),
-                "model",
-                signature=self.signature,
-                extra_pip_requirements=["--extra-index-url https://zwergon.github.io"],
+            mlflow.pyfunc.log_model(
+                artifact_path="model",
+                python_model=model_wrapper,
+                signature=signature,
+                input_example=input_example
             )
 
     def can_report(self):
@@ -180,7 +177,8 @@ class Logger:
             plots = predictions.plot(epoch)
             for name, fig in plots.items():
                 if fig is not None:
-                    mlflow.log_figure(fig, artifact_file=f"{name}/{name}_{epoch}.png")
+                    mlflow.log_figure(
+                        fig, artifact_file=f"{name}/{name}_{epoch}.png")
                     plt.close(fig)
 
     def report_findlr(self, lrs, losses):

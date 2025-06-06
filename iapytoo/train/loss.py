@@ -1,4 +1,3 @@
-from typing import Any
 from iapytoo.utils.iterative_mean import Mean
 
 
@@ -8,8 +7,8 @@ class Loss:
         self.losses = []
 
     def flush(self):
-        for l in self.losses:
-            l.flush()
+        for loss in self.losses:
+            loss.flush()
 
     def __call__(self, index):
         try:
@@ -24,10 +23,10 @@ class Loss:
         state_dict = {
             f"loss_{i}": self.losses[i].state_dict() for i in range(self.n_losses)
         }
-        state_dict['n_losses'] = self.n_losses
+        state_dict["n_losses"] = self.n_losses
         return state_dict
 
     def load_state_dict(self, state_dict):
-        self.n_losses = state_dict['n_losses']
+        self.n_losses = state_dict["n_losses"]
         for i in range(self.n_losses):
             self.losses[i].load_state_dict(state_dict[f"loss_{i}"])

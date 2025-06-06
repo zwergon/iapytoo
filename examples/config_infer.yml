@@ -1,0 +1,17 @@
+project: "iapytoo"
+run: "infer"
+tracking_uri: null
+
+dataset:
+  path: "../data"
+  n_steps_by_batch: 10
+  num_workers: 2
+  batch_size: 64
+ 
+metrics:
+  names: ['accuracy', 'r2']
+
+model:
+  type: "mlflow"
+  predictor: "max"
+  run_id: "5bfea07ccb91434fafe6fc1def3c2011"

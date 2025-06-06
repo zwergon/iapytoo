@@ -1,0 +1,26 @@
+project: "iapytoo"
+run: "run"
+tracking_uri: null
+
+dataset:
+  path: "../data"
+  n_steps_by_batch: 10
+  num_workers: 2
+  batch_size: 64
+
+training:
+  learning_rate: 1e-4
+  loss: "nll"
+  optimizer: "adam"
+  scheduler: "step"
+  epochs: 2
+  #tqdm: false
+
+
+metrics:
+  names: ['accuracy']
+ 
+model:
+  model: "mnist"
+  predictor: "max"
+  kernel_size: 3

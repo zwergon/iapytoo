@@ -1,34 +1,35 @@
-
 import torch
+
+from iapytoo.utils.config import Config
 from iapytoo.metrics.metric import Metric
 
 
 class AccuracyMetric(Metric):
-    def __init__(self, config):
+    def __init__(self, config: Config):
         super(AccuracyMetric, self).__init__("accuracy", config)
-        self.k = config['top_accuracy']
+        self.k = config.metrics.top_accuracy
 
     def compute(self):
 
         # Take care, for this metrics predicted and target do not have the same shape.
         # predicted : ouputs of the models - kind of probabilities
         # Target : label of the class
-        _, top_pred = self.predicted.topk(self.k, 1)
+        _, top_pred = self.outputs.topk(self.k, 1)
         top_pred = top_pred.t()
         correct = top_pred.eq(self.target.view(1, -1).expand_as(top_pred))
         correct_1 = correct[:1].reshape(-1).float().sum(0, keepdim=True)
-        correct_k = correct[:self.k].reshape(-1).float().sum(0, keepdim=True)
+        correct_k = correct[: self.k].reshape(-1).float().sum(0, keepdim=True)
 
         return {
-            'top-1': torch.round(
-                100.0 * correct_1 / self.target.shape[0], decimals=2),
-            f'top-{self.k}': torch.round(
-                100.0 * correct_k / self.target.shape[0], decimals=2)
+            "top-1": torch.round(100.0 * correct_1 / self.target.shape[0], decimals=2),
+            f"top-{self.k}": torch.round(
+                100.0 * correct_k / self.target.shape[0], decimals=2
+            ),
         }
 
 
 class R2Metric(Metric):
-    def __init__(self, config) -> None:
+    def __init__(self, config: Config) -> None:
         super(R2Metric, self).__init__("r2", config)
 
     def compute(self):
@@ -49,7 +50,7 @@ class R2Metric(Metric):
 
 
 class MSMetric(Metric):
-    def __init__(self, config) -> None:
+    def __init__(self, config: Config) -> None:
         super(MSMetric, self).__init__("mean_square", config)
 
     def _compute(self):
@@ -63,7 +64,7 @@ class MSMetric(Metric):
 
 
 class RMSMetric(MSMetric):
-    def __init__(self, config) -> None:
+    def __init__(self, config: Config) -> None:
         Metric.__init__(self, "root_mean_square", config)
         self.name = "rms"
 

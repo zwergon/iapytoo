@@ -1,23 +1,26 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import LambdaLR
+from PIL import Image
 
 
-from iapytoo.dataset.scaling import Scaling
-from iapytoo.predictions.predictors import MaxPredictor
 from iapytoo.predictions.plotters import ConfusionPlotter
-from iapytoo.train.factories import Model, ModelFactory, SchedulerFactory, Scheduler
-from iapytoo.utils.config import Config
+from iapytoo.train.factories import Model, Scheduler, Factory
+from iapytoo.utils.config import ConfigFactory, Config
 from iapytoo.train.training import Training
+from iapytoo.train.mlflow_model import MlflowTransform, IMlfowModelProvider
 
 
-import matplotlib.pyplot as plt
+from mlflow.types.schema import TensorSpec, Schema
+from mlflow.models import ModelSignature
 
 
 class MnistModel(Model):
-    def __init__(self, loader, config):
+    def __init__(self, loader, config: Config):
         super(MnistModel, self).__init__(loader, config)
         self.conv1 = nn.Conv2d(1, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 64, 3, 1)
@@ -46,7 +49,7 @@ class MnistModel(Model):
 
 
 class MnistScheduler(Scheduler):
-    def __init__(self, optimizer, config) -> None:
+    def __init__(self, optimizer, config: Config) -> None:
         super().__init__(optimizer, config)
 
         def lr_lambda(epoch):
@@ -56,51 +59,128 @@ class MnistScheduler(Scheduler):
         self.lr_scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
 
 
+class MnistTransform(MlflowTransform):
+
+    def __init__(self) -> None:
+        super().__init__(
+            transform=transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.1307,), (0.3081,))
+                ]
+            )
+        )
+
+    # override
+    def __call__(self, model_input, *args, **kwds):
+
+        images_pil = []
+        for i in range(model_input.shape[0]):
+            # Extraire l'image (en supprimant la dimension du canal si nécessaire)
+            # Supposons que l'image est en niveaux de gris
+            img_array = model_input[i, 0, :, :]
+
+            # Normaliser l'image si nécessaire (par exemple, si les valeurs sont entre 0 et 1)
+            img_array = (img_array * 255).astype(np.uint8)
+
+            # Créer une image PIL
+            # 'L' pour les niveaux de gris
+            img_pil = Image.fromarray(img_array, 'L')
+            images_pil.append(img_pil)
+
+        model_input_tensor = torch.stack(
+            [self.transform(img) for img in images_pil])
+
+        return model_input_tensor
+
+
+class MnistMlfowModel(IMlfowModelProvider):
+
+    def __init__(self):
+        X = np.random.rand(1, 1, 28, 28)
+        Y = np.zeros(shape=(1,), dtype=np.int64)
+        # add batch size
+        x_shape = list(X.shape)
+        x_shape[0] = -1
+        y_shape = list(Y.shape)
+        y_shape[0] = -1
+
+        input_schema = Schema(
+            [TensorSpec(type=X.dtype, shape=x_shape)])
+        output_schema = Schema(
+            [TensorSpec(type=Y.dtype, shape=y_shape)])
+
+        self.signature = ModelSignature(
+            inputs=input_schema, outputs=output_schema)
+        self.input_example = X
+        self.transform: MlflowTransform = MnistTransform()
+
+    # override
+    def get_transform(self) -> MlflowTransform:
+        return self.transform
+
+    # override
+    def get_signature(self) -> ModelSignature:
+        return self.signature
+
+    # override
+    def get_input_example(self) -> np.array:
+        return self.input_example
+
+
 class MnistTraining(Training):
+
     def __init__(self, config: Config) -> None:
-        super().__init__(config, predictor=MaxPredictor(), metric_names=[])
+        super().__init__(config)
         self.predictions.add_plotter(ConfusionPlotter())
+        self.mlflow_model_provider: IMlfowModelProvider = MnistMlfowModel()
 
 
 if __name__ == "__main__":
-    import os
-
     from iapytoo.utils.arguments import parse_args
 
-    ModelFactory().register_model("mnist", MnistModel)
-    SchedulerFactory().register_scheduler("mnist", MnistScheduler)
+    factory = Factory()
+    factory.register_model("mnist", MnistModel)
+    factory.register_scheduler("mnist", MnistScheduler)
 
     args = parse_args()
 
     if args.run_id is not None:
-        config = Config.create_from_run_id(args.run_id, args.tracking_uri)
-        config.epochs = args.epochs
+        config = ConfigFactory.from_run_id(args.run_id, args.tracking_uri)
+        config.training.epochs = args.epochs
     else:
         # INPUT Parameters
-        config = Config.create_from_args(args)
+        config = ConfigFactory.from_yaml(args.yaml)
 
     Training.seed(config)
 
-    config = Config.create_from_args(args)
-
     training = MnistTraining(config)
-
-    transform = transforms.Compose(
-        [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
+    mflow_transform: MlflowTransform = training.get_transform()
+    train_dataset = datasets.MNIST(
+        config.dataset.path,
+        train=True,
+        download=True,
+        transform=mflow_transform.transform
     )
 
-    dataset1 = datasets.MNIST(
-        args.dataset, train=True, download=True, transform=transform
+    test_dataset = datasets.MNIST(
+        config.dataset.path,
+        train=False,
+        transform=mflow_transform.transform
     )
-    dataset2 = datasets.MNIST(args.dataset, train=False, transform=transform)
 
-    train_loader = torch.utils.data.DataLoader(
-        dataset1, batch_size=config.batch_size, num_workers=config.num_workers
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=config.dataset.batch_size,
+        num_workers=config.dataset.num_workers
     )
-    test_loader = torch.utils.data.DataLoader(
-        dataset2, batch_size=config.batch_size, num_workers=config.num_workers
+    test_loader = DataLoader(
+        test_dataset, batch_size=config.dataset.batch_size,
+        num_workers=config.dataset.num_workers
     )
 
     training.fit(
-        train_loader=train_loader, valid_loader=test_loader, run_id=args.run_id
+        train_loader=train_loader,
+        valid_loader=test_loader,
+        run_id=args.run_id
     )

@@ -1,45 +1,30 @@
 import argparse
 
-from iapytoo.utils.config import Config
-
 
 def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("dataset", help="root path to the dataset")
-    parser.add_argument(
-        "-e",
-        "--epochs",
-        help="number of epochs in learning process",
-        type=int,
-        default=11,
+    parser = argparse.ArgumentParser(
+        description="Run with either a config file or individual parameters."
     )
 
-    parser.add_argument(
-        "-b", "--batch_size", help="batch size in learning process", type=int, default=8
+    exclusive_group = parser.add_mutually_exclusive_group()
+    exclusive_group.add_argument(
+        "--yaml", type=str, help="Path to the YAML configuration file."
     )
 
-    parser.add_argument(
-        "-lr",
-        "--learning_rate",
-        help="learning rate for optimizer",
-        type=float,
-        default=1e-4,
+    # Creating a subgroup to avoid required=True inside the mutually exclusive group
+    param_group = exclusive_group.add_argument_group("Individual parameters")
+    param_group.add_argument("--run-id", type=str, help="Run identifier.")
+    param_group.add_argument("--epochs", type=int, help="Number of epochs.")
+    param_group.add_argument(
+        "--tracking-uri", type=str, help="Tracking URI (optional)."
     )
 
-    parser.add_argument(
-        "-c",
-        "--config",
-        help="training config file",
-        type=str,
-        default=Config.default_path(),
-    )
+    args = parser.parse_args()
 
-    parser.add_argument("-r", "--run_id", help="which run_id to continue", default=None)
-    parser.add_argument(
-        "-tu",
-        "--tracking_uri",
-        help="where to find run_id",
-        type=str,
-        default=None,
-    )
-    return parser.parse_args()
+    # Manual validation: If --yaml is not provided, both --run-id and --epochs are required
+    if args.yaml is None and (args.run_id is None or args.epochs is None):
+        parser.error(
+            "If --yaml is not provided, both --run-id and --epochs are required."
+        )
+
+    return args
