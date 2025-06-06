@@ -14,4 +14,4 @@ metrics:
 model:
   type: "mlflow"
   predictor: "max"
-  run_id: "59606474825b41b68b536f80d0b1911e"
+  run_id: "5bfea07ccb91434fafe6fc1def3c2011"

@@ -3,7 +3,7 @@ import unittest
 
 from iapytoo.utils.config import ConfigFactory
 from iapytoo.dataset import DummyVisionDataset, DummyLabelDataset
-from iapytoo.metrics import MetricsCollection
+from iapytoo.metrics.collection import MetricsCollection
 
 
 class TestMetrics(unittest.TestCase):
