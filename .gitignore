@@ -167,3 +167,5 @@ cython_debug/
 mlruns/
 data/
 dockers/Dockerfile.ifpen
+iapytoo/_version.py
+
