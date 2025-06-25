@@ -144,12 +144,17 @@ class Logger:
         signature = model_wrapper.signature
         input_example = model_wrapper.input_example
 
+        model_wrapper.model.cpu()
+
         with self.lock:
             mlflow.pyfunc.log_model(
                 artifact_path="model",
                 python_model=model_wrapper,
                 signature=signature,
-                input_example=input_example
+                input_example=input_example,
+                extra_pip_requirements=self.config.training.inference_pip_requirements,
+                code_paths=self.config.training.inference_extra_paths,
+                conda_env=None,
             )
 
     def can_report(self):

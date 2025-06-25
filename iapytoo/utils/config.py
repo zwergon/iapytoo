@@ -56,6 +56,8 @@ class TrainingConfig(BaseModel):
     step_size: Optional[int] = 10
     gamma: Optional[float] = 0.9
     groups: Optional[int] = 1
+    inference_pip_requirements: Optional[List[str]] = None
+    inference_extra_paths: Optional[List[str]] = None
 
 
 class MetricsConfig(BaseModel):
