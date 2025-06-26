@@ -7,7 +7,7 @@ from iapytoo.train.valuator import ModelValuator, WGANValuator
 from iapytoo.metrics.metric import Metric
 from iapytoo.metrics.predefined import R2Metric, RMSMetric, AccuracyMetric, MSMetric
 
-from iapytoo.utils.config import Config
+from iapytoo.utils.config import Config, TrainingConfig
 
 
 # Model
@@ -44,11 +44,13 @@ class AdamOptimizer(Optimizer):
     def __init__(self, model, config: Config) -> None:
         super().__init__(model, config)
 
-        kwargs = {"lr": config.training.learning_rate}
-        if config.training.weight_decay is not None:
-            kwargs["weight_decay"] = config.training.weight_decay
-        if config.training.betas is not None:
-            kwargs["betas"] = config.training.weight_decay
+        training_config: TrainingConfig = config.training
+
+        kwargs = {"lr": training_config.learning_rate}
+        if training_config.weight_decay is not None:
+            kwargs["weight_decay"] = training_config.weight_decay
+        if training_config.betas is not None:
+            kwargs["betas"] = training_config.betas
 
         self.torch_optimizer = to.Adam(model.parameters(), **kwargs)
 
