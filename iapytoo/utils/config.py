@@ -7,7 +7,7 @@ import yaml
 from pydantic import BaseModel, BeforeValidator, Field
 from pydantic_core import PydanticUndefined
 import typing as t
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Union
 from typing_extensions import Annotated
 from iapytoo.utils.model_config import ModelConfig, ModelConfigFactory
 from iapytoo.utils.singleton import singleton
@@ -50,7 +50,7 @@ class TrainingConfig(BaseModel):
     learning_rate: float
     optimizer: Optional[str] = "adam"
     weight_decay: Optional[float] = None
-    betas: Optional[float] = None
+    betas: Optional[Union[float, list[float]]] = None
     momentum: Optional[float] = 0.9
     scheduler: Optional[str] = "step"
     step_size: Optional[int] = 10
@@ -69,8 +69,6 @@ class PlottersConfig(BaseModel):
     type: str = "default"
     names: Optional[list[str]] = Field(default_factory=list)
 
-
-# endregion
 
 _DataT = t.TypeVar("_DataT", bound=DatasetConfig)
 _TrainingT = t.TypeVar("_TrainingT", bound=TrainingConfig)
