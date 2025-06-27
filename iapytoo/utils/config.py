@@ -56,8 +56,6 @@ class TrainingConfig(BaseModel):
     step_size: Optional[int] = 10
     gamma: Optional[float] = 0.9
     groups: Optional[int] = 1
-    inference_pip_requirements: Optional[List[str]] = None
-    inference_extra_paths: Optional[List[str]] = None
 
 
 class MetricsConfig(BaseModel):
@@ -175,6 +173,8 @@ class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _PlottersT, _Mo
     sensors: Optional[str] = None
     cuda: Optional[bool] = True
     seed: Optional[int] = 42
+    inference_pip_requirements: Optional[List[str]] = None
+    inference_extra_paths: Optional[List[str]] = None
     dataset: _DataT
     training: Optional[_TrainingT] = None
     metrics: _MetricsT = Field(default_factory=MetricsConfig)
