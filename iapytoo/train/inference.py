@@ -27,7 +27,7 @@ class Inference(ABC, IMlfowModelProvider):
         config: Config
     ) -> None:
 
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda" if torch.cuda.is_available() and config.cuda else "cpu"
         self._config: Config = config
         self.logger: Logger = None
 
