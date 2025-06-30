@@ -171,6 +171,8 @@ class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _PlottersT, _Mo
     sensors: Optional[str] = None
     cuda: Optional[bool] = True
     seed: Optional[int] = 42
+    inference_pip_requirements: Optional[List[str]] = None
+    inference_extra_paths: Optional[List[str]] = None
     dataset: _DataT
     training: Optional[_TrainingT] = None
     metrics: _MetricsT = Field(default_factory=MetricsConfig)
