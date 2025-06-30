@@ -152,8 +152,8 @@ class Logger:
                 python_model=model_wrapper,
                 signature=signature,
                 input_example=input_example,
-                extra_pip_requirements=self.config.training.inference_pip_requirements,
-                code_paths=self.config.training.inference_extra_paths,
+                extra_pip_requirements=self.config.inference_pip_requirements,
+                code_paths=self.config.inference_extra_paths,
                 conda_env=None,
             )
 
