@@ -82,7 +82,7 @@ class Inference(ABC, IMlfowModelProvider):
         self.mlflow_model = MlflowModel()
         self.mlflow_model.model = self.model
         self.mlflow_model.valuator_key = model_config.valuator
-        self.mlflow_model.predictor_key = model_config.predictor
+        self.mlflow_model.predictor_key = model_config.inference_predictor
 
         if self.mlflow_model_provider is not None:
             self.mlflow_model.signature = self.mlflow_model_provider.get_signature()

@@ -272,6 +272,9 @@ class Factory:
         metric = metric.to(device=device)
         return metric
 
+    def register_predictor(self, key, predictor_cls):
+        self.predictor_dict[key] = predictor_cls
+
     def create_predictor(self, key: Config | str):
         if isinstance(key, Config):
             config: Config = key

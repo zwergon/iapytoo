@@ -83,6 +83,6 @@ class MlflowModel(mp.PythonModel):
 
         outputs_tensor = self.valuator.evaluate_one(model_input_tensor)
 
-        predicted_tensor = self.predictor(outputs_tensor)
+        predictions = self.predictor(outputs_tensor)
 
-        return predicted_tensor.numpy()
+        return predictions
