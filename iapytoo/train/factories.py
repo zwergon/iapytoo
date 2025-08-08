@@ -275,7 +275,7 @@ class Factory:
     def register_predictor(self, key, predictor_cls):
         self.predictor_dict[key] = predictor_cls
 
-    def create_predictor(self, key: Config | str):
+    def create_predictor(self, key: Config | str, *args, **kwargs):
         if isinstance(key, Config):
             config: Config = key
             kind = config.model.predictor
@@ -283,7 +283,7 @@ class Factory:
             kind = key
         assert kind is not None, "no default predictor defined ?"
 
-        return self.predictor_dict[kind]()
+        return self.predictor_dict[kind](*args, **kwargs)
 
     def create_valuator(self, key: Config | str, model, device):
         if isinstance(key, Config):
