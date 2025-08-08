@@ -148,13 +148,14 @@ class Logger:
 
         with self.lock:
             mlflow.pyfunc.log_model(
-                artifact_path="model",
+                name="model",
                 python_model=model_wrapper,
                 signature=signature,
                 input_example=input_example,
                 extra_pip_requirements=self.config.inference_pip_requirements,
                 code_paths=self.config.inference_extra_paths,
                 conda_env=None,
+                metadata=self.config.model.inference_predictor_args  # Whole model dictionary can't be dumped
             )
 
     def can_report(self):

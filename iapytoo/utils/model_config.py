@@ -1,11 +1,13 @@
 from pydantic import BaseModel
-from typing import Optional, Union
+from typing import Optional, Union, Dict
 from iapytoo.utils.singleton import singleton
 
 
 class ModelConfig(BaseModel):
     type: str
     predictor: Optional[str] = "default"
+    inference_predictor: Optional[str] = None
+    inference_predictor_args: Optional[Dict] = None
     valuator: Optional[str] = "model"
 
     def _network(self) -> str:
