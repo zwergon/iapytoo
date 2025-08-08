@@ -317,8 +317,7 @@ class Training(Inference):
         train_time.stop()
 
     def fit(
-        self, train_loader: DataLoader, valid_loader: DataLoader,
-        run_id=None
+        self, train_loader: DataLoader, valid_loader: DataLoader, run_id=None
     ):
         num_epochs = self._config.training.epochs
 
