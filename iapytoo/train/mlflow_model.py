@@ -54,12 +54,12 @@ class MlflowModel(mp.PythonModel):
         self.signature = None
         self.input_example = None
 
-        self.testing_valuator_key = None
-        self.testing_predictor_key = None
+        self.valuator_key = None
+        self.predictor_key = None
 
         # from context
-        self.predictor: Predictor = None
-        self.valuator: Valuator = None
+        self.ml_predictor: Predictor = None
+        self.ml_valuator: Valuator = None
 
     def predict(
         self, context: mp.PythonModelContext, model_input: np.ndarray, params: dict[str, Any] | None = None
@@ -68,8 +68,8 @@ class MlflowModel(mp.PythonModel):
         print(f"predict called with input shape: {model_input.shape}")
         model_input_tensor = self.transform(model_input)
 
-        outputs_tensor = self.valuator.evaluate_one(model_input_tensor)
+        outputs_tensor = self.ml_valuator.evaluate_one(model_input_tensor)
 
-        predictions = self.predictor(outputs_tensor)
+        predictions = self.ml_predictor(outputs_tensor)
 
         return predictions
