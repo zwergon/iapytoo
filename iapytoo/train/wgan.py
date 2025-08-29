@@ -11,6 +11,7 @@ from iapytoo.train.loss import Loss
 from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.utils.timer import Timer
+from iapytoo.metrics.collection import MetricsCollection
 
 
 class WGAN_FCT(IntEnum):
@@ -121,7 +122,7 @@ class WGAN(Training):
 
         return penalty
 
-    def _update_d(self, real_data):
+    def _update_d(self, real_data, real_labels=None, metrics: MetricsCollection = None):
         noise_dim = self._config.model.noise_dim
         lambda_gp = self._config.model.lambda_gp
 
@@ -145,7 +146,7 @@ class WGAN(Training):
 
         return d_loss.item()
 
-    def _update_g(self):
+    def _update_g(self, real_data, real_labels=None):
         noise_dim = self._config.model.noise_dim
         batch_size = self._config.dataset.batch_size
 
@@ -182,19 +183,25 @@ class WGAN(Training):
         """
 
         def new_function(epoch, loader, description):
+            d_metrics = MetricsCollection(
+                "critic", self._config.metrics.names, self._config)
+            d_metrics.to(self.device)
+
             timer = Timer()
             timer.start()
             with tqdm(loader, unit="batch", file=sys.stdout) as tepoch:
                 d_mean = self.loss(WGAN_LOSS.DISCRIMINATOR)
                 g_mean = self.loss(WGAN_LOSS.GENERATOR)
                 tepoch.set_description(f"{description} {epoch}")
-                for step, (real_data, _) in enumerate(tepoch):
+                for step, (real_data, real_labels) in enumerate(tepoch):
                     # update discriminator
                     real_data = real_data.to(self.device)
+                    if real_labels is not None:
+                        real_labels = real_labels.to(self.device)
                     self.d_optimizer.zero_grad()
                     self.g_optimizer.zero_grad()
 
-                    d_loss = update_d(real_data)
+                    d_loss = update_d(real_data, real_labels, d_metrics)
                     d_mean.update(d_loss)
 
                     # TODO add clip_value in Config.
@@ -206,7 +213,7 @@ class WGAN(Training):
                     # update generator not so often
                     n_critic = self._config.model.n_critic
                     if n_critic == 1 or step % n_critic == 0:
-                        g_loss = update_g()
+                        g_loss = update_g(real_data, real_labels)
                         g_mean.update(g_loss)
 
                     timer.tick()
@@ -216,6 +223,9 @@ class WGAN(Training):
 
             timer.log()
             timer.stop()
+            if self.logger.can_report():
+                d_metrics.compute()
+                self.logger.report_metrics(epoch, d_metrics)
 
         return new_function
 
@@ -227,6 +237,11 @@ class WGAN(Training):
         """
 
         def new_function(epoch, loader, description):
+
+            d_metrics = MetricsCollection(
+                description, self._config.metrics.names, self._config)
+            d_metrics.to(self.device)
+
             timer = Timer()
             timer.start()
             d_mean = self.loss(WGAN_LOSS.DISCRIMINATOR)
@@ -237,7 +252,7 @@ class WGAN(Training):
             size_by_batch = len(loader)
             step = max(size_by_batch //
                        self._config.training.n_steps_by_batch, 1)
-            for i, (real_data, _) in enumerate(loader):
+            for i, (real_data, real_labels) in enumerate(loader):
 
                 if i % step == 0:
                     f"Processing batch {i+1}/{size_by_batch}"
@@ -247,7 +262,7 @@ class WGAN(Training):
                 self.d_optimizer.zero_grad()
                 self.g_optimizer.zero_grad()
 
-                d_loss = update_d(real_data)
+                d_loss = update_d(real_data, real_labels, d_metrics)
                 d_mean.update(d_loss)
 
                 # TODO add clip_value in Config.
@@ -259,7 +274,7 @@ class WGAN(Training):
                 # update generator not so often
                 n_critic = self._config.model.n_critic
                 if n_critic == 1 or i % n_critic == 0:
-                    g_loss = update_g()
+                    g_loss = update_g(real_data, real_labels)
                     g_mean.update(g_loss)
 
                 timer.tick()
@@ -271,6 +286,9 @@ class WGAN(Training):
 
             timer.log()
             timer.stop()
+            if self.logger.can_report():
+                d_metrics.compute()
+                self.logger.report_metrics(epoch, d_metrics)
 
         return new_function
 
@@ -298,6 +316,7 @@ class WGAN(Training):
             self.logger.summary()
 
             for epoch in range(checkpoint.epoch + 1, num_epochs):
+                self.logger.set_epoch(epoch)
                 # Train
                 self.__train(epoch, train_loader)
 

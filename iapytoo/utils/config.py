@@ -61,7 +61,7 @@ class TrainingConfig(BaseModel):
 class MetricsConfig(BaseModel):
     type: str = "default"
     names: Optional[Annotated[List[str], BeforeValidator(
-        lambda v: ensure_list(v, str))]] = Field(default=None)
+        lambda v: ensure_list(v, str))]] = Field(default=[])
     top_accuracy: Optional[int] = 3
 
 

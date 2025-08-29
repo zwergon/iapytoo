@@ -55,10 +55,10 @@ class MSMetric(Metric):
 
     def _compute(self):
         diff = self.predicted - self.target
-        return torch.mean(diff * diff, dim=0)
+        return torch.mean(diff * diff)
 
     def compute(self):
-        ms = self.compute()
+        ms = self._compute()
         self.results = {self.name: ms}
         return self.results
 

@@ -61,5 +61,9 @@ class ExponentialSmoothingMean(Mean):
     def update(self, value):
         with self.lock:
             self.iter += 1
-            self._value = self.alpha * value + (1 - self.alpha) * self._value
+            if self.iter == 1:
+                self._value = value
+            else:
+                self._value = self.alpha * value + \
+                    (1 - self.alpha) * self._value
             super().update()
