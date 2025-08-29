@@ -4,7 +4,7 @@ import numpy
 import torch
 import logging
 from tqdm import tqdm
-from enum import IntEnum
+from enum import Enum
 
 from torch.utils.data import DataLoader
 
@@ -19,9 +19,9 @@ from iapytoo.train.inference import Inference
 from iapytoo.metrics.collection import MetricsCollection
 
 
-class LossType(IntEnum):
-    TRAIN = 0
-    VALID = 1
+class LossType(str, Enum):
+    TRAIN = "train_loss"
+    VALID = "valid_loss"
 
 
 class Training(Inference):
@@ -50,7 +50,7 @@ class Training(Inference):
             self.train_loop = self.__batch_loop(self._inner_train)
             self.valid_loop = self.__batch_loop(self._inner_validate)
 
-        self.loss = Loss(n_losses=2)
+        self.loss = Loss(LossType)
         self._optimizers = []
         self._schedulers = []
 
@@ -167,12 +167,10 @@ class Training(Inference):
                 self.predictions.compute(loader=kwargs["valid_loader"])
                 self.logger.report_prediction(epoch, self.predictions)
 
-            for item in self.loss(LossType.TRAIN).buffer:
-                self.logger.report_metric(epoch=item[0], metrics={
-                                          "train_loss": item[1]})
-            for item in self.loss(LossType.VALID).buffer:
-                self.logger.report_metric(epoch=item[0], metrics={
-                                          "valid_loss": item[1]})
+            for lt in self.loss.enum_cls:
+                for item in self.loss(lt).buffer:
+                    self.logger.report_metric(epoch=item[0], metrics={
+                                              lt: item[1]})
             self.loss.flush()
 
             checkpoint.update(run_id=self.logger.run_id,

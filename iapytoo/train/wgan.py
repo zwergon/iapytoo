@@ -1,7 +1,7 @@
 import sys
 import torch
 import logging
-from enum import IntEnum
+from enum import IntEnum, Enum
 from tqdm import tqdm
 
 from iapytoo.train.training import Training
@@ -18,11 +18,16 @@ class WGAN_FCT(IntEnum):
     DISCRIMINATOR = 1
 
 
+class WGAN_LOSS(str, Enum):
+    GENERATOR = 'g_loss'
+    DISCRIMINATOR = 'd_loss'
+
+
 class WGAN(Training):
     def __init__(self, config: Config) -> None:
         super().__init__(config)
         # one for generator, one for discriminator
-        self.loss = Loss(n_losses=2)
+        self.loss = Loss(WGAN_LOSS)
         if self._config.training.tqdm:
             self.train_loop = self.__tqdm_gan_loop(
                 self._update_g, self._update_d)
@@ -163,12 +168,10 @@ class WGAN(Training):
                 )
                 self.logger.report_prediction(epoch, self.predictions)
 
-        for item in self.loss(WGAN_FCT.GENERATOR).buffer:
-            self.logger.report_metric(
-                epoch=item[0], metrics={"g_loss": item[1]})
-        for item in self.loss(WGAN_FCT.DISCRIMINATOR).buffer:
-            self.logger.report_metric(
-                epoch=item[0], metrics={"d_loss": item[1]})
+        for lt in self.loss.enum_cls:
+            for item in self.loss(lt).buffer:
+                self.logger.report_metric(epoch=item[0], metrics={
+                    lt: item[1]})
         self.loss.flush()
 
     def __tqdm_gan_loop(self, update_g, update_d):
@@ -182,8 +185,8 @@ class WGAN(Training):
             timer = Timer()
             timer.start()
             with tqdm(loader, unit="batch", file=sys.stdout) as tepoch:
-                d_mean = self.loss(WGAN_FCT.DISCRIMINATOR)
-                g_mean = self.loss(WGAN_FCT.GENERATOR)
+                d_mean = self.loss(WGAN_LOSS.DISCRIMINATOR)
+                g_mean = self.loss(WGAN_LOSS.GENERATOR)
                 tepoch.set_description(f"{description} {epoch}")
                 for step, (real_data, _) in enumerate(tepoch):
                     # update discriminator
@@ -226,8 +229,8 @@ class WGAN(Training):
         def new_function(epoch, loader, description):
             timer = Timer()
             timer.start()
-            d_mean = self.loss(WGAN_FCT.DISCRIMINATOR)
-            g_mean = self.loss(WGAN_FCT.GENERATOR)
+            d_mean = self.loss(WGAN_LOSS.DISCRIMINATOR)
+            g_mean = self.loss(WGAN_LOSS.GENERATOR)
 
             logging.info(f"Epoch {epoch} {description}")
 
@@ -309,6 +312,6 @@ class WGAN(Training):
         return {
             "run_id": self.logger.run_id,
             "run_name": active_run_name,
-            "g_loss": self.loss(WGAN_FCT.GENERATOR).value,
-            "d_loss": self.loss(WGAN_FCT.DISCRIMINATOR).value,
+            "g_loss": self.loss(WGAN_LOSS.GENERATOR).value,
+            "d_loss": self.loss(WGAN_LOSS.DISCRIMINATOR).value,
         }

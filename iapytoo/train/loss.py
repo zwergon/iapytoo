@@ -1,32 +1,40 @@
+from enum import Enum
 from iapytoo.utils.iterative_mean import Mean
 
 
 class Loss:
-    def __init__(self, n_losses=2) -> None:
-        self.n_losses = n_losses
-        self.losses = []
+    def __init__(self, enum_cls: type[Enum]) -> None:
+        """
+        enum_cls: une Enum (basée sur str) qui définit les clés de loss
+        ex: LossType1 ou LossType2
+        """
+        self.enum_cls = enum_cls
+        self.losses = {}
 
     def flush(self):
-        for loss in self.losses:
+        for loss in self.losses.values():
             loss.flush()
 
-    def __call__(self, index):
+    def __call__(self, key: str | Enum):
+        # accepte soit l'Enum, soit directement la string
+        if isinstance(key, str):
+            key = self.enum_cls(key)
         try:
-            return self.losses[index]
-        except IndexError:
-            raise Exception(f"Index {index} of loss out of range")
+            return self.losses[key]
+        except KeyError:
+            raise Exception(f"Loss with key '{key}' not found")
 
     def reset(self):
-        self.losses = [Mean.create("ewm") for _ in range(self.n_losses)]
+        # crée toutes les entrées de la Loss en fonction de l'enum fourni
+        self.losses = {lt: Mean.create("ewm") for lt in self.enum_cls}
 
     def state_dict(self):
-        state_dict = {
-            f"loss_{i}": self.losses[i].state_dict() for i in range(self.n_losses)
-        }
-        state_dict["n_losses"] = self.n_losses
-        return state_dict
+        return {lt.value: loss.state_dict() for lt, loss in self.losses.items()}
 
     def load_state_dict(self, state_dict):
-        self.n_losses = state_dict["n_losses"]
-        for i in range(self.n_losses):
-            self.losses[i].load_state_dict(state_dict[f"loss_{i}"])
+        self.losses = {}
+        for lt in self.enum_cls:
+            if lt.value in state_dict:
+                loss = Mean.create("ewm")
+                loss.load_state_dict(state_dict[lt.value])
+                self.losses[lt] = loss
