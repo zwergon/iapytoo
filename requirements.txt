@@ -1,6 +1,6 @@
 tqdm
 numpy
-torch
-torchvision
+torch==2.4.1
+torchvision==0.19.1
 mlflow
 seaborn

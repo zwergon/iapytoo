@@ -5,5 +5,4 @@ docker run --rm --gpus all \
   -w /app \
   -e PYTHONPATH=/app \
   iapytoo:latest \
-  python3 examples/mnist.py -c examples/config_mnist.json data
-
+  python3 examples/mnist.py --yaml examples/config_mnist.yml

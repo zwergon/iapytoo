@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  iapytoo:
+    build:
+      context: .
+      dockerfile: Dockerfile.ifpen
+      args:
+        http_proxy: ${http_proxy}
+        https_proxy: ${https_proxy}
+        no_proxy: ${no_proxy}
+    image: iapytoo:latest
+
+    env_file:
+      - .env

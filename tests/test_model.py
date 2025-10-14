@@ -1,7 +1,7 @@
 import unittest
 
 import torch.nn as nn
-from iapytoo.train.factories import Model, ModelFactory
+from iapytoo.train.factories import Model, Factory
 
 
 class ModelTest(Model):
@@ -19,10 +19,10 @@ class TestModel(unittest.TestCase):
         super().__init__(methodName)
 
     def test_model(self):
-        factory = ModelFactory()
+        factory = Factory()
         factory.register_model("test", ModelTest)
 
-        model = ModelFactory().create_model("test", config={}, loader=None)
+        model = Factory().create_model("test", config={}, loader=None)
         print(model)
 
 

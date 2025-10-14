@@ -1,0 +1,21 @@
+project: "iapytoo"
+run: "run"
+tracking_uri: null
+cuda: true
+seed: true
+
+dataset:
+  normalization: true
+  n_steps_by_batch: 10
+  ratio_train_test: 0.9
+  num_workers: 2
+
+training:
+  tqdm: true
+  dropout: 0
+  loss: "mse"
+  optimizer: "adam"
+
+model:
+  model: "CNN"
+  kernel_size: 3
