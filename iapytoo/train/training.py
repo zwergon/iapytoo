@@ -50,7 +50,7 @@ class Training(Inference):
             self.train_loop = self.__batch_loop(self._inner_train)
             self.valid_loop = self.__batch_loop(self._inner_validate)
 
-        self.loss = Loss(LossType)
+        self.loss = Loss(LossType, config.plotting_mean)
         self._optimizers = []
         self._schedulers = []
 
@@ -156,26 +156,36 @@ class Training(Inference):
 
         return loss.item()
 
-    def _on_epoch_ended(self, epoch, checkpoint, **kwargs):
+    def _on_epoch_ended(self, epoch, checkpoint, checkpoint_epoch, report_per_epoch, **kwargs):
         lr = self._get_lr(self.optimizer)
         self.logger.report_metric(epoch=epoch, metrics={"learning_rate": lr})
 
         num_epochs = self._config.training.epochs
-        if epoch % 10 == 0 or epoch == num_epochs - 1:
-            if "valid_loader" in kwargs and len(self.predictions) > 0:
 
-                self.predictions.compute(loader=kwargs["valid_loader"])
-                self.logger.report_prediction(epoch, self.predictions)
+        if report_per_epoch:
+            self._report_metrics(epoch, **kwargs)
 
-            for lt in self.loss.enum_cls:
-                for item in self.loss(lt).buffer:
-                    self.logger.report_metric(epoch=item[0], metrics={
-                                              lt: item[1]})
-            self.loss.flush()
-
+        if checkpoint_epoch is not None and \
+                (epoch % checkpoint_epoch == 0 or epoch == num_epochs - 1):
             checkpoint.update(run_id=self.logger.run_id,
                               epoch=epoch, training=self)
             self.logger.log_checkpoint(checkpoint=checkpoint)
+
+            if not report_per_epoch:
+                self._report_metrics(epoch, **kwargs)
+        if checkpoint_epoch is None and not report_per_epoch and epoch == num_epochs - 1:
+            self._report_metrics(epoch, **kwargs)
+
+    def _report_metrics(self, epoch, **kwargs):
+        if "valid_loader" in kwargs and len(self.predictions) > 0:
+            self.predictions.compute(loader=kwargs["valid_loader"])
+            self.logger.report_prediction(epoch, self.predictions)
+
+        for lt in self.loss.enum_cls:
+            for item in self.loss(lt).get_buffer():
+                self.logger.report_metric(epoch=item[0], metrics={
+                                            lt: item[1]})
+        self.loss.flush()
 
     # ----------------------------------------
     # Private methods
@@ -278,7 +288,7 @@ class Training(Inference):
         with Logger(self._config) as self.logger:
             lrs, losses = [], []
             train_time.start()
-            mean_loss = Mean.create("ewm")
+            mean_loss = Mean.create(self._config.plotting_mean)
             for _ in range(num_epochs):
                 with tqdm(train_loader, unit="batch", file=sys.stdout) as tepoch:
                     self.model.train()
@@ -328,6 +338,9 @@ class Training(Inference):
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
+        checkpoint_epoch = self._config.checkpoint_epoch
+        report_per_epoch = True if self.loss.plotting_mean in ["dummy", "epoch"] else False
+        save_model = self._config.save_model
 
         with Logger(self._config, run_id=checkpoint.run_id) as self.logger:
             active_run_name = self.logger.active_run_name()
@@ -348,9 +361,10 @@ class Training(Inference):
                     self.scheduler.step()
 
                 self._on_epoch_ended(
-                    epoch, checkpoint, valid_loader=valid_loader)
+                    epoch, checkpoint, checkpoint_epoch, report_per_epoch, valid_loader=valid_loader)
 
-            self.logger.save_model(self.mlflow_model)
+            if save_model:
+                self.logger.save_model(self.mlflow_model)
 
         return {
             "run_id": self.logger.run_id,

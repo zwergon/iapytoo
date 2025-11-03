@@ -1,3 +1,4 @@
+import numpy as np
 from threading import Lock
 
 
@@ -8,8 +9,12 @@ class Mean:
             return IterativeMean(**kwargs)
         elif kind == "ewm":
             return ExponentialSmoothingMean(**kwargs)
+        elif kind == "dummy":
+            return DummyMean(**kwargs)
+        elif kind == "epoch":
+            return EpochMean(**kwargs)
         else:
-            raise KeyError("mean should be mean, or ewm")
+            raise KeyError("mean should be one of the following: [mean, ewm, dummy, epoch]")
 
     def __init__(self, **kwargs) -> None:
         self._value = 0.0
@@ -41,6 +46,9 @@ class Mean:
     def update(self):
         self.buffer.append((self.iter, self._value))
 
+    def get_buffer(self):
+        return self.buffer
+
 
 class IterativeMean(Mean):
     def __init__(self, **kwargs) -> None:
@@ -51,6 +59,33 @@ class IterativeMean(Mean):
             self.iter += 1
             self._value = (value + (self.iter - 1) * self._value) / self.iter
             super().update()
+
+
+class DummyMean(Mean):
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+
+    def update(self, value):
+        with self.lock:
+            self.iter += 1
+            self._value = value
+            super().update()
+
+
+class EpochMean(DummyMean):
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.epoch = 0
+
+    def flush(self):
+        self.epoch += 1  # Flush happens once per epoch
+        return super().flush()
+
+    def get_buffer(self):
+        epoch_loss = [loss[1] for loss in self.buffer]
+        epoch_mean = np.mean(epoch_loss)
+
+        return [(self.epoch, epoch_mean)]
 
 
 class ExponentialSmoothingMean(Mean):
