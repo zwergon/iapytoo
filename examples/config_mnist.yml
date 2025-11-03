@@ -14,6 +14,7 @@ training:
   optimizer: "adam"
   scheduler: "step"
   epochs: 2
+  compile: true
   #tqdm: false
 
 

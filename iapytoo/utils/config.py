@@ -48,6 +48,7 @@ class TrainingConfig(BaseModel):
     type: str = "default"
     epochs: int = 10
     tqdm: Optional[bool] = True
+    compile: Optional[bool] = False
     n_steps_by_batch: Optional[int] = 10
     loss: str
     learning_rate: float

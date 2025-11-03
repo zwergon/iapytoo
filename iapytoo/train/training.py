@@ -43,11 +43,13 @@ class Training(Inference):
 
         self.criterion = self._create_criterion()
 
+        train_func = torch.compile(self._inner_train) if config.training.compile else self._inner_train
+
         if self._config.training.tqdm:
-            self.train_loop = self.__tqdm_loop(self._inner_train)
+            self.train_loop = self.__tqdm_loop(train_func)
             self.valid_loop = self.__tqdm_loop(self._inner_validate)
         else:
-            self.train_loop = self.__batch_loop(self._inner_train)
+            self.train_loop = self.__batch_loop(train_func)
             self.valid_loop = self.__batch_loop(self._inner_validate)
 
         self.loss = Loss(LossType, config.plotting_mean)
@@ -143,7 +145,7 @@ class Training(Inference):
 
         metrics.update(model_output, Y)
 
-        return loss.item()
+        return loss
 
     def _inner_validate(self, batch, batch_idx, metrics: MetricsCollection):
         X, Y = batch
@@ -154,7 +156,7 @@ class Training(Inference):
 
         metrics.update(model_output, Y)
 
-        return loss.item()
+        return loss
 
     def _on_epoch_ended(self, epoch, checkpoint, checkpoint_epoch, report_per_epoch, **kwargs):
         lr = self._get_lr(self.optimizer)
