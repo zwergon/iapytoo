@@ -9,12 +9,12 @@ class Mean:
             return IterativeMean(**kwargs)
         elif kind == "ewm":
             return ExponentialSmoothingMean(**kwargs)
-        elif kind == "dummy":
-            return DummyMean(**kwargs)
+        elif kind == "raw_loss":
+            return RawLoss(**kwargs)
         elif kind == "epoch":
             return EpochMean(**kwargs)
         else:
-            raise KeyError("mean should be one of the following: [mean, ewm, dummy, epoch]")
+            raise KeyError("mean should be one of the following: [mean, ewm, raw_loss, epoch]")
 
     def __init__(self, **kwargs) -> None:
         self._value = 0.0
@@ -46,7 +46,7 @@ class Mean:
     def update(self):
         self.buffer.append((self.iter, self._value))
 
-    def get_buffer(self):
+    def get_loss(self):
         return self.buffer
 
 
@@ -61,7 +61,7 @@ class IterativeMean(Mean):
             super().update()
 
 
-class DummyMean(Mean):
+class RawLoss(Mean):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
 
@@ -72,7 +72,7 @@ class DummyMean(Mean):
             super().update()
 
 
-class EpochMean(DummyMean):
+class EpochMean(RawLoss):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.epoch = 0
@@ -81,7 +81,8 @@ class EpochMean(DummyMean):
         self.epoch += 1  # Flush happens once per epoch
         return super().flush()
 
-    def get_buffer(self):
+    # Override parent class method
+    def get_loss(self):
         epoch_loss = [loss[1] for loss in self.buffer]
         epoch_mean = np.mean(epoch_loss)
 

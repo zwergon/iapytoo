@@ -4,7 +4,7 @@ import sys
 import logging
 import mlflow
 import yaml
-from pydantic import BaseModel, BeforeValidator, Field
+from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from pydantic_core import PydanticUndefined
 import typing as t
 from typing import List, Optional, Dict, Union
@@ -203,6 +203,15 @@ class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _PlottersT, _Mo
             return dict(items)
 
         return flatten(self.model_dump(exclude_unset=exclude_unset))
+
+    @model_validator(mode="after")
+    def validate_config(self, model):
+        if self.checkpoint_epoch is not None and self.plotting_mean not in ["mean", "ewm"]:
+            raise ValueError("When checkpoint is activated, either 'mean' or 'ewm' plotting_mean"
+                                  " should be activated. Otherwise, the run cannot be correctly"
+                                  " reinitialized in the case of a crash.")
+            # As "raw_loss" and "epoch" will report / flush the loss at each epoch, in the case of a crash,
+            # the loss will be ahead of the checkpoint epoch
 
     def __repr__(self) -> str:
         str = "\nConfig:\n"

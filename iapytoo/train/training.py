@@ -184,7 +184,7 @@ class Training(Inference):
             self.logger.report_prediction(epoch, self.predictions)
 
         for lt in self.loss.enum_cls:
-            for item in self.loss(lt).get_buffer():
+            for item in self.loss(lt).get_loss():
                 self.logger.report_metric(epoch=item[0], metrics={
                                             lt: item[1]})
         self.loss.flush()
@@ -341,7 +341,7 @@ class Training(Inference):
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
         checkpoint_epoch = self._config.checkpoint_epoch
-        report_per_epoch = True if self.loss.plotting_mean in ["dummy", "epoch"] else False
+        report_per_epoch = True if self.loss.plotting_mean in ["raw_loss", "epoch"] else False
         save_model = self._config.save_model
 
         with Logger(self._config, run_id=checkpoint.run_id) as self.logger:
