@@ -4,7 +4,7 @@ import sys
 import logging
 import mlflow
 import yaml
-from pydantic import BaseModel, BeforeValidator, Field
+from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from pydantic_core import PydanticUndefined
 import typing as t
 from typing import List, Optional, Dict, Union
@@ -19,7 +19,10 @@ def ensure_list(value, target_type):
     if isinstance(value, str):
         parsed_list = ast.literal_eval(value)
         if isinstance(parsed_list, list):
-            return [target_type(v.strip()) for v in parsed_list]
+            if isinstance(parsed_list[0], str):
+                return [target_type(v.strip()) for v in parsed_list]
+            else:
+                return parsed_list
         return parsed_list
     else:
         return value
@@ -45,12 +48,14 @@ class TrainingConfig(BaseModel):
     type: str = "default"
     epochs: int = 10
     tqdm: Optional[bool] = True
+    compile: Optional[bool] = False
     n_steps_by_batch: Optional[int] = 10
     loss: str
     learning_rate: float
     optimizer: Optional[str] = "adam"
     weight_decay: Optional[float] = None
-    betas: Optional[Union[float, list[float]]] = None
+    betas: Optional[Union[float, Annotated[list[float], BeforeValidator(
+        lambda v: ensure_list(v, float))]]] = None
     momentum: Optional[float] = 0.9
     scheduler: Optional[str] = "step"
     step_size: Optional[int] = 10
@@ -170,9 +175,14 @@ class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _PlottersT, _Mo
     tracking_uri: Optional[str] = None
     sensors: Optional[str] = None
     cuda: Optional[bool] = True
+    plotting_mean: Optional[str] = "ewm"
+    checkpoint_epoch: Optional[int] = 10
+    save_model: Optional[bool] = True
     seed: Optional[int] = 42
-    inference_pip_requirements: Optional[List[str]] = None
-    inference_extra_paths: Optional[List[str]] = None
+    inference_pip_requirements: Optional[Annotated[list[str], BeforeValidator(
+        lambda v: ensure_list(v, str))]] = None
+    inference_extra_paths: Optional[Annotated[list[str], BeforeValidator(
+        lambda v: ensure_list(v, str))]] = None
     dataset: _DataT
     training: Optional[_TrainingT] = None
     metrics: _MetricsT = Field(default_factory=MetricsConfig)
@@ -193,6 +203,15 @@ class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _PlottersT, _Mo
             return dict(items)
 
         return flatten(self.model_dump(exclude_unset=exclude_unset))
+
+    @model_validator(mode="after")
+    def validate_config(self, model):
+        if self.checkpoint_epoch is not None and self.plotting_mean not in ["mean", "ewm"]:
+            raise ValueError("When checkpoint is activated, either 'mean' or 'ewm' plotting_mean"
+                                  " should be activated. Otherwise, the run cannot be correctly"
+                                  " reinitialized in the case of a crash.")
+            # As "raw_loss" and "epoch" will report / flush the loss at each epoch, in the case of a crash,
+            # the loss will be ahead of the checkpoint epoch
 
     def __repr__(self) -> str:
         str = "\nConfig:\n"
