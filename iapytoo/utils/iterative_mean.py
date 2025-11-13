@@ -83,7 +83,7 @@ class EpochMean(RawLoss):
 
     # Override parent class method
     def get_loss(self):
-        epoch_loss = [loss[1] for loss in self.buffer]
+        epoch_loss = [loss[1].item() for loss in self.buffer]
         epoch_mean = np.mean(epoch_loss)
 
         return [(self.epoch, epoch_mean)]
