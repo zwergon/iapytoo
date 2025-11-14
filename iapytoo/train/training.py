@@ -371,7 +371,7 @@ class Training(Inference):
         return {
             "run_id": self.logger.run_id,
             "run_name": active_run_name,
-            "loss": self.loss(LossType.VALID).value,
+            "loss": self.loss(LossType.VALID).value.item(),
         }
 
     # overwrite
