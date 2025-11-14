@@ -368,10 +368,12 @@ class Training(Inference):
             if save_model:
                 self.logger.save_model(self.mlflow_model)
 
+        loss_value = self.loss(LossType.VALID).value
+        loss_value = loss_value if isinstance(loss_value, float) else loss_value.item()
         return {
             "run_id": self.logger.run_id,
             "run_name": active_run_name,
-            "loss": self.loss(LossType.VALID).value.item(),
+            "loss": loss_value,
         }
 
     # overwrite
