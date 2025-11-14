@@ -208,10 +208,11 @@ class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _PlottersT, _Mo
     def validate_config(self, model):
         if self.checkpoint_epoch is not None and self.plotting_mean not in ["mean", "ewm"]:
             raise ValueError("When checkpoint is activated, either 'mean' or 'ewm' plotting_mean"
-                                  " should be activated. Otherwise, the run cannot be correctly"
-                                  " reinitialized in the case of a crash.")
+                             " should be activated. Otherwise, the run cannot be correctly"
+                             " reinitialized in the case of a crash.")
             # As "raw_loss" and "epoch" will report / flush the loss at each epoch, in the case of a crash,
             # the loss will be ahead of the checkpoint epoch
+        return self
 
     def __repr__(self) -> str:
         str = "\nConfig:\n"
