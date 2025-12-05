@@ -1,0 +1,11 @@
+FROM iapytoo:latest
+
+WORKDIR /workspace
+COPY config.yml /workspace/config.yml
+COPY iapytoo-0.0.9.dev16-py3-none-any.whl /workspace/iapytoo-0.0.9.dev16-py3-none-any.whl
+
+RUN pip install /workspace/iapytoo-0.0.9.dev16-py3-none-any.whl
+
+COPY metrics.py /workspace/metrics.py
+
+ENTRYPOINT ["python", "metrics.py"]

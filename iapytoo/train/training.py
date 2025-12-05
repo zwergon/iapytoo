@@ -1,3 +1,4 @@
+import os
 import sys
 import random
 import numpy
@@ -35,6 +36,22 @@ class Training(Inference):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
+    @staticmethod
+    def setup_ddp(rank):
+        import torch.distributed as dist
+        world_size = int(os.environ['WORLD_SIZE'])
+        master_addr = os.environ['MASTER_ADDR']
+        master_port = os.environ['MASTER_PORT']
+
+        os.environ['MASTER_ADDR'] = master_addr
+        os.environ['MASTER_PORT'] = master_port
+
+        # Choisir NCCL si GPU disponible, sinon Gloo
+        backend = 'nccl' if torch.cuda.is_available() else 'gloo'
+        dist.init_process_group(
+            backend=backend, rank=rank, world_size=world_size)
+        print(f"[Rank {rank}] Process initialized using {backend} backend")
+
     def __init__(self, config: Config) -> None:
         super().__init__(config=config)
 
@@ -43,7 +60,8 @@ class Training(Inference):
 
         self.criterion = self._create_criterion()
 
-        train_func = torch.compile(self._inner_train) if config.training.compile else self._inner_train
+        train_func = torch.compile(
+            self._inner_train) if config.training.compile else self._inner_train
 
         if self._config.training.tqdm:
             self.train_loop = self.__tqdm_loop(train_func)
@@ -187,7 +205,7 @@ class Training(Inference):
             for item in self.loss(lt).get_loss():
                 key: str = str(lt)
                 self.logger.report_metric(epoch=item[0], metrics={
-                                            key: item[1]})
+                    key: item[1]})
         self.loss.flush()
 
     # ----------------------------------------
@@ -342,7 +360,8 @@ class Training(Inference):
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
         checkpoint_epoch = self._config.checkpoint_epoch
-        report_per_epoch = True if self.loss.plotting_mean in ["raw_loss", "epoch"] else False
+        report_per_epoch = True if self.loss.plotting_mean in [
+            "raw_loss", "epoch"] else False
         save_model = self._config.save_model
 
         with Logger(self._config, run_id=checkpoint.run_id) as self.logger:
@@ -370,7 +389,8 @@ class Training(Inference):
                 self.logger.save_model(self.mlflow_model)
 
         loss_value = self.loss(LossType.VALID).value
-        loss_value = loss_value if isinstance(loss_value, float) else loss_value.item()
+        loss_value = loss_value if isinstance(
+            loss_value, float) else loss_value.item()
         return {
             "run_id": self.logger.run_id,
             "run_name": active_run_name,

@@ -42,5 +42,23 @@ class Metric:
         if self.with_target:
             self.target = torch.zeros(size=(0,), device=self.device)
 
+    def gather(self):
+        import torch.distributed as dist
+        if dist.is_initialized():
+            world_size = dist.get_world_size()
+
+            gathered_outputs = [torch.zeros_like(
+                self.outputs) for _ in range(world_size)]
+            dist.all_gather(gathered_outputs, self.outputs)
+
+            if self.with_target:
+                gathered_targets = [torch.zeros_like(
+                    self.target) for _ in range(world_size)]
+                dist.all_gather(gathered_targets, self.target)
+
+            self.outputs = torch.cat(gathered_outputs, dim=0)
+            if self.with_target:
+                self.target = torch.cat(gathered_targets, dim=0)
+
     def compute(self):
         pass

@@ -33,6 +33,9 @@ class R2Metric(Metric):
         super(R2Metric, self).__init__("r2", config)
 
     def compute(self):
+        # for distributed
+        self.gather()
+
         # Compute the mean of the target values
         target_mean = torch.mean(self.target, dim=0)
 
@@ -58,6 +61,7 @@ class MSMetric(Metric):
         return torch.mean(diff * diff)
 
     def compute(self):
+        self.gather()
         ms = self._compute()
         self.results = {self.name: ms}
         return self.results
@@ -69,6 +73,7 @@ class RMSMetric(MSMetric):
         self.name = "rms"
 
     def compute(self):
+        self.gather()
         mean_squared_error = super()._compute()
         self.results = {self.name: torch.sqrt(mean_squared_error)}
         return self.results
