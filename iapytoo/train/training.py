@@ -185,8 +185,9 @@ class Training(Inference):
 
         for lt in self.loss.enum_cls:
             for item in self.loss(lt).get_loss():
+                key: str = str(lt)
                 self.logger.report_metric(epoch=item[0], metrics={
-                                            lt: item[1]})
+                                            key: item[1]})
         self.loss.flush()
 
     # ----------------------------------------
