@@ -3,20 +3,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
+from torchvision import datasets
 from torch.optim.lr_scheduler import LambdaLR
 from PIL import Image
 
 
+from iapytoo.dataset.transform import MeanNormalize
 from iapytoo.predictions.plotters import ConfusionPlotter
 from iapytoo.train.factories import Model, Scheduler, Factory
 from iapytoo.utils.config import ConfigFactory, Config
 from iapytoo.train.training import Training
 from iapytoo.train.mlflow_model import MlflowTransform, IMlfowModelProvider
-
-
-from mlflow.types.schema import TensorSpec, Schema
-from mlflow.models import ModelSignature
 
 
 class MnistModel(Model):
@@ -63,16 +60,10 @@ class MnistTransform(MlflowTransform):
 
     def __init__(self) -> None:
         super().__init__(
-            transform=transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Normalize((0.1307,), (0.3081,))
-                ]
-            )
-        )
+            transform=MeanNormalize(0.1307, 0.3081))
 
     # override
-    def __call__(self, model_input, *args, **kwds):
+    def __call__(self, model_input, *args, **kwds) -> np.array:
 
         images_pil = []
         for i in range(model_input.shape[0]):
@@ -88,7 +79,7 @@ class MnistTransform(MlflowTransform):
             img_pil = Image.fromarray(img_array, 'L')
             images_pil.append(img_pil)
 
-        model_input_tensor = torch.stack(
+        model_input_tensor = np.stack(
             [self.transform(img) for img in images_pil])
 
         return model_input_tensor
@@ -97,31 +88,14 @@ class MnistTransform(MlflowTransform):
 class MnistMlfowModel(IMlfowModelProvider):
 
     def __init__(self):
-        X = np.random.rand(1, 1, 28, 28)
+        X = np.random.rand(1, 28, 28)
         Y = np.zeros(shape=(1,), dtype=np.int64)
-        # add batch size
-        x_shape = list(X.shape)
-        x_shape[0] = -1
-        y_shape = list(Y.shape)
-        y_shape[0] = -1
-
-        input_schema = Schema(
-            [TensorSpec(type=X.dtype, shape=x_shape)])
-        output_schema = Schema(
-            [TensorSpec(type=Y.dtype, shape=y_shape)])
-
-        self.signature = ModelSignature(
-            inputs=input_schema, outputs=output_schema)
         self.input_example = X
         self.transform: MlflowTransform = MnistTransform()
 
     # override
     def get_transform(self) -> MlflowTransform:
         return self.transform
-
-    # override
-    def get_signature(self) -> ModelSignature:
-        return self.signature
 
     # override
     def get_input_example(self) -> np.array:

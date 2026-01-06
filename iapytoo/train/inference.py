@@ -79,36 +79,9 @@ class Inference(ABC, IMlfowModelProvider):
             model_config.predictor
         )
 
-        self.mlflow_model = MlflowModel()
-        self.mlflow_model.model = self.model
-        self.mlflow_model.valuator_key = model_config.valuator
-        self.mlflow_model.predictor_key = model_config.predictor
-        self.mlflow_model.ml_valuator = self.valuator
-        if model_config.inference_predictor is None:
-            self.mlflow_model.ml_predictor = self.predictor
-        else:
-            # Custom predictor should accept extra arguments as does the parent class
-            self.mlflow_model.ml_predictor = factory.create_predictor(model_config.inference_predictor,
-                                                                      model_config.inference_predictor_args)
-
-        if self.mlflow_model_provider is not None:
-            self.mlflow_model.signature = self.mlflow_model_provider.get_signature()
-            self.mlflow_model.input_example = self.mlflow_model_provider.get_input_example()
-            self.mlflow_model.transform = self.mlflow_model_provider.get_transform()
-
     def get_transform(self) -> MlflowTransform:
         if self.mlflow_model_provider is not None:
             return self.mlflow_model_provider.get_transform()
-        return None
-
-    def get_input_example(self) -> np.array:
-        if self.mlflow_model_provider is not None:
-            return self.mlflow_model_provider.get_input_example()
-        return None
-
-    def get_signature(self) -> ModelSignature:
-        if self.mlflow_model_provider is not None:
-            return self.mlflow_model_provider.get_signature()
         return None
 
     @abstractmethod
@@ -129,18 +102,6 @@ class MLFlowInference(Inference):
     def get_transform(self) -> MlflowTransform:
         if self.mlflow_model is not None:
             return self.mlflow_model.transform
-        return None
-
-    # overidde : use mlflow_model
-    def get_input_example(self) -> np.array:
-        if self.mlflow_model is not None:
-            return self.mlflow_model.input_example
-        return None
-
-    # overidde : use mlflow_model
-    def get_signature(self) -> ModelSignature:
-        if self.mlflow_model is not None:
-            return self.mlflow_model.signature
         return None
 
     # overidde : use mlflow_model

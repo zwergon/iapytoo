@@ -81,18 +81,3 @@ class MinMax(Scaling):
             x * (self.weights[OpType.MAX] - self.weights[OpType.MIN])
             + self.weights[OpType.MIN]
         )
-
-
-# TODO
-# class LogNormalize(Normalize):
-
-#     def __init__(self, stats, x_columns, y_columns) -> None:
-#         super().__init__(stats)
-
-#     def __call__(self, X, Y):
-#         x_min = np.log(self.wx[0, :])
-#         x_max = np.log(self.wx[1, :])
-#         return (np.log(X) - x_min) / (x_max -x_min), (Y - self.wy[2, :]) / self.wy[3, :]
-
-#     def reverse_Y(self, Y, idx=0):
-#         return Y * self.wy[3, idx] + self.wy[2, idx]

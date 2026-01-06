@@ -18,6 +18,7 @@ from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.train.inference import Inference
 from iapytoo.metrics.collection import MetricsCollection
+from iapytoo.train import save_mlflow_model
 
 
 class LossType(str, Enum):
@@ -386,7 +387,11 @@ class Training(Inference):
                     epoch, checkpoint, checkpoint_epoch, report_per_epoch, valid_loader=valid_loader)
 
             if save_model:
-                self.logger.save_model(self.mlflow_model)
+                save_mlflow_model(
+                    self._config,
+                    self.model,
+                    self.mlflow_model_provider
+                )
 
         loss_value = self.loss(LossType.VALID).value
         loss_value = loss_value if isinstance(

@@ -1,5 +1,6 @@
 import os
 import torch
+import numpy as np
 
 import uuid
 import tempfile
@@ -137,38 +138,6 @@ class Logger:
             torch.save(checkpoint.params, ckp_name)
             mlflow.log_artifact(local_path=ckp_name,
                                 artifact_path="checkpoints")
-
-    def save_model(self, model_wrapper: MlflowModel):
-
-        def supports_name():
-            version = tuple(map(int, mlflow.__version__.split(".")))
-            return version >= (3, 0, 0)
-
-        assert model_wrapper is not None, "no model_wrapper instance ?"
-
-        signature = model_wrapper.signature
-        input_example = model_wrapper.input_example
-
-        model_wrapper.model.cpu()
-
-        kwargs = {
-            "python_model": model_wrapper,
-            "signature": signature,
-            "input_example": input_example,
-            "extra_pip_requirements": self.config.inference_pip_requirements,
-            "code_paths": self.config.inference_extra_paths,
-            "conda_env": None,
-            # Whole model dictionary can't be dumped
-            "metadata": self.config.model.inference_predictor_args,
-        }
-
-        if supports_name():
-            kwargs["name"] = "model"
-        else:
-            kwargs["artifact_path"] = "model"
-
-        with self.lock:
-            mlflow.pyfunc.log_model(**kwargs)
 
     def can_report(self):
         return self.context.epoch > self.context.last_epoch
