@@ -5,6 +5,7 @@ from enum import IntEnum, Enum
 from tqdm import tqdm
 
 from iapytoo.train.training import Training
+from iapytoo.train import save_mlflow_model
 from iapytoo.utils.config import Config
 from iapytoo.train.factories import Factory
 from iapytoo.train.loss import Loss
@@ -170,9 +171,10 @@ class WGAN(Training):
                 self.logger.report_prediction(epoch, self.predictions)
 
         for lt in self.loss.enum_cls:
-            for item in self.loss(lt).buffer:
+            key: str = str(lt)
+            for item in self.loss(lt).get_loss():
                 self.logger.report_metric(epoch=item[0], metrics={
-                    lt: item[1]})
+                    key: item[1]})
         self.loss.flush()
 
     def __tqdm_gan_loop(self, update_g, update_d):
@@ -326,7 +328,9 @@ class WGAN(Training):
 
                 self._on_epoch_ended(epoch, checkpoint, loader=valid_loader)
 
-            self.logger.save_model(self.mlflow_model)
+            save_mlflow_model(self._config,
+                              self.generator,
+                              self.mlflow_model_provider)
 
         return {
             "run_id": self.logger.run_id,

@@ -6,6 +6,8 @@ from iapytoo.utils.config import Config, ConfigFactory, DatasetConfig
 from iapytoo.train.inference import MLFlowInference
 from iapytoo.train.mlflow_model import MlflowTransform
 
+from mnist import MnistModel, MnistTransform
+
 
 class MnistInference(MLFlowInference):
     def __init__(self, config: Config) -> None:

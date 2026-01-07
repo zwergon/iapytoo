@@ -64,25 +64,7 @@ class MnistTransform(MlflowTransform):
 
     # override
     def __call__(self, model_input, *args, **kwds) -> np.array:
-
-        images_pil = []
-        for i in range(model_input.shape[0]):
-            # Extraire l'image (en supprimant la dimension du canal si nécessaire)
-            # Supposons que l'image est en niveaux de gris
-            img_array = model_input[i, 0, :, :]
-
-            # Normaliser l'image si nécessaire (par exemple, si les valeurs sont entre 0 et 1)
-            img_array = (img_array * 255).astype(np.uint8)
-
-            # Créer une image PIL
-            # 'L' pour les niveaux de gris
-            img_pil = Image.fromarray(img_array, 'L')
-            images_pil.append(img_pil)
-
-        model_input_tensor = np.stack(
-            [self.transform(img) for img in images_pil])
-
-        return model_input_tensor
+        return self.transform(model_input)
 
 
 class MnistMlfowModel(IMlfowModelProvider):

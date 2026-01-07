@@ -390,7 +390,8 @@ class Training(Inference):
                 save_mlflow_model(
                     self._config,
                     self.model,
-                    self.mlflow_model_provider
+                    provider=self.mlflow_model_provider,
+                    epoch=num_epochs
                 )
 
         loss_value = self.loss(LossType.VALID).value

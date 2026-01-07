@@ -168,4 +168,5 @@ mlruns/
 data/
 dockers/Dockerfile.ifpen
 iapytoo/_version.py
+examples/tmp/
 

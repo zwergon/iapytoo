@@ -11,7 +11,8 @@ from .mlflow_model import IMlfowModelProvider, MlflowModel
 
 def save_mlflow_model(config: Config,
                       model,
-                      provider: IMlfowModelProvider = None):
+                      provider: IMlfowModelProvider = None,
+                      epoch=0):
 
     model_config: ModelConfig = config.model
     metadata = {
@@ -43,13 +44,12 @@ def save_mlflow_model(config: Config,
             "code_paths": config.inference_extra_paths,
             "conda_env": None,
             "artifacts": artifacts
-
         }
 
         if supports_name():
-            kwargs["name"] = "model"
+            kwargs["name"] = f"model_step_{epoch}"
         else:
-            kwargs["artifact_path"] = "model"
+            kwargs["artifact_path"] = f"model_step_{epoch}"
 
         if provider is not None:
             input_example = provider.get_input_example()

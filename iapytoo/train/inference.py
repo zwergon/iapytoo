@@ -123,15 +123,9 @@ class MLFlowInference(Inference):
             self._models = self._create_models(loader)
             assert self.model is not None, "no model loaded for prediction"
 
-            factory = Factory()
-            self.valuator = factory.create_valuator(
-                self.mlflow_model.valuator_key,
-                self.model,
-                self.device
-            )
-            self.predictor = factory.create_predictor(
-                self.mlflow_model.predictor_key
-            )
+            self.valuator = self.mlflow_model.valuator
+            self.valuator.device = self.device
+            self.predictor = self.mlflow_model.predictor
 
             self.predictions.compute(loader=loader)
             self.logger.report_prediction(0, self.predictions)

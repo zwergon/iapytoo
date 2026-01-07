@@ -73,11 +73,14 @@ class Logger:
     def start(self):
         matplotlib.use("agg")
         params_flag = self.run_id is None
-        active_run = mlflow.start_run(
-            experiment_id=self.experiment_id,
-            run_id=self.run_id,
-            run_name=self._run_name(self.config.run),
-        )
+        kwargs = {
+            "experiment_id": self.experiment_id
+        }
+        if self.run_id is None:
+            kwargs['run_name'] = self._run_name(self.config.run)
+        else:
+            kwargs['run_id'] = self.run_id
+        active_run = mlflow.start_run(**kwargs)
         logging.info(f"active_run {active_run.info.run_id}")
         self.run_id = active_run.info.run_id
         if params_flag:
