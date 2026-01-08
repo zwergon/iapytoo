@@ -27,6 +27,5 @@ if __name__ == "__main__":
     predicted = loaded_model.predict([model_input])
     plt.figure()
     plt.plot(predicted[0, 0, :])
-
     plt.savefig("prediction.jpg", dpi=300, bbox_inches="tight")
     plt.close()

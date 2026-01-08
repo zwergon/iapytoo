@@ -18,7 +18,7 @@ from iapytoo.train.logger import Logger
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.train.inference import Inference
 from iapytoo.metrics.collection import MetricsCollection
-from iapytoo.train import save_mlflow_model
+from iapytoo.train.mlflow_model import save_mlflow_model
 
 
 class LossType(str, Enum):

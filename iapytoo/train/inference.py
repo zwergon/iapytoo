@@ -6,7 +6,7 @@ import numpy as np
 import mlflow
 import mlflow.pyfunc
 
-from mlflow.models import ModelSignature
+from mlflow.tracking import MlflowClient
 
 from abc import ABC, abstractmethod
 
@@ -89,14 +89,25 @@ class Inference(ABC, IMlfowModelProvider):
         pass
 
 
+def get_model_uri(run_id, idx=-1):
+    """return the idx model_uri for this run_id.
+    return the last one by default.
+    """
+    client = MlflowClient()
+    run = client.get_run(run_id=run_id)
+    model_uri = f"models:/{run.outputs.model_outputs[-1].model_id}"
+    return model_uri
+
+
 class MLFlowInference(Inference):
 
     def __init__(self, config: Config) -> None:
         super().__init__(config)
         model_config: MLFlowConfig = self._config.model
-        logged_model = f"runs:/{model_config.run_id}/model"
+
+        model_uri = get_model_uri(model_config.run_id)
         self.mlflow_model: MlflowModel = mlflow.pyfunc.load_model(
-            logged_model).unwrap_python_model()
+            model_uri).unwrap_python_model()
 
     # overidde : use mlflow_model
     def get_transform(self) -> MlflowTransform:
@@ -113,7 +124,9 @@ class MLFlowInference(Inference):
     def predict(self, loader):
 
         metrics = MetricsCollection(
-            "inference", self._config.metrics.names, self._config)
+            "inference",
+            self._config.metrics.names,
+            self._config)
         # metrics.to(self.device)
 
         with Logger(self._config) as self.logger:

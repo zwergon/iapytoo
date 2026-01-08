@@ -1,13 +1,19 @@
-
-import numpy as np
+import os
+import sys
+import importlib
+import tempfile
+import torch
+import mlflow
+import yaml
 import logging
 from typing import Any
 
-import torch
-
+import numpy as np
 import mlflow.pyfunc as mp
 
-from iapytoo.train.factories import Factory
+
+from iapytoo.utils.config import Config, ModelConfig, ConfigFactory
+from iapytoo.train.factories import Factory, Model
 from iapytoo.train.valuator import Valuator
 from iapytoo.predictions.predictors import Predictor
 
@@ -23,6 +29,14 @@ class MlflowTransform:
 
 class IMlfowModelProvider:
 
+    @property
+    def code_path(self) -> str:
+        code_definition = self.code_definition()
+        return code_definition.get("path", None)
+
+    def code_definition(self) -> dict:
+        return {}
+
     def get_input_example(self) -> np.array:
         return None  # by default no input example
 
@@ -36,14 +50,26 @@ class _MlflowModelPrivate:
     def from_context(mlflow_model: '_MlflowModelPrivate', context: mp.PythonModelContext):
         private = _MlflowModelPrivate()
 
-        saved_model = torch.load(
-            context.artifacts["model"], weights_only=False)
+        config = ConfigFactory.from_yaml(context.artifacts["config"])
 
-        if 'model' in saved_model:
-            private.model = saved_model['model']
+        code_definition_path = context.artifacts.get("code_definition", None)
 
-        if "transform" in saved_model:
-            private.transform = saved_model['transform']
+        assert code_definition_path is not None, "code_definition artifact is required to load the model"
+
+        with open(code_definition_path, "r") as file:
+            code_definition = yaml.safe_load(file)
+
+        sys.path.insert(0, context.artifacts["zip"])
+
+        module = importlib.import_module(code_definition["module"])
+        model_cls = getattr(module, code_definition["model_cls"])
+
+        private.model = model_cls(loader=None, config=config)
+        private.model.load_state_dict(torch.load(
+            context.artifacts["model"], weights_only=True))
+
+        transform_cls = getattr(module, code_definition["transform_cls"])
+        private.transform = transform_cls()
 
         factory = Factory()
         private.valuator = factory.create_valuator(
@@ -66,7 +92,7 @@ class _MlflowModelPrivate:
         mlflow_model._private = private
 
     def __init__(self):
-        self.model = None
+        self.model: Model = None
         self.transform = None
         self.valuator: Valuator = None
         self.predictor: Predictor = None
@@ -145,3 +171,87 @@ class MlflowModel(mp.PythonModel):
         predictions = self.ml_predictor(outputs_tensor)
 
         return predictions
+
+
+def zip_codes(code_path: dict, zip_path):
+    import zipfile
+    from pathlib import Path
+
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        base_dir = Path(code_path)
+        for file in base_dir.rglob("*.py"):
+            arcname = file.relative_to(base_dir)
+            zipf.write(file, arcname=arcname)
+
+
+def save_mlflow_model(config: Config,
+                      model: Model,
+                      provider: IMlfowModelProvider = None,
+                      epoch=0):
+
+    model_config: ModelConfig = config.model
+    metadata = {
+        "valuator_key":  model_config.valuator,
+        "predictor_key": model_config.predictor,
+        "inference_key": model_config.inference_predictor,
+        "inference_args": model_config.inference_predictor_args
+    }
+
+    def supports_name():
+        version = tuple(map(int, mlflow.__version__.split(".")))
+        return version >= (3, 0, 0)
+
+    model.cpu()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_path = os.path.join(tmpdir, "config.yaml")
+        with open(config_path, "w") as file:
+            yaml.safe_dump(config.model_dump(exclude_unset=True), file)
+
+        model_path = os.path.join(tmpdir, "model.pt")
+        torch.save(model.state_dict(), model_path)
+
+        artifacts = {
+            "model": model_path,
+            "config": config_path
+        }
+
+        kwargs = {
+            "python_model": MlflowModel(metadata),
+            "extra_pip_requirements": config.inference_pip_requirements,
+            "code_paths": config.inference_extra_paths,
+            "conda_env": None,
+            "artifacts": artifacts
+        }
+
+        if supports_name():
+            kwargs["name"] = f"model_step_{epoch}"
+        else:
+            kwargs["artifact_path"] = f"model_step_{epoch}"
+
+        if provider is not None:
+            input_example = provider.get_input_example()
+            if input_example is not None:
+                input_path = os.path.join(tmpdir, "input_example.npy")
+                np.save(input_path, input_example)
+
+                kwargs["input_example"] = [MlflowModel.INPUT_EXAMPLE]
+                artifacts["input_example"] = input_path
+
+            code_definition = provider.code_definition()
+            if code_definition:
+                if provider.code_path is not None:
+                    zip_path = os.path.join(tmpdir, "code.zip")
+                    zip_codes(provider.code_path, zip_path)
+                    artifacts["zip"] = zip_path
+
+                    specs_path = os.path.join(tmpdir, "code_definition.yml")
+                    with open(specs_path, "w") as file:
+                        yaml.safe_dump(code_definition, file)
+                    artifacts["code_definition"] = specs_path
+                else:
+                    raise ValueError(
+                        "code_path must be set in provider if code_definition is given"
+                    )
+
+        model_info = mp.log_model(**kwargs)
+        logging.info(f"ModelURI: {model_info.model_uri}")

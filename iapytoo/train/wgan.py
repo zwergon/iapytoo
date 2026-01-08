@@ -5,7 +5,7 @@ from enum import IntEnum, Enum
 from tqdm import tqdm
 
 from iapytoo.train.training import Training
-from iapytoo.train import save_mlflow_model
+from iapytoo.train.mlflow_model import save_mlflow_model
 from iapytoo.utils.config import Config
 from iapytoo.train.factories import Factory
 from iapytoo.train.loss import Loss

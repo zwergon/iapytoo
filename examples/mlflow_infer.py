@@ -5,7 +5,7 @@ from PIL import Image
 import tempfile
 
 from iapytoo.dataset.transform import to_numpy
-from mnist import MnistModel, MnistTransform
+from iapytoo.train.inference import get_model_uri
 
 
 def get_model_input(idx=0):
@@ -27,9 +27,9 @@ def get_model_input(idx=0):
 
 if __name__ == "__main__":
     import mlflow.pyfunc as mp
-    run_id = "46ea82068c224db38ed32a72e939c306"
+    run_id = "34d327ae3df54519bef59687fb5d7622"
 
-    logged_model = f'runs:/{run_id}/model'
+    logged_model = get_model_uri(run_id)
 
     # Load model as a PyFuncModel.
     loaded_model: mp.PyFuncModel = mlflow.pyfunc.load_model(logged_model)
