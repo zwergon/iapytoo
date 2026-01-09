@@ -1,25 +1,32 @@
 
+import os
+import numpy as np
+from pathlib import Path
 
 from iapytoo.predictions.plotters import Fake1DPlotter, DSPPlotter
 from iapytoo.train.factories import Factory
 
 from torch.utils.data import DataLoader
 from iapytoo.utils.config import Config, ConfigFactory
-from iapytoo.train.mlflow_model import IMlfowModelProvider, MlflowTransform
+from iapytoo.train.mlflow_model import IMlfowModelProvider
 from iapytoo.train.wgan import WGAN
-import torch
-import os
-from mlflow.models import ModelSignature
-import numpy as np
-from dataset import SinDataset, LatentDataset
-from critic import CNN1DDiscriminator, GruDiscriminator, DFTCritic
-from generator import CNN1DGenerator, GruGenerator
+
+from examples.wgan.dataset import SinDataset, LatentDataset
+from examples.wgan.critic import CNN1DDiscriminator, GruDiscriminator, DFTCritic
+from examples.wgan.generator import CNN1DGenerator, GruGenerator
 
 
 class WindProvider(IMlfowModelProvider):
 
     def __init__(self, config: Config):
         self.config = config
+
+    def code_definition(self) -> dict:
+        return {
+            "path": str(Path(__file__).parent / "examples"),
+            "module": "examples.wgan.generator",
+            "model_cls": "GruGenerator"
+        }
 
     def get_input_example(self) -> np.array:
         # Example shape for input noise signal
@@ -37,7 +44,8 @@ if __name__ == "__main__":
         os.path.dirname(__file__), "config_wgan.yml"))
 
     # load training data
-    trainset = SinDataset()
+    dataset_path = Path(__file__).parent / config.dataset.path
+    trainset = SinDataset(dataset_path)
 
     trainloader = DataLoader(
         trainset,

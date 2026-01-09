@@ -31,6 +31,7 @@ class GanConfig(ModelConfig):
     hidden_size: Optional[int] = 128
     lambda_gp: Optional[float] = 10.0
     noise_dim: Optional[int] = 100
+    signal_length: Optional[int] = 200
     n_critic: Optional[int] = 5
 
     def _network(self) -> str:

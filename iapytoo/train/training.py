@@ -140,7 +140,7 @@ class Training(Inference):
     # overwrite
     def _create_models(self, loader):
         model = Factory().create_model(self._config.model.model,
-                                       self._config, loader, self.device)
+                                       self._config, self.device)
 
         return [model]
 

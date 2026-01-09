@@ -62,14 +62,19 @@ class _MlflowModelPrivate:
         sys.path.insert(0, context.artifacts["zip"])
 
         module = importlib.import_module(code_definition["module"])
+
+        assert "model_cls" in code_definition, "a class of model is required to load the model"
         model_cls = getattr(module, code_definition["model_cls"])
 
-        private.model = model_cls(loader=None, config=config)
+        private.model = model_cls(config=config)
         private.model.load_state_dict(torch.load(
             context.artifacts["model"], weights_only=True))
 
-        transform_cls = getattr(module, code_definition["transform_cls"])
-        private.transform = transform_cls()
+        if "transform_cls" in code_definition:
+            transform_cls = getattr(module, code_definition["transform_cls"])
+            private.transform = transform_cls()
+        else:
+            private.transform = None
 
         factory = Factory()
         private.valuator = factory.create_valuator(

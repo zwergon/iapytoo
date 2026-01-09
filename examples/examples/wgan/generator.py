@@ -16,12 +16,12 @@ class CNN1DInitiator(WeightInitiator):
 
 
 class CNN1DGenerator(Model):
-    def __init__(self, loader, config: Config):
-        super(CNN1DGenerator, self).__init__(loader, config)
+    def __init__(self, config: Config):
+        super(CNN1DGenerator, self).__init__(config)
         self.noise_dim = config.model.noise_dim
-        dataset = loader.dataset
+        self.signal_length = config.model.signal_length
 
-        kernel_size = dataset.signal_length // 16  # 4 couches qui multiplient par 2
+        kernel_size = self.signal_length // 16  # 4 couches qui multiplient par 2
 
         self.main = nn.Sequential(
             nn.ConvTranspose1d(self.noise_dim, 512,
@@ -63,17 +63,17 @@ class CNN1DGenerator(Model):
 
 # Générateur
 class Generator(Model):
-    def __init__(self, loader, config: Config) -> None:
-        super(Generator, self).__init__(loader, config)
+    def __init__(self, config: Config) -> None:
+        super(Generator, self).__init__(config)
         noise_dim = config.model.noise_dim
-        dataset = loader.dataset
+        self.signal_length = config.model.signal_length
 
         self.model = nn.Sequential(
             nn.Linear(noise_dim, 128),
             nn.ReLU(),
             nn.Linear(128, 256),
             nn.ReLU(),
-            nn.Linear(256, dataset.signal_length),
+            nn.Linear(256, self.signal_length),
         )
 
     def forward(self, z):
@@ -81,14 +81,14 @@ class Generator(Model):
 
 
 class GruGenerator(Model):
-    def __init__(self, loader, config: Config):
-        super(GruGenerator, self).__init__(loader, config)
+    def __init__(self, config: Config):
+        super(GruGenerator, self).__init__(config)
         self.noise_dim = config.model.noise_dim
         self.hidden_size = config.model.hidden_size
-        dataset = loader.dataset
+        self.signal_length = config.model.signal_length
 
         self.gru = nn.GRU(self.noise_dim, self.hidden_size, batch_first=True)
-        self.fc = nn.Linear(self.hidden_size, dataset.signal_length)
+        self.fc = nn.Linear(self.hidden_size, self.signal_length)
 
     def get_noise(self, n_samples, noise_dim, device="cpu"):
         return torch.randn(n_samples, noise_dim, device=device)

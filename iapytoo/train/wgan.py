@@ -59,10 +59,10 @@ class WGAN(Training):
     def _create_models(self, loader):
         factory = Factory()
         generator = factory.create_model(
-            self._config.model.generator, self._config, loader, self.device
+            self._config.model.generator, self._config, self.device
         )
         discriminator = factory.create_model(
-            self._config.model.discriminator, self._config, loader, self.device
+            self._config.model.discriminator, self._config, self.device
         )
 
         return [generator, discriminator]

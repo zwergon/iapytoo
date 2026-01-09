@@ -29,13 +29,8 @@ class _Dataset(Dataset):
 
 
 class SinDataset(_Dataset):
-    def __init__(self):
-        super().__init__(
-            filename=os.path.join(
-                os.path.dirname(__file__),
-                "./data/sin_wav.csv",
-            )
-        )
+    def __init__(self, filename):
+        super().__init__(filename=filename)
         self.labels_size = 2
 
 

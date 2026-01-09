@@ -3,20 +3,28 @@ import numpy as np
 from PIL import Image
 import tempfile
 
-from iapytoo.dataset.transform import to_numpy
-from generator import GruGenerator
+from iapytoo.train.inference import get_model_uri
 from mlflow.tracking import MlflowClient
 
 
 if __name__ == "__main__":
+    import argparse
     import mlflow.pyfunc as mp
     import matplotlib.pyplot as plt
-    run_id = "6fcdac611218488892a89222e0dfcacb"
 
-    logged_model = f'runs:/{run_id}/model_step_0'
+    parser = argparse.ArgumentParser(
+        description="Load an MLflow model from a run_id"
+    )
+    parser.add_argument(
+        "--run-id",
+        required=True,
+        help="MLflow run_id (e.g. 34d327ae3df54519bef59687fb5d7622)",
+    )
+    args = parser.parse_args()
+    logged_model = get_model_uri(args.run_id)
 
     client = MlflowClient()
-    run = client.get_run(run_id)
+    run = client.get_run(args.run_id)
 
     noise_dim = int(run.data.params['model.noise_dim'])
 

@@ -9,11 +9,11 @@ from wind_gan.generator import CNN1DInitiator
 
 
 class CNN1DDiscriminator(Model):
-    def __init__(self, loader, config: Config):
-        super(CNN1DDiscriminator, self).__init__(loader, config)
-        dataset = loader.dataset
+    def __init__(self, config: Config):
+        super(CNN1DDiscriminator, self).__init__(config)
+        self.signal_length = config.model.signal_length
 
-        kernel_size = dataset.signal_length // 16  # 4 couches qui multiplient par 2
+        kernel_size = self.signal_length // 16  # 4 couches qui multiplient par 2
         self.main = nn.Sequential(
             # input kernel_size*16
             nn.Conv1d(1, 64, kernel_size=4, stride=2, padding=1, bias=False),
@@ -47,11 +47,11 @@ class CNN1DDiscriminator(Model):
 
 
 class GruDiscriminator(Model):
-    def __init__(self, loader, config: Config):
-        super(GruDiscriminator, self).__init__(loader, config)
+    def __init__(self, config: Config):
+        super(GruDiscriminator, self).__init__(config)
         self.hidden_size = config.model.hidden_size
-        dataset = loader.dataset
-        self.gru = nn.GRU(dataset.signal_length,
+        self.signal_length = config.model.signal_length
+        self.gru = nn.GRU(self.signal_length,
                           self.hidden_size, batch_first=True)
         self.fc = nn.Linear(self.hidden_size, 1)
 
@@ -68,12 +68,12 @@ class GruDiscriminator(Model):
 
 # Discriminateur utilisant la DFTLayer
 class DFTCritic(Model):
-    def __init__(self, loader, config) -> None:
-        super().__init__(loader, config)
-        dataset = loader.dataset
-        self.dft_layer = DFTLayer(dataset.signal_length)
+    def __init__(self, config) -> None:
+        super().__init__(config)
+        self.signal_length = config.model.signal_length
+        self.dft_layer = DFTLayer(self.signal_length)
         self.model = nn.Sequential(
-            nn.Linear(dataset.signal_length, 256),
+            nn.Linear(self.signal_length, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
             nn.ReLU(),

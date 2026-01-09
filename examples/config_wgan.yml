@@ -3,7 +3,7 @@ run: cnn1d
 tracking_uri: null
 
 dataset:
-  path: "useless"
+  path: "./data/sin_wave.csv"
   num_workers: 2
   batch_size: 128
 
@@ -17,6 +17,7 @@ model:
   hidden_size: 128
   n_critic: 5
   noise_dim: 20
+  signal_length: 600
   lambda_gp: 10
 
 training:

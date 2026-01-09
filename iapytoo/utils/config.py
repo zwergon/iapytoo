@@ -225,18 +225,6 @@ class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _PlottersT, _Mo
     def __str__(self):
         return self.__repr__()
 
-    @staticmethod
-    def default_path():
-        return os.path.join(os.path.dirname(__file__), "cf", "config.json")
-
-    @staticmethod
-    def default_config():
-        return Config(Config.default_path())
-
-    @staticmethod
-    def test_config():
-        return Config(os.path.join(os.path.dirname(__file__), "cf", "config_test.json"))
-
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         # initialize root logger

@@ -26,10 +26,19 @@ def get_model_input(idx=0):
 
 
 if __name__ == "__main__":
+    import argparse
     import mlflow.pyfunc as mp
-    run_id = "34d327ae3df54519bef59687fb5d7622"
 
-    logged_model = get_model_uri(run_id)
+    parser = argparse.ArgumentParser(
+        description="Load an MLflow model from a run_id"
+    )
+    parser.add_argument(
+        "--run-id",
+        required=True,
+        help="MLflow run_id (e.g. 34d327ae3df54519bef59687fb5d7622)",
+    )
+    args = parser.parse_args()
+    logged_model = get_model_uri(args.run_id)
 
     # Load model as a PyFuncModel.
     loaded_model: mp.PyFuncModel = mlflow.pyfunc.load_model(logged_model)

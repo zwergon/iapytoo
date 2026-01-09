@@ -12,8 +12,8 @@ from iapytoo.train.mlflow_model import MlflowTransform, IMlfowModelProvider
 
 
 class MnistModel(Model):
-    def __init__(self, loader, config: Config):
-        super(MnistModel, self).__init__(loader, config)
+    def __init__(self, config: Config):
+        super(MnistModel, self).__init__(config)
         self.conv1 = nn.Conv2d(1, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 64, 3, 1)
         self.dropout1 = nn.Dropout(0.25)
