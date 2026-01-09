@@ -5,7 +5,7 @@ from iapytoo.predictions.plotters import ConfusionPlotter
 from iapytoo.train.factories import Factory
 from iapytoo.utils.config import ConfigFactory, Config
 from iapytoo.train.training import Training
-from iapytoo.train.mlflow_model import MlflowTransform, IMlfowModelProvider
+from iapytoo.train.mlflow_model import MlflowTransform, MlfowModelProvider
 
 from examples.subclasses import MnistModel, MnistScheduler, MnistMlfowModel
 
@@ -15,7 +15,9 @@ class MnistTraining(Training):
     def __init__(self, config: Config) -> None:
         super().__init__(config)
         self.predictions.add_plotter(ConfusionPlotter())
-        self.mlflow_model_provider: IMlfowModelProvider = MnistMlfowModel()
+
+    def create_mlflow_provider(self, config: Config) -> MlfowModelProvider:
+        return MnistMlfowModel(config)
 
 
 if __name__ == "__main__":
@@ -39,7 +41,7 @@ if __name__ == "__main__":
     Training.seed(config)
 
     training = MnistTraining(config)
-    mflow_transform: MlflowTransform = training.get_transform()
+    mflow_transform: MlflowTransform = training.transform
     train_dataset = datasets.MNIST(
         config.dataset.path,
         train=True,

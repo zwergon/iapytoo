@@ -8,7 +8,8 @@ from iapytoo.train.factories import Factory
 
 from torch.utils.data import DataLoader
 from iapytoo.utils.config import Config, ConfigFactory
-from iapytoo.train.mlflow_model import IMlfowModelProvider
+from iapytoo.utils.model_config import GanConfig
+from iapytoo.train.mlflow_model import MlfowModelProvider
 from iapytoo.train.wgan import WGAN
 
 from examples.wgan.dataset import SinDataset, LatentDataset
@@ -16,27 +17,29 @@ from examples.wgan.critic import CNN1DDiscriminator, GruDiscriminator, DFTCritic
 from examples.wgan.generator import CNN1DGenerator, GruGenerator
 
 
-class WindProvider(IMlfowModelProvider):
+class WindProvider(MlfowModelProvider):
 
     def __init__(self, config: Config):
-        self.config = config
+        model_config: GanConfig = config.model
+        self._input_example = np.random.rand(model_config.noise_dim)
 
+    # override
     def code_definition(self) -> dict:
         return {
             "path": str(Path(__file__).parent / "examples"),
-            "module": "examples.wgan.generator",
-            "model_cls": "GruGenerator"
+            "model": {
+                "module": "examples.wgan.generator",
+                "class": "GruGenerator"
+            }
         }
-
-    def get_input_example(self) -> np.array:
-        # Example shape for input noise signal
-        return np.random.rand(self.config.model.noise_dim)
 
 
 class WindGan(WGAN):
     def __init__(self, config: Config):
         super().__init__(config)
-        self.mlflow_model_provider = WindProvider(config)
+
+    def create_mlflow_provider(self, config: Config) -> MlfowModelProvider:
+        return WindProvider(config)
 
 
 if __name__ == "__main__":

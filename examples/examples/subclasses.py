@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from iapytoo.dataset.transform import MeanNormalize
 from iapytoo.train.factories import Model, Scheduler
 from iapytoo.utils.config import Config
-from iapytoo.train.mlflow_model import MlflowTransform, IMlfowModelProvider
+from iapytoo.train.mlflow_model import MlflowTransform, MlfowModelProvider
 
 
 class MnistModel(Model):
@@ -53,38 +53,28 @@ class MnistScheduler(Scheduler):
 
 class MnistTransform(MlflowTransform):
 
-    def __init__(self) -> None:
-        super().__init__(
-            transform=MeanNormalize(0.1307, 0.3081))
-
-    # override
-    def __call__(self, model_input, *args, **kwds) -> np.array:
-        return self.transform(model_input)
+    def __init__(self, config: Config) -> None:
+        super().__init__(config, transform=MeanNormalize(0.1307, 0.3081))
 
 
-class MnistMlfowModel(IMlfowModelProvider):
+class MnistMlfowModel(MlfowModelProvider):
 
-    def __init__(self):
-        X = np.random.rand(1, 28, 28)
-        Y = np.zeros(shape=(1,), dtype=np.int64)
-        self.input_example = X
-        self.transform: MlflowTransform = MnistTransform()
+    def __init__(self, config: Config):
+        super().__init__(config)
+        self._input_example = np.random.rand(1, 28, 28)
+        self._transform: MlflowTransform = MnistTransform(config)
 
     # override
     def code_definition(self) -> dict:
         from pathlib import Path
         return {
             "path": str(Path(__file__).parent),
-            "module": "examples.subclasses",
-            "model_cls": "MnistModel",
-            "transform_cls": "MnistTransform"
+            "model": {
+                "module": "examples.subclasses",
+                "class": "MnistModel"
+            },
+            "transform": {
+                "module": "examples.subclasses",
+                "class": "MnistTransform"
+            }
         }
-
-    # override
-
-    def get_transform(self) -> MlflowTransform:
-        return self.transform
-
-    # override
-    def get_input_example(self) -> np.array:
-        return self.input_example

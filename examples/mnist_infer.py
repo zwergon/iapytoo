@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     inference = MnistInference(config)
 
-    transform: MlflowTransform = inference.get_transform()
+    transform: MlflowTransform = inference.transform
 
     dataset_config: DatasetConfig = config.dataset
 

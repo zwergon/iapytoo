@@ -10,38 +10,49 @@ from typing import Any
 
 import numpy as np
 import mlflow.pyfunc as mp
+from abc import ABC, abstractmethod
 
 
-from iapytoo.utils.config import Config, ModelConfig, ConfigFactory
+from iapytoo.utils.config import Config, ModelConfig, ConfigFactory, DatasetConfigFactory
 from iapytoo.train.factories import Factory, Model
 from iapytoo.train.valuator import Valuator
 from iapytoo.predictions.predictors import Predictor
 
 
-class MlflowTransform:
+class MlflowTransform(ABC):
 
-    def __init__(self, transform):
+    @abstractmethod
+    def __init__(self, config: Config, transform=None):
         self.transform = transform
 
     def __call__(self, model_input, *args, **kwds) -> np.array:
-        raise NotImplementedError
+        assert self.transform is not None, "use a MlTransform without a true tranform definition"
+        return self.transform(model_input)
 
 
-class IMlfowModelProvider:
+class MlfowModelProvider(ABC):
+
+    @abstractmethod
+    def __init__(self, config: Config) -> None:
+        self._input_example = None
+        self._transform = None
 
     @property
     def code_path(self) -> str:
         code_definition = self.code_definition()
         return code_definition.get("path", None)
 
+    @abstractmethod
     def code_definition(self) -> dict:
-        return {}
+        pass
 
-    def get_input_example(self) -> np.array:
-        return None  # by default no input example
+    @property
+    def input_example(self) -> np.array:
+        return self._input_example
 
-    def get_transform(self) -> MlflowTransform:
-        return None  # by default no transform
+    @property
+    def transform(self) -> MlflowTransform:
+        return self._transform
 
 
 class _MlflowModelPrivate:
@@ -49,8 +60,6 @@ class _MlflowModelPrivate:
     @staticmethod
     def from_context(mlflow_model: '_MlflowModelPrivate', context: mp.PythonModelContext):
         private = _MlflowModelPrivate()
-
-        config = ConfigFactory.from_yaml(context.artifacts["config"])
 
         code_definition_path = context.artifacts.get("code_definition", None)
 
@@ -61,18 +70,32 @@ class _MlflowModelPrivate:
 
         sys.path.insert(0, context.artifacts["zip"])
 
-        module = importlib.import_module(code_definition["module"])
+        if "config" in code_definition:
+            module = importlib.import_module(
+                code_definition["config"]["module"])
+            if "dataset" in code_definition["config"]:
+                key = code_definition["config"]["dataset"]
+                dataset_config_cls = getattr(module, key)
+                DatasetConfigFactory().register_dataset_config(
+                    key, dataset_config_cls)
 
-        assert "model_cls" in code_definition, "a class of model is required to load the model"
-        model_cls = getattr(module, code_definition["model_cls"])
+        config = ConfigFactory.from_yaml(context.artifacts["config"])
+
+        module = importlib.import_module(code_definition["model"]["module"])
+
+        assert "model" in code_definition, "a class of model is required to load the model"
+        model_cls = getattr(module, code_definition["model"]["class"])
 
         private.model = model_cls(config=config)
         private.model.load_state_dict(torch.load(
             context.artifacts["model"], weights_only=True))
 
-        if "transform_cls" in code_definition:
-            transform_cls = getattr(module, code_definition["transform_cls"])
-            private.transform = transform_cls()
+        if "transform" in code_definition:
+            module = importlib.import_module(
+                code_definition["transform"]["module"])
+            transform_cls = getattr(
+                module, code_definition["transform"]["class"])
+            private.transform = transform_cls(config=config)
         else:
             private.transform = None
 
@@ -191,7 +214,7 @@ def zip_codes(code_path: dict, zip_path):
 
 def save_mlflow_model(config: Config,
                       model: Model,
-                      provider: IMlfowModelProvider = None,
+                      provider: MlfowModelProvider = None,
                       epoch=0):
 
     model_config: ModelConfig = config.model
@@ -234,10 +257,9 @@ def save_mlflow_model(config: Config,
             kwargs["artifact_path"] = f"model_step_{epoch}"
 
         if provider is not None:
-            input_example = provider.get_input_example()
-            if input_example is not None:
+            if provider.input_example is not None:
                 input_path = os.path.join(tmpdir, "input_example.npy")
-                np.save(input_path, input_example)
+                np.save(input_path, provider.input_example)
 
                 kwargs["input_example"] = [MlflowModel.INPUT_EXAMPLE]
                 artifacts["input_example"] = input_path
