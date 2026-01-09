@@ -1,6 +1,6 @@
 project: "iapytoo"
 run: "run"
-tracking_uri: null
+tracking_uri: "./mlruns"
 checkpoint_epoch: 2
 plotting_mean: "ewm"
 save_model: true

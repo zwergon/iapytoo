@@ -5,6 +5,17 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from dataclasses import dataclass, field
+from typing import Callable, Any, List
+from enum import IntEnum
+
+
+class StepStatus(IntEnum):
+    FAIL = -1
+    OK = 0
+    TEST = 2
+    SKIP = 3
+
 
 PYTHON = sys.executable
 root_dir = Path(__file__).parent
@@ -12,102 +23,127 @@ root_dir = Path(__file__).parent
 tmp_dir = root_dir / 'tmp'
 
 
-mnist_script = root_dir / "mnist.py"
-mnist_config = root_dir / "config_mnist.yml"
-
-infer_config_template = root_dir / "config_infer.yml"
-tmp_infer_config = tmp_dir / "tmp.yml"
-
-mnist_infer_script = root_dir / "mnist_infer.py"
-mlflow_infer_script = root_dir / "mlflow_infer.py"
-
-# ---------- Étape 1 ----------
+class StepEnum(IntEnum):
+    MNIST = 0
+    MNIST_AGAIN = 1
+    MNIST_INFER = 2
+    MNIST_MLFLOW = 3
+    WGAN = 4
+    WGAN_AGAIN = 5
+    WGAN_MLFLOW = 6
 
 
-def run_mnist():
-    log_file = tmp_dir / "mnist.log"
-    try:
-        print("Lancement de mnist.py ... (log -> mnist.log)")
-        with open(log_file, "w") as f:
-            result = subprocess.run([PYTHON, mnist_script, "--yaml", mnist_config],
-                                    stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
-        # lire le log pour extraire run_id
-        with open(log_file, "r") as f:
+# mnist, mnist_again, mnist_infer, mnist_mlflow_infer, wgan_train, wgan_mlflow
+actions = [True] * 7
+# actions[StepEnum.MNIST] = False
+# actions[StepEnum.MNIST_AGAIN] = False
+actions[StepEnum.MNIST_INFER] = False
+# actions[StepEnum.MNIST_MLFLOW] = False
+# actions[StepEnum.WGAN] = False
+actions[StepEnum.WGAN_AGAIN] = False
+# actions[StepEnum.WGAN_MLFLOW] = False
+
+
+@dataclass
+class Step:
+    name: str
+    func: Callable[..., Any]
+    script: Path | None = None
+    config: Path | None = None
+    log_file: Path | None = None
+    needs_run_id: bool = False
+    returns_run_id: bool = False
+    extra_args: List[str] = field(default_factory=list)
+    status: StepStatus = StepStatus.SKIP
+
+    def _extract_run_id(self):
+        with open(self.log_file, "r") as f:
             for line in f:
                 match = re.search(r"Run_id:\s*([a-f0-9]+)", line)
                 if match:
                     run_id = match.group(1)
                     print(f"Run_id trouvé : {run_id}")
                     return 0, run_id
-        print("Erreur : run_id introuvable dans mnist.log")
-        return 1, None
-    except subprocess.CalledProcessError as e:
-        print(f"Erreur lors de l'exécution de mnist.py (voir {log_file})")
+        print(f"Erreur : run_id introuvable dans {self.log_file}")
         return 1, None
 
-# ---------- Étape 1 bis----------
+
+def create_tmp_yaml(step: Step, run_id):
+
+    tmp_config = tmp_dir / "tmp.yml"
+    shutil.copyfile(step.config, tmp_config)
+    with open(tmp_config, "r") as f:
+        cfg = yaml.safe_load(f)
+    cfg.setdefault("model", {})["run_id"] = run_id
+    with open(tmp_config, "w") as f:
+        yaml.safe_dump(cfg, f)
+    print(f"tmp.yaml créé avec run_id {run_id}")
+    return tmp_config
 
 
-def run_mnist_again(run_id):
-    log_file = tmp_dir / "mnist_again.log"
+# ---------- Étape 1 ----------
+
+def run_train(step: Step):
     try:
-        print("Lancement de mnist.py ... (log -> mnist_again.log)")
-        with open(log_file, "w") as f:
-            result = subprocess.run([PYTHON, mnist_script, "--run-id",  run_id, "--epochs", "4"],
+        print(f"Lancement de {step.name} ... (log -> {step.log_file})")
+        with open(step.log_file, "w") as f:
+            result = subprocess.run([PYTHON, step.script, "--yaml", step.config],
                                     stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
-        return 0
+        if step.returns_run_id:
+            return step._extract_run_id()
+
     except subprocess.CalledProcessError as e:
-        print(f"Erreur lors de l'exécution de mnist.py (voir {log_file})")
-        return 1
+        print(
+            f"Erreur lors de l'exécution de mnist.py (voir {step.log_file})")
+        return 1, None
 
 # ---------- Étape 2 ----------
 
 
-def create_tmp_yaml(run_id):
+def run_train_again(step: Step, run_id):
     try:
-        shutil.copyfile(infer_config_template, tmp_infer_config)
-        with open(tmp_infer_config, "r") as f:
-            cfg = yaml.safe_load(f)
-        cfg.setdefault("model", {})["run_id"] = run_id
-        with open(tmp_infer_config, "w") as f:
-            yaml.safe_dump(cfg, f)
-        print(f"tmp.yaml créé avec run_id {run_id}")
+        print(f"Lancement de {step.name} ... (log -> {step.log_file})")
+        with open(step.log_file, "w") as f:
+            subprocess.run([PYTHON, step.script, "--run-id",  run_id] + step.extra_args,
+                           stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
         return 0
-    except Exception as e:
-        print(f"Erreur lors de la création de tmp.yaml : {e}")
+    except subprocess.CalledProcessError as e:
+        print(f"Erreur lors de l'exécution de mnist.py (voir {step.log_file})")
         return 1
+
 
 # ---------- Étape 3 ----------
 
 
-def run_mnist_infer():
-    log_file = tmp_dir / "mnist_infer.log"
+def run_mnist_infer(step: Step, run_id):
     try:
-        print("Lancement de mnist_infer.py ... (log -> mnist_infer.log)")
-        with open(log_file, "w") as f:
-            subprocess.run([PYTHON, mnist_infer_script, "--yaml", tmp_infer_config],
+        print(f"Lancement de {step.name} ... (log -> {step.log_file})")
+
+        tmp_config = create_tmp_yaml(step, run_id=run_id)
+        with open(step.log_file, "w") as f:
+            subprocess.run([PYTHON, step.script, "--yaml", tmp_config],
                            stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
         return 0
     except subprocess.CalledProcessError as e:
         print(
-            f"Erreur lors de l'exécution de mnist_infer.py (voir {log_file})")
+            f"Erreur lors de l'exécution de mnist_infer.py (voir {step.log_file})")
         return 1
+
 
 # ---------- Étape 4 ----------
 
-
-def run_mlflow_infer(run_id):
-    log_file = tmp_dir / "mlflow_infer.log"
+def run_mlflow_infer(step: Step, run_id):
     try:
-        print("Lancement de mlflow_infer.py ... (log -> mlflow_infer.log)")
-        with open(log_file, "w") as f:
-            subprocess.run([PYTHON, mlflow_infer_script, run_id],
+        print(f"Lancement de {step.name} ... (log -> {step.log_file})")
+        with open(step.log_file, "w") as f:
+            subprocess.run([PYTHON, step.script, "--run-id", run_id] + step.extra_args,
                            stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
         return 0
     except subprocess.CalledProcessError as e:
         print(
-            f"Erreur lors de l'exécution de mlflow_infer.py (voir {log_file})")
+            f"Erreur lors de l'exécution de mlflow_infer.py (voir {step.log_file})")
         return 1
+
 
 # ---------- Main ----------
 
@@ -117,29 +153,88 @@ def main():
 
     os.makedirs(tmp_dir, exist_ok=True)
 
-    code, run_id = run_mnist()
-    status['run_mnist'] = "OK" if code == 0 else "FAIL"
+    steps = [
+        Step(
+            name="mnist_train",
+            func=run_train,
+            script=root_dir / "mnist.py",
+            config=root_dir / "config_mnist.yml",
+            log_file=tmp_dir / "mnist.log",
+            returns_run_id=True
+        ),
+        Step(
+            name="mnist_train_again",
+            func=run_train_again,
+            script=root_dir / "mnist.py",
+            config=root_dir / "config_mnist.yml",
+            log_file=tmp_dir / "mnist_again.log",
+            needs_run_id=True,
+            extra_args=["--epochs", "4"]
+        ),
+        Step(
+            name="mnist_infer",
+            func=run_mnist_infer,
+            script=root_dir / "mnist_infer.py",
+            config=root_dir / "config_infer.yml",
+            log_file=tmp_dir / "mnist_infer.log",
+            needs_run_id=True
+        ),
+        Step(
+            name="mnist_mlflow_infer",
+            func=run_mlflow_infer,
+            script=root_dir / "mlflow_infer.py",
+            log_file=tmp_dir / "mnist_mlflow_infer.log",
+            needs_run_id=True
+        ),
+        Step(
+            name="wgan_train",
+            func=run_train,
+            script=root_dir / "wgan_train.py",
+            config=root_dir / "config_wgan.py",
+            log_file=tmp_dir / "wgan_train.log",
+            returns_run_id=True
+        ),
+        Step(name="wgan_again",
+             func=run_train_again,
+             script=root_dir / "wgan_train.py",
+             config=root_dir / "config_wgan.py",
+             log_file=tmp_dir / "wgan_again.log",
+             needs_run_id=True,
+             extra_args=["--epochs", "20"]
+             ),
+        Step(
+            name="wgan_mlflow_infer",
+            func=run_mlflow_infer,
+            script=root_dir / "wgan_infer.py",
+            log_file=tmp_dir / "wgan_infer.log",
+            needs_run_id=True,
+            extra_args=["--output", str(tmp_dir / "prediction.jpg")]
+        )
+    ]
 
-    if code == 0:
-        code = run_mnist_again(run_id)
-    status['run_mnist_again'] = "OK" if code == 0 else "FAIL"
+    for step, action in zip(steps, actions):
+        step.status = StepStatus.TEST if action else StepStatus.SKIP
 
-    if code == 0:
-        code = create_tmp_yaml(run_id)
-    status['create_tmp_yaml'] = "OK" if code == 0 else "FAIL"
+    run_id = None
 
-    if code == 0:
-        code = run_mnist_infer()
-    status['run_mnist_infer'] = "OK" if code == 0 else "FAIL"
+    for step in steps:
+        if step.status != StepStatus.TEST:
+            print(f"skip {step.name}")
+            continue
+        if step.needs_run_id:
+            code = step.func(step, run_id)
+        else:
+            result = step.func(step)
+            code, run_id = result if step.returns_run_id else (result, run_id)
 
-    if code == 0:
-        code = run_mlflow_infer(run_id)
-    status['run_mlflow_infer'] = "OK" if code == 0 else "FAIL"
+        step.status = StepStatus.OK if code == 0 else StepStatus.FAIL
+
+        if code != 0:
+            break
 
     print("\n=== Résumé des étapes ===")
-    for k, v in status.items():
-        print(f"{k}: {v}")
-    print("\nLogs disponibles : mnist.log, mnist_infer.log, mlflow_infer.log")
+    for step in steps:
+        print(f"{step.name}: {step.status.name}")
 
 
 if __name__ == "__main__":

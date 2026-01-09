@@ -20,6 +20,12 @@ if __name__ == "__main__":
         required=True,
         help="MLflow run_id (e.g. 34d327ae3df54519bef59687fb5d7622)",
     )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="prediction.jpg",
+        help="output filenane for one generated output",
+    )
     args = parser.parse_args()
     logged_model = get_model_uri(args.run_id)
 
@@ -35,5 +41,5 @@ if __name__ == "__main__":
     predicted = loaded_model.predict([model_input])
     plt.figure()
     plt.plot(predicted[0, 0, :])
-    plt.savefig("prediction.jpg", dpi=300, bbox_inches="tight")
+    plt.savefig(args.output, dpi=300, bbox_inches="tight")
     plt.close()

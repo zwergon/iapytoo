@@ -1,6 +1,6 @@
 project: wgan
 run: cnn1d
-tracking_uri: null
+tracking_uri: "./mlruns"
 
 dataset:
   path: "./data/sin_wave.csv"

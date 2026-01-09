@@ -1,6 +1,6 @@
 project: "iapytoo"
 run: "infer"
-tracking_uri: null
+tracking_uri: "./mlruns"
 
 dataset:
   path: "../data"
