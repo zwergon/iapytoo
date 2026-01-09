@@ -4,7 +4,9 @@ from iapytoo.predictions.plotters import ConfusionPlotter
 from iapytoo.utils.config import Config, ConfigFactory, DatasetConfig
 
 from iapytoo.train.inference import MLFlowInference
-from iapytoo.train.mlflow_model import MlflowTransform
+from iapytoo.train.mlflow_model import MlflowTransform, MlfowModelProvider
+
+from examples.subclasses import MnistMlfowModel
 
 
 class MnistInference(MLFlowInference):
@@ -12,13 +14,16 @@ class MnistInference(MLFlowInference):
         super().__init__(config)
         self.predictions.add_plotter(ConfusionPlotter())
 
+    def create_mlflow_provider(self, config: Config) -> MlfowModelProvider:
+        return MnistMlfowModel(config)
+
 
 if __name__ == "__main__":
     import os
+    from iapytoo.utils.arguments import parse_args
 
-    # INPUT Parameters
-    config = ConfigFactory.from_yaml(os.path.join(
-        os.path.dirname(__file__), "config_infer.yml"))
+    args = parse_args()
+    config = ConfigFactory.from_yaml(args.yaml)
 
     inference = MnistInference(config)
 

@@ -36,8 +36,8 @@ class StepEnum(IntEnum):
 # mnist, mnist_again, mnist_infer, mnist_mlflow_infer, wgan_train, wgan_mlflow
 actions = [True] * 7
 # actions[StepEnum.MNIST] = False
-# actions[StepEnum.MNIST_AGAIN] = False
-actions[StepEnum.MNIST_INFER] = False
+actions[StepEnum.MNIST_AGAIN] = False
+# actions[StepEnum.MNIST_INFER] = False
 # actions[StepEnum.MNIST_MLFLOW] = False
 # actions[StepEnum.WGAN] = False
 actions[StepEnum.WGAN_AGAIN] = False
