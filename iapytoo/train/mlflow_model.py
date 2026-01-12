@@ -68,8 +68,6 @@ class _MlflowModelPrivate:
         with open(code_definition_path, "r") as file:
             code_definition = yaml.safe_load(file)
 
-        sys.path.insert(0, context.artifacts["zip"])
-
         if "config" in code_definition:
             module = importlib.import_module(
                 code_definition["config"]["module"])
@@ -198,6 +196,9 @@ class MlflowModel(mp.PythonModel):
 
         predictions = self.ml_predictor(outputs_tensor)
 
+        if isinstance(predictions, torch.Tensor):
+            predictions = predictions.detach().cpu().numpy()
+
         return predictions
 
 
@@ -246,7 +247,7 @@ def save_mlflow_model(config: Config,
         kwargs = {
             "python_model": MlflowModel(metadata),
             "extra_pip_requirements": config.inference_pip_requirements,
-            "code_paths": config.inference_extra_paths,
+            # "code_paths": config.inference_extra_paths,
             "conda_env": None,
             "artifacts": artifacts
         }
@@ -267,14 +268,12 @@ def save_mlflow_model(config: Config,
             code_definition = provider.code_definition()
             if code_definition:
                 if provider.code_path is not None:
-                    zip_path = os.path.join(tmpdir, "code.zip")
-                    zip_codes(provider.code_path, zip_path)
-                    artifacts["zip"] = zip_path
 
                     specs_path = os.path.join(tmpdir, "code_definition.yml")
                     with open(specs_path, "w") as file:
                         yaml.safe_dump(code_definition, file)
                     artifacts["code_definition"] = specs_path
+                    kwargs['code_paths'] = [provider.code_path]
                 else:
                     raise ValueError(
                         "code_path must be set in provider if code_definition is given"
