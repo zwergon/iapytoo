@@ -1,0 +1,23 @@
+API
+====
+
+.. autoclass:: iapytoo.utils.config.Config
+    :members:
+    :undoc-members:
+
+.. autoclass:: iapytoo.train.factories.Model
+    :members:
+    :undoc-members:
+
+
+.. autoclass:: iapytoo.train.mlflow_model.MlflowTransform
+    :members:
+    :undoc-members:
+
+
+.. autoclass:: iapytoo.train.mlflow_model.MlfowModelProvider
+    :members:
+    :undoc-members:
+
+
+    

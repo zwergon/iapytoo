@@ -31,27 +31,99 @@ class MlflowTransform(ABC):
 
 
 class MlfowModelProvider(ABC):
+    """
+    Abstract base class defining how an MLflow-deployable model is described.
+
+    This class is responsible for providing all metadata required to package
+    a trained model as an MLflow ``pyfunc`` model, including:
+
+    - the Python code to ship with the model
+    - an optional input example
+    - an optional input/output transformation
+
+    Subclasses must implement :meth:`code_definition` and define how the model
+    is exposed for inference.
+    """
 
     @abstractmethod
     def __init__(self, config: Config) -> None:
+        """
+        Initialize the model provider.
+
+        Args:
+            config (Config): Global experiment configuration object.
+        """
         self._input_example = None
         self._transform = None
 
     @property
     def code_path(self) -> str:
+        """
+        Return the path to the Python code defining the MLflow model.
+
+        The path is extracted from the dictionary returned by
+        :meth:`code_definition`.
+
+        Returns:
+            str: Path to the code directory or file to be packaged with the
+            MLflow model, or ``None`` if not defined.
+        """
         code_definition = self.code_definition()
         return code_definition.get("path", None)
 
     @abstractmethod
     def code_definition(self) -> dict:
+        """
+        Describe the Python code required for MLflow model packaging.
+
+        This method must return a dictionary describing how the inference
+        code should be shipped with the MLflow model.
+
+        Example:
+            Valid code definition dictionary::
+
+                {
+                    "path": str(Path(__file__).parent),
+                    "model": {
+                        "module": "examples.subclasses",
+                        "class": "MnistModel"
+                    },
+                    "transform": {
+                        "module": "examples.subclasses",
+                        "class": "MnistTransform"
+                    }
+                }
+
+
+        Returns:
+            dict: Code definition used during MLflow model logging.
+        """
         pass
 
     @property
     def input_example(self) -> np.array:
+        """
+        Return an example input for the MLflow model.
+
+        This example is used by MLflow to infer the model signature and to
+        validate the input format during deployment.
+
+        Returns:
+            numpy.ndarray: Example input array, or ``None`` if not defined.
+        """
         return self._input_example
 
     @property
     def transform(self) -> MlflowTransform:
+        """
+        Return the input/output transformation used for MLflow inference.
+
+        The transform is applied before and/or after calling the model
+        ``predict`` method when serving the model with MLflow.
+
+        Returns:
+            MlflowTransform: Transformation object, or ``None`` if not defined.
+        """
         return self._transform
 
 
