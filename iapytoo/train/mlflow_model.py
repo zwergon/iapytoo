@@ -13,21 +13,16 @@ import mlflow.pyfunc as mp
 from abc import ABC, abstractmethod
 
 
-from iapytoo.utils.config import Config, ModelConfig, ConfigFactory, DatasetConfigFactory
-from iapytoo.train.factories import Factory, Model
+from iapytoo.utils.config import (
+    Config,
+    ModelConfig,
+    ConfigFactory,
+    DatasetConfigFactory
+)
+from iapytoo.train.factories import Factory
+from iapytoo.train.model import Model
 from iapytoo.train.valuator import Valuator
 from iapytoo.predictions.predictors import Predictor
-
-
-class MlflowTransform(ABC):
-
-    @abstractmethod
-    def __init__(self, config: Config, transform=None):
-        self.transform = transform
-
-    def __call__(self, model_input, *args, **kwds) -> np.array:
-        assert self.transform is not None, "use a MlTransform without a true tranform definition"
-        return self.transform(model_input)
 
 
 class MlfowModelProvider(ABC):
@@ -272,17 +267,6 @@ class MlflowModel(mp.PythonModel):
             predictions = predictions.detach().cpu().numpy()
 
         return predictions
-
-
-def zip_codes(code_path: dict, zip_path):
-    import zipfile
-    from pathlib import Path
-
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        base_dir = Path(code_path)
-        for file in base_dir.rglob("*.py"):
-            arcname = file.relative_to(base_dir)
-            zipf.write(file, arcname=arcname)
 
 
 def save_mlflow_model(config: Config,

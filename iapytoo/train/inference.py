@@ -63,7 +63,7 @@ class Inference(ABC):
         return self.mlflow_model_provider.transform
 
     @abstractmethod
-    def _create_models(self, loader):
+    def _create_models(self):
         pass
 
     def create_mlflow_provider(self, config: Config) -> MlfowModelProvider:
@@ -114,7 +114,7 @@ class MLFlowInference(Inference):
         self.mlflow_model: MlflowModel = mlflow.pyfunc.load_model(
             model_uri).unwrap_python_model()
 
-    def _create_models(self, loader):
+    def _create_models(self):
         model = self.mlflow_model.model
         model.to(self.device)
         return [model]

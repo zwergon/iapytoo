@@ -3,6 +3,11 @@ import torch
 from iapytoo.utils.config import Config
 
 
+class MetricError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
 class Metric:
     def __init__(self, name, config: Config, with_target=True):
         from iapytoo.train.factories import Factory

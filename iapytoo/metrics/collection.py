@@ -1,10 +1,10 @@
 from iapytoo.utils.config import Config
-from iapytoo.metrics.metric import Metric
+from iapytoo.metrics.metric import Metric, MetricError
 
 
 class MetricsCollection(Metric):
     def __init__(self, tag: str, metric_names: list[str], config: Config):
-        from iapytoo.train.factories import Factory, MetricError
+        from iapytoo.train.factories import Factory
         super().__init__(tag, config)
         self.metrics = {}
         try:

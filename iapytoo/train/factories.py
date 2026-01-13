@@ -1,145 +1,58 @@
-import torch
 import torch.nn as nn
 from iapytoo.utils.singleton import singleton
-import torch.optim as to
-from torch.optim.lr_scheduler import StepLR
-from iapytoo.predictions.predictors import Predictor, MaxPredictor
-from iapytoo.train.valuator import ModelValuator, WGANValuator
-from iapytoo.metrics.metric import Metric
-from iapytoo.metrics.predefined import R2Metric, RMSMetric, AccuracyMetric, MSMetric
 
-from iapytoo.utils.config import Config, TrainingConfig
+from iapytoo.utils.config import Config
 
+from iapytoo.train.loss import Loss
 
-# Model
+from iapytoo.train.optimizer import (
+    Optimizer,
+    AdamOptimizer,
+    SGDOptimizer,
+    RMSpropOptimizer,
+    OptimizerError,
+)
 
-class WeightInitiator:
-    def __call__(self, m):
-        """method to be overloaded for weight initialization by use of 'model.apply(initiator)'"""
-        classname = m.__class__.__name__
-        print(f"init {classname}")
+from iapytoo.train.model import (
+    Model,
+    ModelError
+)
 
+from iapytoo.metrics.metric import (
+    Metric,
+    MetricError
+)
 
-class Model(nn.Module):
-    """
-    The base class for all trainable models in iapytoo.
+from iapytoo.metrics.predefined import (
+    R2Metric,
+    RMSMetric,
+    AccuracyMetric,
+    MSMetric
+)
+from iapytoo.train.scheduler import (
+    Scheduler,
+    StepScheduler,
+    SchedulerError
+)
 
-    Users must subclass this class to define:
+from iapytoo.predictions.predictors import (
+    Predictor,
+    MaxPredictor
+)
 
-    - the neural architecture
-    - how raw model outputs are transformed into predictions
+from iapytoo.train.valuator import (
+    Valuator,
+    ModelValuator,
+    WGANValuator
+)
 
-    Example:
-
-    >>> class MyModel(Model):
-    ...    def __init__(self, config: Config) -> None:
-    ...        super().__init__(config)
-    ...        # Define your layers here
-    ...
-    ...    def forward(self, x):
-    ...        # Define the forward pass
-    """
-
-    def __init__(self, config: Config) -> None:
-        super().__init__()
-
-    def weight_initiator(self):
-        """return an WeightInitiator subclass that will be used to initialize weights of this model"""
-        return None
-
-    def predict(self, model_output: torch.Tensor) -> torch.Tensor:
-        """Transform raw model outputs into prediction values.
-
-        This method converts the output of the neural network into a format
-        compatible with the dataset target (Y).
-
-        Args: 
-            model_output (torch.Tensor): Raw output of the neural network.
-
-        Returns:
-            torch.Tensor: Prediction value (e.g. class index, probability distribution).
-        """
-        return model_output
-
-
-# Optimizer
-
-class Optimizer:
-    def __init__(self, model, config: Config) -> None:
-        self.torch_optimizer = None
-
-
-class AdamOptimizer(Optimizer):
-    def __init__(self, model, config: Config) -> None:
-        super().__init__(model, config)
-
-        training_config: TrainingConfig = config.training
-
-        kwargs = {"lr": training_config.learning_rate}
-        if training_config.weight_decay is not None:
-            kwargs["weight_decay"] = training_config.weight_decay
-        if training_config.betas is not None:
-            kwargs["betas"] = training_config.betas
-
-        self.torch_optimizer = to.Adam(model.parameters(), **kwargs)
-
-
-class RMSpropOptimizer(Optimizer):
-    def __init__(self, model, config: Config):
-        super().__init__(model, config)
-        self.torch_optimizer = to.RMSprop(
-            model.parameters(), lr=config.training.learning_rate
-        )
-
-
-class SGDOptimizer(Optimizer):
-    def __init__(self, model, config: Config) -> None:
-        super().__init__(model, config)
-        kwargs = {"lr": config.training.learning_rate}
-        if config.training.weight_decay is not None:
-            kwargs["weight_decay"] = config.training.weight_decay
-        if config.training.momentum is not None:
-            kwargs["momentum"] = config.training.momentum
-        self.torch_optimizer = to.SGD(model.parameters(), **kwargs)
-
-# Scheduler
-
-
-class Scheduler:
-    def __init__(self, optimizer, config: Config) -> None:
-        self.lr_scheduler = None
-
-
-class StepScheduler(Scheduler):
-    def __init__(self, optimizer, config) -> None:
-        super().__init__(optimizer, config)
-
-        kwargs = {}
-        kwargs["gamma"] = config.training.gamma
-        kwargs["step_size"] = config.training.step_size
-        self.lr_scheduler = StepLR(optimizer, **kwargs)
-
-# Factories
-
-
-class OptimizerError(Exception):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
-
-
-class ModelError(Exception):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
-
-
-class SchedulerError(Exception):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
-
-
-class MetricError(Exception):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
+from iapytoo.dataset.transform import Transform, TransformError
+from iapytoo.dataset.scaling import (
+    MeanNormalize,
+    MinMaxNormalize,
+    MeanScalingByColumn,
+    MinMaxScalingByColumn
+)
 
 
 @singleton
@@ -181,10 +94,28 @@ class Factory:
             "gan": WGANValuator
         }
 
+        self.transform_dict = {
+            "normalize": MeanNormalize,
+            "minmax": MinMaxNormalize,
+            "normalize_by_column": MeanScalingByColumn,
+            "minmax_by_column": MinMaxScalingByColumn
+        }
+
+    def register_transform(self, key, transform_cls):
+        self.transform_dict[key] = transform_cls
+
+    def create_transform(self, kind: str, config: Config) -> Transform:
+        try:
+            transform = self.transform_dict[kind](config)
+        except KeyError:
+            raise TransformError(f"transform {kind} is not handled")
+
+        return transform
+
     def register_loss(self, key, loss_cls):
         self.loss_dict[key] = loss_cls
 
-    def create_loss(self, kind: str):
+    def create_loss(self, kind: str) -> Loss:
         """Creates a loss criterion
 
         Args:
@@ -203,7 +134,7 @@ class Factory:
     def register_scheduler(self, key, scheduler_cls):
         self.schedulers_dict[key] = scheduler_cls
 
-    def create_scheduler(self, kind: str, optimizer, config: Config):
+    def create_scheduler(self, kind: str, optimizer, config: Config) -> Scheduler:
         """Creates an learning rate scheduler
 
         Args:
@@ -226,7 +157,7 @@ class Factory:
     def register_optimizer(self, key, optimizer_cls):
         self.optimizers_dict[key] = optimizer_cls
 
-    def create_optimizer(self, kind: str, model, config: Config):
+    def create_optimizer(self, kind: str, model, config: Config) -> Optimizer:
         """Creates an optimizer for the NN
 
         Args:
@@ -249,7 +180,7 @@ class Factory:
     def register_model(self, key, model_cls):
         self.models_dict[key] = model_cls
 
-    def create_model(self, kind: str, config: Config, device="cpu"):
+    def create_model(self, kind: str, config: Config, device="cpu") -> Model:
         """Creates an architecture of NN
 
         Args:
@@ -303,7 +234,7 @@ class Factory:
     def register_predictor(self, key, predictor_cls):
         self.predictor_dict[key] = predictor_cls
 
-    def create_predictor(self, key: Config | str, *args, **kwargs):
+    def create_predictor(self, key: Config | str, *args, **kwargs) -> Predictor:
         if isinstance(key, Config):
             config: Config = key
             kind = config.model.predictor
@@ -313,7 +244,7 @@ class Factory:
 
         return self.predictor_dict[kind](*args, **kwargs)
 
-    def create_valuator(self, key: Config | str, model, device):
+    def create_valuator(self, key: Config | str, model, device) -> Valuator:
         if isinstance(key, Config):
             config: Config = key
             kind = config.model.valuator

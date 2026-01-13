@@ -1,8 +1,18 @@
 
 from abc import ABC, abstractmethod
 from typing import List
-from PIL import Image
 import numpy as np
+from iapytoo.utils.config import Config
+
+from enum import IntEnum
+
+
+class OpType(IntEnum):
+    MEAN = 0
+    STD = 1
+    MIN = 2
+    MAX = 3
+    LAST = 4
 
 
 def to_numpy(img):
@@ -17,43 +27,45 @@ def to_numpy(img):
     return array
 
 
+class TransformError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
 class Transform(ABC):
 
     @abstractmethod
-    def __call__(self, y):
+    def __init__(self, config: Config):
+        pass
+
+    @abstractmethod
+    def __call__(self, y) -> np.array:
+        pass
+
+    @abstractmethod
+    def inv(self, y) -> np.array:
         pass
 
 
 class Compose(Transform):
 
-    def __init__(self, transforms: List[Transform]):
-        self.transforms: List[Transform] = transforms
+    def __init__(self, config: Config, names: list[str]):
+        from iapytoo.train.factories import Factory
+        super().__init__(config)
+        self.transforms: List[Transform] = None
+        try:
+            factory = Factory()
+            self.tranforms = [factory.create_transform(
+                n, config) for n in names]
+        except KeyError as er:
+            print(f"Unable to create Transform : {er}")
 
-    def __call__(self, y):
+    def __call__(self, y) -> np.array:
         for t in self.transforms:
             y = t(y)
         return y
 
-
-class MeanNormalize(Transform):
-    def __init__(self, mean, std) -> None:
-        self.mean: float = mean
-        self.std: float = std
-
-    def __call__(self, y):
-        # Many datasets (MNIST, ...) provide PIL image as X
-        if isinstance(y, Image.Image):
-            y = to_numpy(y)
-        return (y - self.mean) / self.std
-
-
-class MinMaxNormalize(Transform):
-    def __init__(self, y_min, y_max) -> None:
-        self.y_min: float = y_min
-        self.y_max: float = y_max
-
-    def __call__(self, y):
-        # Many datasets (MNIST, ...) provide PIL image as X
-        if isinstance(y, Image.Image):
-            y = to_numpy(y)
-        return (y - self.y_min) / (self.y_max - self.y_min)
+    def inv(self, y) -> np.array:
+        for t in self.transforms:
+            y = t.inv(y)
+        return y

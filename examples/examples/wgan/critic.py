@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from iapytoo.train.factories import Model
+from iapytoo.train.model import Model
 from iapytoo.utils.config import Config
 
 from wind_gan.dft_layer import DFTLayer

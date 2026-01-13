@@ -6,7 +6,8 @@ from torch.optim.lr_scheduler import LambdaLR
 
 
 from iapytoo.dataset.transform import MeanNormalize
-from iapytoo.train.factories import Model, Scheduler
+from iapytoo.train.model import Model
+from iapytoo.train.scheduler import Scheduler
 from iapytoo.utils.config import Config
 from iapytoo.train.mlflow_model import MlflowTransform, MlfowModelProvider
 
@@ -71,6 +72,7 @@ class MnistMlfowModel(MlfowModelProvider):
             "path": str(Path(__file__).parent),
             "model": {
                 "module": "examples.subclasses",
+                "key": "mnist",
                 "class": "MnistModel"
             },
             "transform": {

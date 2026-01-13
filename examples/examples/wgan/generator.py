@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from iapytoo.train.factories import Model, WeightInitiator
+from iapytoo.train.model import Model, WeightInitiator
 from iapytoo.utils.config import Config
 
 

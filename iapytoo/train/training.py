@@ -138,9 +138,12 @@ class Training(Inference):
         return [optimizer]
 
     # overwrite
-    def _create_models(self, loader):
-        model = Factory().create_model(self._config.model.model,
-                                       self._config, self.device)
+    def _create_models(self):
+        model = Factory().create_model(
+            self._config.model.model,
+            self._config,
+            self.device
+        )
 
         return [model]
 
@@ -295,7 +298,7 @@ class Training(Inference):
         num_epochs = self._config.training.epochs
         num_batch = len(train_loader)
 
-        self._models = self._create_models(train_loader)
+        self._models = self._create_models()
         self._optimizers = self._create_optimizers()
 
         lr = self._config.training.learning_rate
@@ -353,7 +356,7 @@ class Training(Inference):
 
         self.loss.reset()
 
-        self._models = self._create_models(loader=train_loader)
+        self._models = self._create_models()
         self._optimizers = self._create_optimizers()
         self._schedulers = self._create_schedulers(self.optimizer)
         self._init_mlflow_model()
@@ -410,7 +413,7 @@ class Training(Inference):
         if run_id is None, reuse a model
         """
         if run_id is not None:
-            self._models = self._create_models(loader)
+            self._models = self._create_models()
             checkpoint = CheckPoint(run_id)
             checkpoint.init(self, only_model=True)
         else:
