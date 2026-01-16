@@ -15,10 +15,10 @@ from iapytoo.dataset.transform import (
 
 
 class MeanNormalize(Transform):
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, name='global') -> None:
         super().__init__(config)
         dataset_config: DatasetConfig = config.dataset
-        stats = dataset_config.statistic('global').stats
+        stats = dataset_config.statistic(name).stats
         if not stats:
             logging.error("no \"global\" statistics in config ")
             self.mean: float = 0.
@@ -38,10 +38,10 @@ class MeanNormalize(Transform):
 
 
 class MinMaxNormalize(Transform):
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, name='global') -> None:
         super().__init__(config)
         dataset_config: DatasetConfig = config.dataset
-        stats = dataset_config.statistic('global').stats
+        stats = dataset_config.statistic(name).stats
         if not stats:
             logging.error("no \"global\" statistics in config ")
             self.y_min: float = 0.
