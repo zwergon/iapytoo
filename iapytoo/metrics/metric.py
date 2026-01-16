@@ -1,6 +1,7 @@
 import torch
 
 from iapytoo.utils.config import Config
+from iapytoo.predictions.predictors import Predictor
 
 
 class MetricError(Exception):
@@ -9,12 +10,12 @@ class MetricError(Exception):
 
 
 class Metric:
-    def __init__(self, name, config: Config, with_target=True):
+    def __init__(self, name, config: Config, predictor: Predictor = None, with_target=True):
         from iapytoo.train.factories import Factory
         self.with_target = with_target
         self.name = name
         self.config = config
-        self.predictor = Factory().create_predictor(config)
+        self.predictor = predictor
 
         # First dimension is for the concatenation.
         self.outputs = torch.zeros(size=(0,))
@@ -28,6 +29,7 @@ class Metric:
 
     @property
     def predicted(self):
+        assert self.predictor is not None, "need a predictor to compute metric"
         return self.predictor(self.outputs)
 
     def to(self, device):

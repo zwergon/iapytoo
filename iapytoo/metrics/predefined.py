@@ -2,11 +2,13 @@ import torch
 
 from iapytoo.utils.config import Config
 from iapytoo.metrics.metric import Metric
+from iapytoo.predictions.predictors import Predictor
 
 
 class AccuracyMetric(Metric):
-    def __init__(self, config: Config):
-        super(AccuracyMetric, self).__init__("accuracy", config)
+    def __init__(self, config: Config, predictor: Predictor = None):
+        super(AccuracyMetric, self).__init__(
+            "accuracy", config, predictor=predictor)
         self.k = config.metrics.top_accuracy
 
     def compute(self):
@@ -29,8 +31,8 @@ class AccuracyMetric(Metric):
 
 
 class R2Metric(Metric):
-    def __init__(self, config: Config) -> None:
-        super(R2Metric, self).__init__("r2", config)
+    def __init__(self, config: Config, predictor: Predictor = None) -> None:
+        super(R2Metric, self).__init__("r2", config, predictor=predictor)
 
     def compute(self):
         # for distributed
@@ -53,8 +55,9 @@ class R2Metric(Metric):
 
 
 class MSMetric(Metric):
-    def __init__(self, config: Config) -> None:
-        super(MSMetric, self).__init__("mean_square", config)
+    def __init__(self, config: Config, predictor: Predictor = None) -> None:
+        super(MSMetric, self).__init__(
+            "mean_square", config, predictor=predictor)
 
     def _compute(self):
         diff = self.predicted - self.target
@@ -68,8 +71,8 @@ class MSMetric(Metric):
 
 
 class RMSMetric(MSMetric):
-    def __init__(self, config: Config) -> None:
-        Metric.__init__(self, "root_mean_square", config)
+    def __init__(self, config: Config, predictor: Predictor = None) -> None:
+        Metric.__init__(self, "root_mean_square", config, predictor=predictor)
         self.name = "rms"
 
     def compute(self):

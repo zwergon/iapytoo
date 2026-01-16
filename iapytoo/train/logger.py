@@ -15,11 +15,11 @@ import mlflow.pyfunc
 
 
 from iapytoo.utils.config import Config
+from iapytoo.utils.model_config import ModelConfig
 from iapytoo.utils.display import lrfind_plot
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.train.context import Context
 from iapytoo.predictions import Predictions
-from iapytoo.train.mlflow_model import MlflowModel
 
 
 class Logger:
@@ -109,9 +109,9 @@ class Logger:
     def __str__(self):
         msg = "\nLogger:\n"
 
-        model_config = self.config.model
+        model_config: ModelConfig = self.config.model
 
-        msg += f"Network: {model_config._network()}\n"
+        msg += f"Provider: {model_config.provider}\n"
         msg += f"matplotlib backend: {matplotlib.rcParams['backend']}, interactive: {matplotlib.is_interactive()}\n"
         msg += f"tracking_uri: {mlflow.get_tracking_uri()}\n"
         active_run = mlflow.active_run()

@@ -7,6 +7,7 @@ from tqdm import tqdm
 from iapytoo.train.training import Training
 from iapytoo.train.mlflow_model import save_mlflow_model
 from iapytoo.utils.config import Config
+from iapytoo.train.mlflow_model import MlflowWGANProvider
 from iapytoo.train.factories import Factory
 from iapytoo.train.loss import Loss
 from iapytoo.train.logger import Logger
@@ -56,14 +57,16 @@ class WGAN(Training):
     def _create_criterion(self):
         return None
 
-    def _create_models(self, loader):
-        factory = Factory()
-        generator = factory.create_model(
-            self._config.model.generator, self._config, self.device
-        )
-        discriminator = factory.create_model(
-            self._config.model.discriminator, self._config, self.device
-        )
+    def _create_models(self):
+        assert self.mlflow_model_provider is not None, "generator is defined as model in provider"
+
+        gan_provider: MlflowWGANProvider = self.mlflow_model_provider
+
+        generator = gan_provider.generator
+        generator.to(self.device)
+
+        discriminator = gan_provider.discriminator
+        discriminator.to(self.device)
 
         return [generator, discriminator]
 
@@ -186,7 +189,10 @@ class WGAN(Training):
 
         def new_function(epoch, loader, description):
             d_metrics = MetricsCollection(
-                "critic", self._config.metrics.names, self._config)
+                "critic",
+                self._config.metrics.names,
+                self._config,
+                predictor=self.predictor)
             d_metrics.to(self.device)
 
             timer = Timer()
@@ -241,7 +247,11 @@ class WGAN(Training):
         def new_function(epoch, loader, description):
 
             d_metrics = MetricsCollection(
-                description, self._config.metrics.names, self._config)
+                description,
+                self._config.metrics.names,
+                self._config,
+                predictor=self.predictor
+            )
             d_metrics.to(self.device)
 
             timer = Timer()
@@ -305,9 +315,8 @@ class WGAN(Training):
 
         self.loss.reset()
 
-        self._models = self._create_models(train_loader)
+        self._models = self._create_models()
         self._optimizers = self._create_optimizers()
-        self._init_mlflow_model()
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
@@ -329,7 +338,6 @@ class WGAN(Training):
                 self._on_epoch_ended(epoch, checkpoint, loader=valid_loader)
 
             save_mlflow_model(self._config,
-                              self.generator,
                               self.mlflow_model_provider)
 
         return {

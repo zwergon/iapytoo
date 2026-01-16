@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from iapytoo.train.model import Model, WeightInitiator
+from iapytoo.train.model import WGANModel, WeightInitiator
 from iapytoo.utils.config import Config
 
 
@@ -15,7 +15,7 @@ class CNN1DInitiator(WeightInitiator):
             nn.init.constant_(m.bias.data, 0)
 
 
-class CNN1DGenerator(Model):
+class CNN1DGenerator(WGANModel):
     def __init__(self, config: Config):
         super(CNN1DGenerator, self).__init__(config)
         self.noise_dim = config.model.noise_dim
@@ -62,7 +62,7 @@ class CNN1DGenerator(Model):
 
 
 # Générateur
-class Generator(Model):
+class Generator(WGANModel):
     def __init__(self, config: Config) -> None:
         super(Generator, self).__init__(config)
         noise_dim = config.model.noise_dim
@@ -80,7 +80,7 @@ class Generator(Model):
         return self.model(z)
 
 
-class GruGenerator(Model):
+class GruGenerator(WGANModel):
     def __init__(self, config: Config):
         super(GruGenerator, self).__init__(config)
         self.noise_dim = config.model.noise_dim

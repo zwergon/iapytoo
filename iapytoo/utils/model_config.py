@@ -5,44 +5,26 @@ from iapytoo.utils.singleton import singleton
 
 class ModelConfig(BaseModel):
     type: str
-    predictor: Optional[str] = "default"
-    inference_predictor: Optional[str] = None
-    inference_predictor_args: Optional[Dict] = None
-    valuator: Optional[str] = "model"
-
-    def _network(self) -> str:
-        pass
+    provider: str
 
 
 class DefaultModelConfig(ModelConfig):
-    model: str
     hidden_size: Optional[int] = 128
     num_layers: Optional[int] = 3
     kernel_size: Optional[int] = 5
     dropout: Optional[float] = 0.5
 
-    def _network(self) -> str:
-        return str(self.model)
-
 
 class GanConfig(ModelConfig):
-    generator: str
-    discriminator: str
     hidden_size: Optional[int] = 128
     lambda_gp: Optional[float] = 10.0
     noise_dim: Optional[int] = 100
     signal_length: Optional[int] = 200
     n_critic: Optional[int] = 5
 
-    def _network(self) -> str:
-        return f"{self.discriminator} & {self.generator}"
-
 
 class MLFlowConfig(ModelConfig):
     run_id: str
-
-    def _network(self) -> str:
-        return self.run_id
 
 
 class ConfigError(Exception):

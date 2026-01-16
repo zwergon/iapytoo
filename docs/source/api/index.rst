@@ -15,7 +15,7 @@ API
     :undoc-members:
 
 
-.. autoclass:: iapytoo.train.mlflow_model.MlfowModelProvider
+.. autoclass:: iapytoo.train.mlflow_model.MlflowModelProvider
     :members:
     :undoc-members:
 

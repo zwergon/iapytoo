@@ -4,6 +4,7 @@ import unittest
 from iapytoo.utils.config import ConfigFactory
 from iapytoo.dataset import DummyVisionDataset, DummyLabelDataset
 from iapytoo.metrics.collection import MetricsCollection
+from iapytoo.predictions.predictors import Predictor
 
 
 class TestMetrics(unittest.TestCase):
@@ -15,6 +16,7 @@ class TestMetrics(unittest.TestCase):
             "sensors": "sensor_1",
             "model": {
                 "type": "default",
+                "provider": "provider",
                 "model": "CNN"
             },
             "dataset": {
@@ -48,7 +50,11 @@ class TestMetrics(unittest.TestCase):
             dataset, batch_size=config.dataset.batch_size, shuffle=True, drop_last=True
         )
 
-        collection = MetricsCollection("test", ["r2", "rms"], config)
+        collection = MetricsCollection(
+            "test",
+            ["r2", "rms"],
+            config,
+            predictor=Predictor())
 
         for X, Y in loader:
             Y_hat = TestMetrics.compute(Y)
@@ -65,7 +71,11 @@ class TestMetrics(unittest.TestCase):
             dataset, batch_size=config.dataset.batch_size, shuffle=True, drop_last=True
         )
 
-        collection = MetricsCollection("test", ["accuracy"], config)
+        collection = MetricsCollection(
+            "test",
+            ["accuracy"],
+            config,
+            predictor=Predictor())
 
         for X, Y in loader:
             Y_hat = TestMetrics.compute_labels(Y, dataset.n_labels)

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from iapytoo.train.inference import Inference
+    from iapytoo.train.model import Model
 
 
 class Predictions:
@@ -15,15 +16,10 @@ class Predictions:
         self.outputs = None  # dimension is assigned in compute
         self.actual = None
 
-        self.inference = inference
+        self.inference: Inference = inference
 
         self.prediction_plotter: CollectionPlotters = CollectionPlotters()
         self.prediction_plotter.connect(self)
-
-    @property
-    def valuator(self):
-        assert self.inference is not None, "no inference for this prediction"
-        return self.inference.valuator
 
     @property
     def predictor(self):
@@ -39,13 +35,15 @@ class Predictions:
 
     def compute(self, loader):
 
-        assert self.valuator is not None, "no valuator"
+        model: Model = self.inference.model
+
+        assert model is not None, "no model defined to create a prediction"
         assert self.predictor is not None, "no predictor"
 
         self.outputs = torch.zeros(size=(0,))
         self.actual = torch.zeros(size=(0,))
 
-        for outputs, actual in self.valuator.evaluate_loader(loader):
+        for outputs, actual in model.evaluate_loader(loader):
             self.outputs = torch.cat((self.outputs, outputs), dim=0)
 
             if actual is not None:

@@ -15,7 +15,7 @@ from iapytoo.utils.config import Config
 from iapytoo.utils.model_config import ModelConfig, MLFlowConfig
 from iapytoo.train.logger import Logger
 from iapytoo.train.factories import Factory
-from iapytoo.train.mlflow_model import MlflowTransform, MlflowModel, MlfowModelProvider
+from iapytoo.train.mlflow_model import MlflowModel, MlflowModelProvider
 from iapytoo.predictions import Predictions, PredictionType
 from iapytoo.metrics.collection import MetricsCollection
 
@@ -32,12 +32,9 @@ class Inference(ABC):
         self.logger: Logger = None
 
         self._models = []
-        self.valuator = None
-        self.predictor = None
+
         self.predictions: Predictions = Predictions(self)
-        self.mlflow_model: MlflowModel = None
-        self.mlflow_model_provider: MlfowModelProvider = self.create_mlflow_provider(
-            config)
+        self.mlflow_model_provider: MlflowModelProvider = self._create_model_provider()
 
     def _display_device(self):
         use_cuda = torch.cuda.is_available()
@@ -57,37 +54,26 @@ class Inference(ABC):
         return self._models[0]
 
     @property
+    def predictor(self):
+        assert self.mlflow_model_provider is not None, "a provider is required to define predictor"
+        return self.mlflow_model_provider.predictor
+
+    @property
     def transform(self):
         if self.mlflow_model_provider is None:
             return None
         return self.mlflow_model_provider.transform
 
+    def _create_model_provider(self) -> MlflowModelProvider:
+        model_config: ModelConfig = self._config.model
+        assert model_config.provider is not None, "a provider is need to define model"
+        return Factory().create_provider(
+            model_config.provider, self._config
+        )
+
     @abstractmethod
     def _create_models(self):
         pass
-
-    def create_mlflow_provider(self, config: Config) -> MlfowModelProvider:
-        return None
-
-    def _init_mlflow_model(self):
-        """ Generates mlflow model by creating valuator and predictor for this inference
-            if a MlfowModelProvider is provided, use it to initiate signature, transform and input_example
-            Take care that at that point model should already be created
-        """
-
-        assert self.model is not None, "a pytorch model is required for mlflow model"
-
-        model_config: ModelConfig = self._config.model
-
-        factory = Factory()
-        self.valuator = factory.create_valuator(
-            model_config.valuator,
-            self.model,
-            self.device
-        )
-        self.predictor = factory.create_predictor(
-            model_config.predictor
-        )
 
     @abstractmethod
     def predict(self, loader, run_id=None):
@@ -124,19 +110,14 @@ class MLFlowInference(Inference):
         metrics = MetricsCollection(
             "inference",
             self._config.metrics.names,
-            self._config)
-        # metrics.to(self.device)
+            self._config,
+            predictor=self.predictor)
 
         with Logger(self._config) as self.logger:
             self._display_device()
             self.logger.summary()
 
-            self._models = self._create_models(loader)
-            assert self.model is not None, "no model loaded for prediction"
-
-            self.valuator = self.mlflow_model.valuator
-            self.valuator.device = self.device
-            self.predictor = self.mlflow_model.predictor
+            self._models = self._create_models()
 
             self.predictions.compute(loader=loader)
             self.logger.report_prediction(0, self.predictions)

@@ -13,5 +13,5 @@ metrics:
 
 model:
   type: "mlflow"
-  predictor: "max"
-  run_id: "34d327ae3df54519bef59687fb5d7622"
+  provider: "MnistProvider"
+  run_id: "5ed6c950d260451f89cb08b6f61529f4"

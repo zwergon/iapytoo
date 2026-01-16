@@ -11,9 +11,7 @@ dataset:
   
 model:
   type: "gan"
-  valuator: "gan"
-  generator: g_gru
-  discriminator: d_dft
+  provider: "WindProvider"
   hidden_size: 128
   n_critic: 5
   noise_dim: 20

@@ -30,7 +30,14 @@ dataset:
   n_steps_by_batch: 10
   num_workers: 2
   batch_size: 64
-
+  stats:
+    - variable: "global"
+      stats:
+        - 0.1307
+        - 0.3081
+        - 0.
+        - 1.
+  
 training:
   learning_rate: 1e-4
   loss: "nll"
@@ -45,8 +52,7 @@ metrics:
   names: ['accuracy']
  
 model:
-  model: "mnist"
-  predictor: "max"
+  provider: "MnistProvider"
   kernel_size: 3
   # inference_predictor: "labeledTop3" -> include custom predictor for inference
 

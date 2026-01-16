@@ -35,17 +35,6 @@ from iapytoo.train.scheduler import (
     SchedulerError
 )
 
-from iapytoo.predictions.predictors import (
-    Predictor,
-    MaxPredictor
-)
-
-from iapytoo.train.valuator import (
-    Valuator,
-    ModelValuator,
-    WGANValuator
-)
-
 from iapytoo.dataset.transform import Transform, TransformError
 from iapytoo.dataset.scaling import (
     MeanNormalize,
@@ -53,6 +42,13 @@ from iapytoo.dataset.scaling import (
     MeanScalingByColumn,
     MinMaxScalingByColumn
 )
+
+from iapytoo.train.mlflow_model import (
+    ProviderError,
+    MlflowModelProvider
+)
+
+from iapytoo.predictions.predictors import Predictor
 
 
 @singleton
@@ -74,7 +70,7 @@ class Factory:
             "rmsprop": RMSpropOptimizer,
         }
 
-        self.models_dict = {
+        self.provider_dict = {
         }
 
         self.metrics_dict = {
@@ -84,33 +80,16 @@ class Factory:
             "accuracy": AccuracyMetric,
         }
 
-        self.predictor_dict = {
-            "default": Predictor,
-            "max": MaxPredictor
-        }
+    def register_provider(self, provider_cls):
+        self.provider_dict[provider_cls.__name__] = provider_cls
 
-        self.valuator_dict = {
-            "model": ModelValuator,
-            "gan": WGANValuator
-        }
-
-        self.transform_dict = {
-            "normalize": MeanNormalize,
-            "minmax": MinMaxNormalize,
-            "normalize_by_column": MeanScalingByColumn,
-            "minmax_by_column": MinMaxScalingByColumn
-        }
-
-    def register_transform(self, key, transform_cls):
-        self.transform_dict[key] = transform_cls
-
-    def create_transform(self, kind: str, config: Config) -> Transform:
+    def create_provider(self, kind: str, config: Config) -> MlflowModelProvider:
         try:
-            transform = self.transform_dict[kind](config)
+            provider = self.provider_dict[kind](config)
         except KeyError:
-            raise TransformError(f"transform {kind} is not handled")
+            raise ProviderError(f"transform {kind} is not handled")
 
-        return transform
+        return provider
 
     def register_loss(self, key, loss_cls):
         self.loss_dict[key] = loss_cls
@@ -177,39 +156,10 @@ class Factory:
 
         return optimizer
 
-    def register_model(self, key, model_cls):
-        self.models_dict[key] = model_cls
-
-    def create_model(self, kind: str, config: Config, device="cpu") -> Model:
-        """Creates an architecture of NN
-
-        Args:
-            kind (str): kind of NN, key for the factory
-            config (dict): config dict to use to initialize model
-            device (str, optional): Defaults to "cpu".
-
-        Raises:
-            ModelError: error raised if no architecture fit kind key
-
-        Returns:
-            nn.Module: pytorch model
-        """
-        try:
-            model: Model = self.models_dict[kind](config)
-        except KeyError:
-            raise ModelError(f"model {kind} is not handled")
-
-        initiator = model.weight_initiator()
-        if initiator is not None:
-            model.apply(initiator)
-
-        model = model.to(device=device)
-        return model
-
     def register_metric(self, key, metric_cls):
         self.metrics_dict[key] = metric_cls
 
-    def create_metric(self, kind: str, config: Config, device="cpu") -> Metric:
+    def create_metric(self, kind: str, config: Config, device="cpu", predictor: Predictor = None) -> Metric:
         """Creates an architecture of NN
 
         Args:
@@ -224,32 +174,9 @@ class Factory:
             iapytoo.metrics.Metric: metric
         """
         try:
-            metric: Metric = self.metrics_dict[kind](config)
+            metric: Metric = self.metrics_dict[kind](config, predictor)
         except KeyError:
             raise MetricError(f"metric {kind} is not handled")
 
         metric = metric.to(device=device)
         return metric
-
-    def register_predictor(self, key, predictor_cls):
-        self.predictor_dict[key] = predictor_cls
-
-    def create_predictor(self, key: Config | str, *args, **kwargs) -> Predictor:
-        if isinstance(key, Config):
-            config: Config = key
-            kind = config.model.predictor
-        else:
-            kind = key
-        assert kind is not None, "no default predictor defined ?"
-
-        return self.predictor_dict[kind](*args, **kwargs)
-
-    def create_valuator(self, key: Config | str, model, device) -> Valuator:
-        if isinstance(key, Config):
-            config: Config = key
-            kind = config.model.valuator
-        else:
-            kind = key
-        assert kind is not None, "no default valuator defined ?"
-
-        return self.valuator_dict[kind](model, device)

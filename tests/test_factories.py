@@ -112,15 +112,6 @@ class TestFactory(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.factory.create_predictor("unknown_predictor")
 
-    def test_create_valuator(self):
-        valuator = self.factory.create_valuator(
-            "model", self.mock_model, device="cpu")
-        self.assertIsNotNone(valuator)
-
-        with self.assertRaises(KeyError):
-            self.factory.create_valuator(
-                "unknown_valuator", self.mock_model, device="cpu")
-
 
 if __name__ == "__main__":
     unittest.main()

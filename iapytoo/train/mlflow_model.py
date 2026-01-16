@@ -15,17 +15,19 @@ from abc import ABC, abstractmethod
 
 from iapytoo.utils.config import (
     Config,
-    ModelConfig,
-    ConfigFactory,
-    DatasetConfigFactory
+    ModelConfig
 )
-from iapytoo.train.factories import Factory
 from iapytoo.train.model import Model
-from iapytoo.train.valuator import Valuator
 from iapytoo.predictions.predictors import Predictor
+from iapytoo.dataset.transform import Transform
 
 
-class MlfowModelProvider(ABC):
+class ProviderError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
+class MlflowModelProvider(ABC):
     """
     Abstract base class defining how an MLflow-deployable model is described.
 
@@ -48,8 +50,10 @@ class MlfowModelProvider(ABC):
         Args:
             config (Config): Global experiment configuration object.
         """
-        self._input_example = None
-        self._transform = None
+        self._model: Model = None
+        self._input_example: np.array = None
+        self._transform: Transform = None
+        self._predictor: Predictor = Predictor()  # default one
 
     @property
     def code_path(self) -> str:
@@ -109,7 +113,7 @@ class MlfowModelProvider(ABC):
         return self._input_example
 
     @property
-    def transform(self) -> MlflowTransform:
+    def transform(self) -> Transform:
         """
         Return the input/output transformation used for MLflow inference.
 
@@ -121,12 +125,44 @@ class MlfowModelProvider(ABC):
         """
         return self._transform
 
+    @property
+    def model(self) -> Model:
+        return self._model
 
-class _MlflowModelPrivate:
+    @property
+    def predictor(self) -> Predictor:
+        return self._predictor
+
+    @property
+    def ml_predictor(self) -> Predictor:
+        return self._predictor
+
+
+class MlflowWGANProvider(MlflowModelProvider):
+
+    def __init__(self, config: Config) -> None:
+        super().__init__(config)
+        self._discriminator = None
+
+    @property
+    def discriminator(self):
+        return self._discriminator
+
+    @property
+    def generator(self):
+        return self._model
+
+
+class MlflowModel(mp.PythonModel):
+
+    INPUT_EXAMPLE = "input_example"
 
     @staticmethod
-    def from_context(mlflow_model: '_MlflowModelPrivate', context: mp.PythonModelContext):
-        private = _MlflowModelPrivate()
+    def from_context(context: mp.PythonModelContext) -> MlflowModelProvider:
+        from iapytoo.utils.config import (
+            ConfigFactory,
+            DatasetConfigFactory
+        )
 
         code_definition_path = context.artifacts.get("code_definition", None)
 
@@ -146,84 +182,41 @@ class _MlflowModelPrivate:
 
         config = ConfigFactory.from_yaml(context.artifacts["config"])
 
-        module = importlib.import_module(code_definition["model"]["module"])
+        module = importlib.import_module(code_definition["provider"]["module"])
 
-        assert "model" in code_definition, "a class of model is required to load the model"
-        model_cls = getattr(module, code_definition["model"]["class"])
+        assert "provider" in code_definition, "a class of provider is required to load the model"
+        provider_cls = getattr(module, code_definition["provider"]["class"])
 
-        private.model = model_cls(config=config)
-        private.model.load_state_dict(torch.load(
+        provider: MlflowModelProvider = provider_cls(config=config)
+
+        provider._model.load_state_dict(torch.load(
             context.artifacts["model"], weights_only=True))
 
-        if "transform" in code_definition:
-            module = importlib.import_module(
-                code_definition["transform"]["module"])
-            transform_cls = getattr(
-                module, code_definition["transform"]["class"])
-            private.transform = transform_cls(config=config)
-        else:
-            private.transform = None
+        return provider
 
-        factory = Factory()
-        private.valuator = factory.create_valuator(
-            mlflow_model.metadata["valuator_key"],
-            private.model,
-            "cpu"
-        )
-        private.predictor = factory.create_predictor(
-            mlflow_model.metadata['predictor_key']
-        )
-
-        if mlflow_model.metadata.get('inference_key') is not None:
-            private.ml_predictor = factory.create_predictor(
-                mlflow_model.metadata['inference_key'],
-                mlflow_model.metadata.get('inference_args', {})
-            )
-        else:
-            private.ml_predictor = private.predictor
-
-        mlflow_model._private = private
-
-    def __init__(self):
-        self.model: Model = None
-        self.transform = None
-        self.valuator: Valuator = None
-        self.predictor: Predictor = None
-        self.ml_predictor: Predictor = None
-
-
-class MlflowModel(mp.PythonModel):
-
-    INPUT_EXAMPLE = "input_example"
-
-    def __init__(self, metadata: dict = None) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.metadata = metadata
-        self._private: _MlflowModelPrivate = None
+        self._provider: MlflowModelProvider = None
 
     @property
     def transform(self):
-        return self._private.transform
+        return self._provider.transform
 
     @property
     def model(self):
-        return self._private.model
-
-    @property
-    def valuator(self):
-        return self._private.valuator
+        return self._provider.model
 
     @property
     def predictor(self):
-        return self._private.predictor
+        return self._provider.predictor
 
     @property
     def ml_predictor(self):
-        return self._private.ml_predictor
+        return self._provider.ml_predictor
 
     def load_context(self, context):
         super().load_context(context)
-        _MlflowModelPrivate.from_context(self, context)
+        self._provider = MlflowModel.from_context(context)
 
     def predict(
         self,
@@ -259,7 +252,7 @@ class MlflowModel(mp.PythonModel):
 
         batch_tensor = torch.from_numpy(batch)
 
-        outputs_tensor = self.valuator.evaluate_one(batch_tensor)
+        outputs_tensor = self.model.evaluate_one(batch_tensor)
 
         predictions = self.ml_predictor(outputs_tensor)
 
@@ -270,22 +263,14 @@ class MlflowModel(mp.PythonModel):
 
 
 def save_mlflow_model(config: Config,
-                      model: Model,
-                      provider: MlfowModelProvider = None,
+                      provider: MlflowModelProvider,
                       epoch=0):
-
-    model_config: ModelConfig = config.model
-    metadata = {
-        "valuator_key":  model_config.valuator,
-        "predictor_key": model_config.predictor,
-        "inference_key": model_config.inference_predictor,
-        "inference_args": model_config.inference_predictor_args
-    }
 
     def supports_name():
         version = tuple(map(int, mlflow.__version__.split(".")))
         return version >= (3, 0, 0)
 
+    model = provider.model
     model.cpu()
     with tempfile.TemporaryDirectory() as tmpdir:
         config_path = os.path.join(tmpdir, "config.yaml")
@@ -301,7 +286,7 @@ def save_mlflow_model(config: Config,
         }
 
         kwargs = {
-            "python_model": MlflowModel(metadata),
+            "python_model": MlflowModel(),
             "extra_pip_requirements": config.inference_pip_requirements,
             # "code_paths": config.inference_extra_paths,
             "conda_env": None,

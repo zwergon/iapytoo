@@ -225,7 +225,7 @@ This ensures **strict parity between training and inference**.
 Model provider abstraction
 --------------------------
 
-``MlfowModelProvider`` is an optional abstraction used **at logging time**.
+``MlflowModelProvider`` is an optional abstraction used **at logging time**.
 
 Its role is to declare:
 

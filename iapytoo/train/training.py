@@ -139,11 +139,9 @@ class Training(Inference):
 
     # overwrite
     def _create_models(self):
-        model = Factory().create_model(
-            self._config.model.model,
-            self._config,
-            self.device
-        )
+        assert self.mlflow_model_provider is not None, "all model definition in provider"
+        model = self.mlflow_model_provider.model
+        model.to(self.device)
 
         return [model]
 
@@ -225,7 +223,10 @@ class Training(Inference):
 
         def new_function(epoch, loader, description, mean: Mean):
             metrics = MetricsCollection(
-                description, self._config.metrics.names, self._config)
+                description,
+                self._config.metrics.names,
+                self._config,
+                predictor=self.predictor)
             metrics.to(self.device)
 
             timer = Timer()
@@ -262,7 +263,10 @@ class Training(Inference):
                        self._config.training.n_steps_by_batch, 1)
 
             metrics = MetricsCollection(
-                description, self._config.metrics.names, self._config)
+                description,
+                self._config.metrics.names,
+                self._config,
+                predictor=self.predictor)
             metrics.to(self.device)
 
             for batch_idx, batch in enumerate(loader):
@@ -359,7 +363,6 @@ class Training(Inference):
         self._models = self._create_models()
         self._optimizers = self._create_optimizers()
         self._schedulers = self._create_schedulers(self.optimizer)
-        self._init_mlflow_model()
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
@@ -392,7 +395,6 @@ class Training(Inference):
             if save_model:
                 save_mlflow_model(
                     self._config,
-                    self.model,
                     provider=self.mlflow_model_provider,
                     epoch=num_epochs
                 )

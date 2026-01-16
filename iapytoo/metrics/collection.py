@@ -1,16 +1,25 @@
 from iapytoo.utils.config import Config
 from iapytoo.metrics.metric import Metric, MetricError
+from iapytoo.predictions.predictors import Predictor
 
 
 class MetricsCollection(Metric):
-    def __init__(self, tag: str, metric_names: list[str], config: Config):
+    def __init__(self,
+                 tag: str,
+                 metric_names: list[str],
+                 config: Config,
+                 predictor: Predictor = None):
         from iapytoo.train.factories import Factory
         super().__init__(tag, config)
         self.metrics = {}
         try:
             factory = Factory()
             for n in metric_names:
-                self.metrics[f"{tag}_{n}"] = factory.create_metric(n, config)
+                self.metrics[f"{tag}_{n}"] = factory.create_metric(
+                    n,
+                    config,
+                    predictor=predictor
+                )
         except MetricError as er:
             print(f"Unable to create metric : {er}")
 

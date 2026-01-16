@@ -8,38 +8,15 @@ from iapytoo.train.factories import Factory
 
 from torch.utils.data import DataLoader
 from iapytoo.utils.config import Config, ConfigFactory
-from iapytoo.utils.model_config import GanConfig
-from iapytoo.train.mlflow_model import MlfowModelProvider
 from iapytoo.train.wgan import WGAN
 
 from examples.wgan.dataset import SinDataset, LatentDataset
-from examples.wgan.critic import CNN1DDiscriminator, GruDiscriminator, DFTCritic
-from examples.wgan.generator import CNN1DGenerator, GruGenerator
-
-
-class WindProvider(MlfowModelProvider):
-
-    def __init__(self, config: Config):
-        model_config: GanConfig = config.model
-        self._input_example = np.random.rand(model_config.noise_dim)
-
-    # override
-    def code_definition(self) -> dict:
-        return {
-            "path": str(Path(__file__).parent / "examples"),
-            "model": {
-                "module": "examples.wgan.generator",
-                "class": "GruGenerator"
-            }
-        }
+from examples.wgan.provider import WindProvider
 
 
 class WindGan(WGAN):
     def __init__(self, config: Config):
         super().__init__(config)
-
-    def create_mlflow_provider(self, config: Config) -> MlfowModelProvider:
-        return WindProvider(config)
 
 
 if __name__ == "__main__":
@@ -49,6 +26,9 @@ if __name__ == "__main__":
     # load training data
     dataset_path = Path(__file__).parent / config.dataset.path
     trainset = SinDataset(dataset_path)
+
+    factory = Factory()
+    factory.register_provider(WindProvider)
 
     trainloader = DataLoader(
         trainset,
@@ -64,13 +44,6 @@ if __name__ == "__main__":
 
     valid_loader = DataLoader(
         latentset, batch_size=16, shuffle=False)
-
-    factory = Factory()
-    factory.register_model("g_cnn1d", CNN1DGenerator)
-    factory.register_model("d_cnn1d", CNN1DDiscriminator)
-    factory.register_model("g_gru", GruGenerator)
-    factory.register_model("d_gru", GruDiscriminator)
-    factory.register_model("d_dft", DFTCritic)
 
     wgan = WindGan(config)
     wgan.predictions.prediction_plotter.add(Fake1DPlotter(n_plot=2))

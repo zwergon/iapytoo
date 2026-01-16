@@ -149,7 +149,6 @@ def run_mlflow_infer(step: Step, run_id):
 
 
 def main():
-    status = {}
 
     os.makedirs(tmp_dir, exist_ok=True)
 
@@ -157,7 +156,7 @@ def main():
         Step(
             name="mnist_train",
             func=run_train,
-            script=root_dir / "mnist.py",
+            script=root_dir / "mnist_train.py",
             config=root_dir / "config_mnist.yml",
             log_file=tmp_dir / "mnist.log",
             returns_run_id=True
@@ -165,7 +164,7 @@ def main():
         Step(
             name="mnist_train_again",
             func=run_train_again,
-            script=root_dir / "mnist.py",
+            script=root_dir / "mnist_train.py",
             config=root_dir / "config_mnist.yml",
             log_file=tmp_dir / "mnist_again.log",
             needs_run_id=True,

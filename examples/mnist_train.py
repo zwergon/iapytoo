@@ -1,13 +1,14 @@
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
+from iapytoo.dataset.transform import Transform
 from iapytoo.predictions.plotters import ConfusionPlotter
 from iapytoo.train.factories import Factory
 from iapytoo.utils.config import ConfigFactory, Config
 from iapytoo.train.training import Training
-from iapytoo.train.mlflow_model import MlflowTransform, MlfowModelProvider
 
-from examples.subclasses import MnistModel, MnistScheduler, MnistMlfowModel
+from examples.mnist.provider import MnistProvider
+from examples.mnist.scheduler import MnistScheduler
 
 
 class MnistTraining(Training):
@@ -16,9 +17,6 @@ class MnistTraining(Training):
         super().__init__(config)
         self.predictions.add_plotter(ConfusionPlotter())
 
-    def create_mlflow_provider(self, config: Config) -> MlfowModelProvider:
-        return MnistMlfowModel(config)
-
 
 if __name__ == "__main__":
     from iapytoo.utils.arguments import parse_args
@@ -26,7 +24,7 @@ if __name__ == "__main__":
     root_dir = Path(__file__).parent
 
     factory = Factory()
-    factory.register_model("mnist", MnistModel)
+    factory.register_provider(MnistProvider)
     factory.register_scheduler("mnist", MnistScheduler)
 
     args = parse_args()
@@ -41,18 +39,17 @@ if __name__ == "__main__":
     Training.seed(config)
 
     training = MnistTraining(config)
-    mflow_transform: MlflowTransform = training.transform
     train_dataset = datasets.MNIST(
         config.dataset.path,
         train=True,
         download=True,
-        transform=mflow_transform.transform
+        transform=training.transform
     )
 
     test_dataset = datasets.MNIST(
         config.dataset.path,
         train=False,
-        transform=mflow_transform.transform
+        transform=training.transform
     )
 
     train_loader = DataLoader(
