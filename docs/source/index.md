@@ -24,7 +24,7 @@ An iapytoo project typically looks like this::
 project/
 ├── config.yml
 ├── train.py
-└── examples/
+└── mlcode/
     ├── __init__.py
     ├── dataset.py
     ├── model.py
@@ -33,7 +33,7 @@ project/
 ```
 
 * Training is driven by a YAML configuration file
-* Custom code lives in override modules
+* Custom code lives in override modules (*mlcode* directory)
 * Models are logged as MLflow PyFunc models
 * Inference reuses the exact same code and configuration
 

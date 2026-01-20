@@ -104,8 +104,10 @@ class MlflowModelProvider(ABC):
         """
         Return an example input for the MLflow model.
 
-        This example is used by MLflow to infer the model signature and to
-        validate the input format during deployment.
+        This example is used by MLflow to
+        validate the input format for deployment during training.
+
+
 
         Returns:
             numpy.ndarray: Example input array, or ``None`` if not defined.
