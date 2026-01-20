@@ -9,12 +9,6 @@ API
     :members:
     :undoc-members:
 
-
-.. autoclass:: iapytoo.train.mlflow_model.MlflowTransform
-    :members:
-    :undoc-members:
-
-
 .. autoclass:: iapytoo.train.mlflow_model.MlflowModelProvider
     :members:
     :undoc-members:

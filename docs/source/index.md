@@ -10,13 +10,22 @@ The core idea is to:
 * Preserve strict parity between training and inference
 * Deploy models as reproducible, self-contained MLflow artifacts
 
-This documentation is organized around three main concepts:
+This documentation is organized around four main concepts:
 
 * **Overrides**: how users plug their own code into iapytoo
 * **Training**: how experiments are configured and executed
 * **Inference**: how models are loaded, served, and queried
+* **Examples**: end-to-end projects to learn iapytoo by practice
+
 
 ## Quick overview
+If you prefer learning by doing, check the new **Examples** section. It contains full projects, including:
+
+* A **Deep Learning classification** example on the MNIST dataset
+* A **Wasserstein GAN** that learns to generate a 1D sinusoidal curve
+
+These examples are another way to discover iapytoo through concrete, runnable use cases.
+
 
 An iapytoo project typically looks like this::
 
@@ -34,7 +43,8 @@ project/
 
 * Training is driven by a YAML configuration file
 * Custom code lives in override modules (*mlcode* directory)
-    * key module is given by overriding 
+    * key module is given by overriding the {py:class}`MlflowModelProvider <iapytoo.train.mlflow_model.MlflowModelProvider>` class
+
 * Models are logged as MLflow PyFunc models
 * Inference reuses the exact same code and configuration
 
@@ -52,6 +62,8 @@ If you are new to iapytoo, we recommend reading the documentation in this order:
 1. :doc:`overrides/index` – how to write project-specific code
 2. :doc:`training/index` – how to configure and run experiments
 3. :doc:`inference/index` – how to deploy and query trained models
+4. :doc:`examples/index` – learn by example with complete projects
+
 
 
 ```{toctree}
@@ -61,4 +73,5 @@ If you are new to iapytoo, we recommend reading the documentation in this order:
 overrides/index
 training/index
 inference/index
+examples/index
 api/index.rst

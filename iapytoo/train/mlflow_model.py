@@ -81,17 +81,20 @@ class MlflowModelProvider(ABC):
         Example:
             Valid code definition dictionary::
 
-                {
-                    "path": str(Path(__file__).parent),
-                    "model": {
-                        "module": "examples.subclasses",
-                        "class": "MnistModel"
-                    },
-                    "transform": {
-                        "module": "examples.subclasses",
-                        "class": "MnistTransform"
-                    }
-                }
+                class MyProvider(MlflowModelProvider):
+                    def __init__(self, config):
+                        super().__init__(config)
+                        self._model = MyTorchModel(config)
+                        self._transform = MyTransform(config)
+                        self._predictor = MyPredictor()
+
+                    def code_definition(self):
+                        return {
+                            "path": str(Path(__file__).parent),
+                            "provider": {
+                                "module": "myproject.provider",
+                                "class": "MyProvider"
+                        }
 
 
         Returns:

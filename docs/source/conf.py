@@ -38,7 +38,10 @@ exclude_patterns = []
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_rtd_theme'
-# html_static_path = ['_static']
+html_static_path = ['_static']
+html_logo = "_static/images/logo_transparent.png"
+html_favicon = "_static/images/icon.jpg"
+
 
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False  # Désactiver si tu n'utilises pas le format NumPy
