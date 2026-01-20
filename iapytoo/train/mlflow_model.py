@@ -36,7 +36,7 @@ class MlflowModelProvider(ABC):
 
     - the Python code to ship with the model
     - an optional input example
-    - an optional input/output transformation
+    - an optional input transformation
 
     Subclasses must implement :meth:`code_definition` and define how the model
     is exposed for inference.
@@ -107,7 +107,7 @@ class MlflowModelProvider(ABC):
         This example is used by MLflow to
         validate the input format for deployment during training.
 
-
+        Note: input_example is not used for Signature inference
 
         Returns:
             numpy.ndarray: Example input array, or ``None`` if not defined.
@@ -117,9 +117,9 @@ class MlflowModelProvider(ABC):
     @property
     def transform(self) -> Transform:
         """
-        Return the input/output transformation used for MLflow inference.
+        Return the input transformation used for MLflow inference.
 
-        The transform is applied before and/or after calling the model
+        The transform is applied before calling the model
         ``predict`` method when serving the model with MLflow.
 
         Returns:
