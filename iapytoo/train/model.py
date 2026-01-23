@@ -82,6 +82,9 @@ class Model(nn.Module):
 
 class WGANModel(Model):
 
+    def __init__(self, config: Config) -> None:
+        super().__init__(config)
+
     # override
     def evaluate_loader(self, loader: DataLoader):
 
@@ -97,3 +100,19 @@ class WGANModel(Model):
                 outputs = gen_output.detach().cpu()
 
                 yield outputs, None
+
+
+class DDPMModel(Model):
+
+    def __init__(self, config: Config) -> None:
+        super().__init__(config)
+
+    def evaluate_loader(self, loader: DataLoader):
+        return super().evaluate_loader(loader)
+
+    def evaluate_one(self, input):
+        return super().evaluate_one(input)
+
+    def get_noise(self):
+        raise NotImplementedError(
+            f"need to define a noise generation for {self.__class__.__name__}")

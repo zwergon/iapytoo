@@ -16,6 +16,9 @@ class Loss:
         for loss in self.losses.values():
             loss.flush()
 
+    def to_dict(self):
+        return {str(k): v.value for k, v in self.losses.items()}
+
     def __call__(self, key: str | Enum):
         # accepte soit l'Enum, soit directement la string
         if isinstance(key, str):
