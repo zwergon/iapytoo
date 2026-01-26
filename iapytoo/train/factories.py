@@ -27,7 +27,8 @@ from iapytoo.metrics.predefined import (
     R2Metric,
     RMSMetric,
     AccuracyMetric,
-    MSMetric
+    MSMetric,
+    AccumulAccuracyMetric
 )
 from iapytoo.train.scheduler import (
     Scheduler,
@@ -78,6 +79,7 @@ class Factory:
             "rms": RMSMetric,
             "ms": MSMetric,
             "accuracy": AccuracyMetric,
+            "accumul_accuracy": AccumulAccuracyMetric
         }
 
     def register_provider(self, provider_cls):

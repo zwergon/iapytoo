@@ -80,3 +80,32 @@ class RMSMetric(MSMetric):
         mean_squared_error = super()._compute()
         self.results = {self.name: torch.sqrt(mean_squared_error)}
         return self.results
+
+
+class AccumulAccuracyMetric(Metric):
+    def __init__(self, config: Config, predictor: Predictor = None):
+        super(AccumulAccuracyMetric, self).__init__(
+            "accumul_accuracy", config, predictor=predictor)
+        self.k = config.metrics.top_accuracy
+        self.correct_1 = 0
+        self.correct_k = 0
+        self.n = 0
+
+    def update(self, outputs, target):
+        # Take care, for this metrics predicted and target do not have the same shape.
+        # predicted : ouputs of the models - kind of probabilities
+        # Target : label of the class
+        _, top_pred = outputs.topk(self.k, 1)
+        top_pred = top_pred.t()
+        correct = top_pred.eq(target.view(1, -1).expand_as(top_pred))
+        self.correct_1 += correct[:1].reshape(-1).float().sum(0, keepdim=True)
+        self.correct_k += correct[: self.k].reshape(-1).float().sum(0, keepdim=True)
+        self.n += target.shape[0]
+
+    def compute(self):
+        return {
+            "top-1": torch.round(100.0 * self.correct_1 / self.n, decimals=2),
+            f"top-{self.k}": torch.round(
+                100.0 * self.correct_k / self.n, decimals=2
+            ),
+        }

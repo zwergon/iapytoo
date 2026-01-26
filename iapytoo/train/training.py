@@ -237,7 +237,7 @@ class Training(Inference):
                     loss = function(batch, batch_idx, metrics)
                     timer.tick()
 
-                    mean.update(loss)
+                    mean.update(loss.item())
 
                     tepoch.set_postfix(loss=mean.value)
 
@@ -272,7 +272,7 @@ class Training(Inference):
             for batch_idx, batch in enumerate(loader):
                 loss = function(batch, batch_idx, metrics)
 
-                mean.update(loss)
+                mean.update(loss.item())
 
                 if mean.iter % step == 0:
                     logging.info(
@@ -399,13 +399,10 @@ class Training(Inference):
                     epoch=num_epochs
                 )
 
-        loss_value = self.loss(LossType.VALID).value
-        loss_value = loss_value if isinstance(
-            loss_value, float) else loss_value.item()
         return {
             "run_id": self.logger.run_id,
             "run_name": active_run_name,
-            "loss": loss_value,
+            "loss": self.loss(LossType.VALID).value,
         }
 
     # overwrite
