@@ -32,10 +32,11 @@ class StepEnum(IntEnum):
     WGAN_AGAIN = 5
     WGAN_MLFLOW = 6
     DDPM_TRAIN = 7
+    DDPM_MLFLOW = 8
 
 
 # mnist, mnist_again, mnist_infer, mnist_mlflow_infer, wgan_train, wgan_mlflow
-actions = [True] * 8
+actions = [True] * 9
 # actions[StepEnum.MNIST] = False
 actions[StepEnum.MNIST_AGAIN] = False
 # actions[StepEnum.MNIST_INFER] = False
@@ -209,7 +210,7 @@ def main():
             script=root_dir / "wgan_infer.py",
             log_file=tmp_dir / "wgan_infer.log",
             needs_run_id=True,
-            extra_args=["--output", str(tmp_dir / "prediction.jpg")]
+            extra_args=["--output", str(tmp_dir / "wgan.jpg")]
         ),
         Step(
             name="ddpm_train",
@@ -219,6 +220,14 @@ def main():
             log_file=tmp_dir / "ddpm_train.log",
             returns_run_id=True
         ),
+        Step(
+            name="ddpm_mlflow_infer",
+            func=run_mlflow_infer,
+            script=root_dir / "ddpm_infer.py",
+            log_file=tmp_dir / "ddpm_infer.log",
+            needs_run_id=True,
+            extra_args=["--output", str(tmp_dir / "ddpm.jpg")]
+        )
     ]
 
     for step, action in zip(steps, actions):

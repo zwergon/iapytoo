@@ -23,7 +23,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output",
         type=str,
-        default="wgan.jpg",
+        default="ddpm.jpg",
         help="output filenane for one generated output",
     )
     args = parser.parse_args()
@@ -32,12 +32,12 @@ if __name__ == "__main__":
     client = MlflowClient()
     run = client.get_run(args.run_id)
 
-    noise_dim = int(run.data.params['model.noise_dim'])
+    signal_length = int(run.data.params['model.signal_length'])
 
     # Load model as a PyFuncModel.
     loaded_model: mp.PyFuncModel = mlflow.pyfunc.load_model(logged_model)
 
-    model_input = np.random.rand(noise_dim)
+    model_input = np.random.rand(1, signal_length)
     predicted = loaded_model.predict([model_input])
     plt.figure()
     plt.plot(predicted[0, 0, :])

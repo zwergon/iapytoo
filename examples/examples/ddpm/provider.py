@@ -32,7 +32,7 @@ class PSDProvider(MlflowModelProvider):
         return {
             "path": str(Path(__file__).parent),
             "provider": {
-                "module": "wind_diff.provider",
+                "module": "examples.ddpm.provider",
                 "class": "PSDProvider"
             }
         }
