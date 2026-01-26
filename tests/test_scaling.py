@@ -3,7 +3,12 @@ import unittest
 import numpy as np
 
 from iapytoo.utils.config import ConfigFactory
-from iapytoo.train.factories import Factory
+from iapytoo.dataset.scaling import (
+    MeanNormalize,
+    MeanScalingByColumn,
+    MinMaxNormalize,
+    MinMaxScalingByColumn
+)
 
 
 class TestScaling(unittest.TestCase):
@@ -51,7 +56,7 @@ class TestScaling(unittest.TestCase):
             "run": "test_run",
             "sensors": "sensor_1",
             "model": {
-                "model": "CNN"
+                "provider": "DummyProvider"
             },
             "dataset": {
                 "path": "dummy_path",
@@ -73,14 +78,13 @@ class TestScaling(unittest.TestCase):
         config_data['dataset']['stats'] = self.stats
         config = ConfigFactory.from_args(config_data)
 
-        factory = Factory()
-        scaling = factory.create_transform("minmax_by_column", config)
+        scaling = MinMaxScalingByColumn(config)
 
         scaled = scaling(self.X)
         print(scaled)
         print(scaling.inv(scaled))
 
-        scaling = factory.create_transform("normalize_by_column", config)
+        scaling = MeanScalingByColumn(config)
         scaled = scaling(self.X)
         print(scaled)
         print(scaling.inv(scaled))
@@ -91,14 +95,13 @@ class TestScaling(unittest.TestCase):
         config_data['dataset']['stats'] = self.global_stats
         config = ConfigFactory.from_args(config_data)
 
-        factory = Factory()
-        scaling = factory.create_transform("minmax", config)
+        scaling = MinMaxNormalize(config)
 
         scaled = scaling(self.X)
         print(scaled)
         print(scaling.inv(scaled))
 
-        scaling = factory.create_transform("normalize", config)
+        scaling = MeanNormalize(config)
         scaled = scaling(self.X)
         print(scaled)
         print(scaling.inv(scaled))

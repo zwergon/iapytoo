@@ -1,0 +1,22 @@
+project: drp
+run: ddpm
+tracking_uri: "./mlruns"
+
+dataset:
+  path: "useless"
+  batch_size: 16
+  num_workers: 2
+  stats: []
+     
+model:
+  type: "ddpm"
+  provider: "PSDProvider"
+  signal_length: 512
+
+training:
+  learning_rate: 1e-4
+  loss: "psd"
+  optimizer: "adam"
+  scheduler: "plateau"
+  epochs: 2
+

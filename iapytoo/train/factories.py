@@ -1,9 +1,7 @@
-import torch.nn as nn
 from iapytoo.utils.singleton import singleton
 
 from iapytoo.utils.config import Config
 
-from iapytoo.train.loss import Loss
 
 from iapytoo.train.optimizer import (
     Optimizer,
@@ -40,6 +38,13 @@ from iapytoo.train.mlflow_model import (
     MlflowModelProvider
 )
 
+from iapytoo.train.nn_loss import (
+    NNLoss,
+    MSELoss,
+    NLLLoss,
+    CrossEntropyLoss
+)
+
 from iapytoo.predictions.predictors import Predictor
 
 
@@ -47,9 +52,9 @@ from iapytoo.predictions.predictors import Predictor
 class Factory:
     def __init__(self) -> None:
         self.loss_dict = {
-            "mse": nn.MSELoss,
-            "nll": nn.NLLLoss,
-            "cel": nn.CrossEntropyLoss,
+            "mse": MSELoss,
+            "nll": NLLLoss,
+            "cel": CrossEntropyLoss,
         }
 
         self.schedulers_dict = {
@@ -86,7 +91,7 @@ class Factory:
     def register_loss(self, key, loss_cls):
         self.loss_dict[key] = loss_cls
 
-    def create_loss(self, kind: str) -> Loss:
+    def create_loss(self, kind: str, config: Config) -> NNLoss:
         """Creates a loss criterion
 
         Args:
@@ -96,7 +101,7 @@ class Factory:
             nn.Module: pytorch loss function
         """
         try:
-            criterion = self.loss_dict[kind]()
+            criterion = self.loss_dict[kind](config)
         except KeyError:
             raise Exception(f"loss {kind} is not handled")
 

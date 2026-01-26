@@ -8,8 +8,10 @@ from iapytoo.train.hooks import TrainHook, TqdmHook, LoggingHook
 from iapytoo.train.loss import Loss
 from iapytoo.utils.iterative_mean import Mean
 from iapytoo.utils.timer import Timer
-from iapytoo.utils.config import Config
+from iapytoo.utils.config import Config, TrainingConfig
+from iapytoo.train.scheduler import Scheduler
 from torch.utils.data import DataLoader
+
 import os
 import sys
 import random
@@ -78,9 +80,9 @@ class Training(Inference):
         self._schedulers = []
 
     @property
-    def scheduler(self):
+    def scheduler(self) -> Scheduler:
         if len(self._schedulers) > 0:
-            return self._schedulers[0].lr_scheduler
+            return self._schedulers[0]
 
         return None
 
@@ -126,7 +128,10 @@ class Training(Inference):
     # ----------------------------------------
 
     def _create_criterion(self):
-        return Factory().create_loss(self._config.training.loss)
+        training_conf: TrainingConfig = self._config.training
+        criterion = Factory().create_loss(training_conf.loss, self._config)
+        criterion.to(self.device)
+        return criterion
 
     def _get_lr(self, optimizer):
         for param_group in optimizer.param_groups:
@@ -165,10 +170,15 @@ class Training(Inference):
 
         self.optimizer.step()
 
+        f_loss = loss.item()
+
+        if self.scheduler is not None:
+            self.scheduler.update(f_loss)
+
         metrics.update(model_output, Y)
 
-        self.loss(LossType.TRAIN).update(loss.item())
-        return {LossType.TRAIN: loss.item()}
+        self.loss(LossType.TRAIN).update(f_loss)
+        return {LossType.TRAIN: f_loss}
 
     def _inner_validate(self, batch, batch_idx, metrics: MetricsCollection):
         X, Y = batch

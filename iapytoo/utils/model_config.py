@@ -24,7 +24,7 @@ class GanConfig(ModelConfig):
 
 
 class DDPMConfig(ModelConfig):
-    lambd: Optional[float] = 0.1
+    lambda_: Optional[float] = 0.1
     n_times: Optional[int] = 1000
     signal_length: Optional[int] = 512
 
