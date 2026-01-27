@@ -13,6 +13,13 @@ class Scheduler:
     def __init__(self, optimizer, config: Config) -> None:
         self.lr_scheduler = None
 
+    def update(self, loss: float):
+        pass
+
+    def step(self):
+        assert self.lr_scheduler is not None, f"no torch scheduler associated with {self.__class__.__name__}"
+        self.lr_scheduler.step()
+
 
 class StepScheduler(Scheduler):
     def __init__(self, optimizer, config) -> None:

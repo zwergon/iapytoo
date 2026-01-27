@@ -23,6 +23,12 @@ class GanConfig(ModelConfig):
     n_critic: Optional[int] = 5
 
 
+class DDPMConfig(ModelConfig):
+    lambda_: Optional[float] = 0.1
+    n_times: Optional[int] = 1000
+    signal_length: Optional[int] = 512
+
+
 class MLFlowConfig(ModelConfig):
     run_id: str
 
@@ -39,6 +45,7 @@ class ModelConfigFactory:
             "default": DefaultModelConfig,
             "mlflow": MLFlowConfig,
             "gan": GanConfig,
+            "ddpm": DDPMConfig
         }
 
     def register_model_config(

@@ -1,3 +1,17 @@
+from iapytoo.train.mlflow_model import save_mlflow_model
+from iapytoo.metrics.collection import MetricsCollection
+from iapytoo.train.inference import Inference
+from iapytoo.train.checkpoint import CheckPoint
+from iapytoo.train.logger import Logger
+from iapytoo.train.factories import Factory
+from iapytoo.train.hooks import TrainHook, TqdmHook, LoggingHook
+from iapytoo.train.loss import Loss
+from iapytoo.utils.iterative_mean import Mean
+from iapytoo.utils.timer import Timer
+from iapytoo.utils.config import Config, TrainingConfig
+from iapytoo.train.scheduler import Scheduler
+from torch.utils.data import DataLoader
+
 import os
 import sys
 import random
@@ -7,18 +21,7 @@ import logging
 from tqdm import tqdm
 from enum import Enum
 
-from torch.utils.data import DataLoader
-
-from iapytoo.utils.config import Config
-from iapytoo.utils.timer import Timer
-from iapytoo.utils.iterative_mean import Mean
-from iapytoo.train.loss import Loss
-from iapytoo.train.factories import Factory
-from iapytoo.train.logger import Logger
-from iapytoo.train.checkpoint import CheckPoint
-from iapytoo.train.inference import Inference
-from iapytoo.metrics.collection import MetricsCollection
-from iapytoo.train.mlflow_model import save_mlflow_model
+from typing import List
 
 
 class LossType(str, Enum):
@@ -65,20 +68,21 @@ class Training(Inference):
             self._inner_train) if config.training.compile else self._inner_train
 
         if self._config.training.tqdm:
-            self.train_loop = self.__tqdm_loop(train_func)
-            self.valid_loop = self.__tqdm_loop(self._inner_validate)
+            self.hooks: list[TrainHook] = [TqdmHook()]
         else:
-            self.train_loop = self.__batch_loop(train_func)
-            self.valid_loop = self.__batch_loop(self._inner_validate)
+            self.hooks: list[TrainHook] = [LoggingHook()]
+
+        self.train_loop = self.__hooked_loop(train_func)
+        self.valid_loop = self.__hooked_loop(self._inner_validate)
 
         self.loss = Loss(LossType, config.plotting_mean)
         self._optimizers = []
         self._schedulers = []
 
     @property
-    def scheduler(self):
+    def scheduler(self) -> Scheduler:
         if len(self._schedulers) > 0:
-            return self._schedulers[0].lr_scheduler
+            return self._schedulers[0]
 
         return None
 
@@ -124,7 +128,10 @@ class Training(Inference):
     # ----------------------------------------
 
     def _create_criterion(self):
-        return Factory().create_loss(self._config.training.loss)
+        training_conf: TrainingConfig = self._config.training
+        criterion = Factory().create_loss(training_conf.loss, self._config)
+        criterion.to(self.device)
+        return criterion
 
     def _get_lr(self, optimizer):
         for param_group in optimizer.param_groups:
@@ -163,9 +170,15 @@ class Training(Inference):
 
         self.optimizer.step()
 
+        f_loss = loss.item()
+
+        if self.scheduler is not None:
+            self.scheduler.update(f_loss)
+
         metrics.update(model_output, Y)
 
-        return loss
+        self.loss(LossType.TRAIN).update(f_loss)
+        return {LossType.TRAIN: f_loss}
 
     def _inner_validate(self, batch, batch_idx, metrics: MetricsCollection):
         X, Y = batch
@@ -175,10 +188,20 @@ class Training(Inference):
         loss = self.criterion(model_output, Y)
 
         metrics.update(model_output, Y)
+        self.loss(LossType.VALID).update(loss.item())
+        return {LossType.VALID: loss.item()}
 
-        return loss
+    def _train(self, epoch, train_loader):
+        # Train
+        self.model.train()
+        return self.train_loop(epoch, train_loader, "Train")
 
-    def _on_epoch_ended(self, epoch, checkpoint, checkpoint_epoch, report_per_epoch, **kwargs):
+    def _validate(self, epoch, valid_loader):
+        self.model.eval()
+        with torch.no_grad():
+            return self.valid_loop(epoch, valid_loader, "Valid")
+
+    def _on_epoch_ended(self, epoch, checkpoint, checkpoint_epoch=None, report_per_epoch=None, **kwargs):
         lr = self._get_lr(self.optimizer)
         self.logger.report_metric(epoch=epoch, metrics={"learning_rate": lr})
 
@@ -199,8 +222,8 @@ class Training(Inference):
             self._report_metrics(epoch, **kwargs)
 
     def _report_metrics(self, epoch, **kwargs):
-        if "valid_loader" in kwargs and len(self.predictions) > 0:
-            self.predictions.compute(loader=kwargs["valid_loader"])
+        if "loader" in kwargs and len(self.predictions) > 0:
+            self.predictions.compute(loader=kwargs["loader"])
             self.logger.report_prediction(epoch, self.predictions)
 
         for lt in self.loss.enum_cls:
@@ -214,85 +237,47 @@ class Training(Inference):
     # Private methods
     # ----------------------------------------
 
-    def __tqdm_loop(self, function):
-        """
-        This is a decorator that encapsulates the inner learning procces.
-        Iterations over all batches of one epoch.
-        This decorator displays a progress bar and computes some times
-        """
+    def __hooked_loop(self, function):
+        def new_function(epoch, loader, description):
+            hooks = self.hooks or []
 
-        def new_function(epoch, loader, description, mean: Mean):
             metrics = MetricsCollection(
                 description,
                 self._config.metrics.names,
                 self._config,
-                predictor=self.predictor)
+                predictor=self.predictor
+            )
             metrics.to(self.device)
 
             timer = Timer()
             timer.start()
-            with tqdm(loader, unit="batch", file=sys.stdout) as tepoch:
-                for batch_idx, batch in enumerate(tepoch):
-                    tepoch.set_description(f"{description} {epoch}")
-                    loss = function(batch, batch_idx, metrics)
-                    timer.tick()
 
-                    mean.update(loss.item())
+            for h in hooks:
+                h.on_epoch_start(epoch, description)
 
-                    tepoch.set_postfix(loss=mean.value)
+            total = len(loader)
+
+            for batch_idx, batch in enumerate(loader):
+                for h in hooks:
+                    h.on_batch_start(batch_idx, total)
+
+                losses = function(batch, batch_idx, metrics)
+                timer.tick()
+
+                for h in hooks:
+                    h.on_batch_end(batch_idx, total, losses)
+
+            if self.logger.can_report():
+                metrics.compute()
+                self.logger.report_metrics(epoch, metrics)
+
+            for h in hooks:
+                h.on_epoch_end(epoch, metrics)
 
             timer.log()
             timer.stop()
 
-            if self.logger.can_report():
-                metrics.compute()
-                self.logger.report_metrics(epoch, metrics)
-
         return new_function
-
-    def __batch_loop(self, function):
-        """
-        This is a decorator that encapsulates the inner learning procces.
-        Iterations over all batches of one epoch.
-        This decorator is used for learning process in batch mode (less verbose)
-        """
-
-        def new_function(epoch, loader, description, mean: Mean):
-            size_by_batch = len(loader)
-            step = max(size_by_batch //
-                       self._config.training.n_steps_by_batch, 1)
-
-            metrics = MetricsCollection(
-                description,
-                self._config.metrics.names,
-                self._config,
-                predictor=self.predictor)
-            metrics.to(self.device)
-
-            for batch_idx, batch in enumerate(loader):
-                loss = function(batch, batch_idx, metrics)
-
-                mean.update(loss.item())
-
-                if mean.iter % step == 0:
-                    logging.info(
-                        f"Epoch {epoch} {description} iter {mean.iter} loss: {mean.value}")
-
-            if self.logger.can_report():
-                metrics.compute()
-                self.logger.report_metrics(epoch, metrics)
-
-        return new_function
-
-    def __train(self, epoch, train_loader):
-        # Train
-        self.model.train()
-        return self.train_loop(epoch, train_loader, "Train", self.loss(LossType.TRAIN))
-
-    def __validate(self, epoch, valid_loader):
-        self.model.eval()
-        with torch.no_grad():
-            return self.valid_loop(epoch, valid_loader, "Valid", self.loss(LossType.VALID))
 
     # ----------------------------------------
     # Public methods
@@ -354,7 +339,7 @@ class Training(Inference):
         train_time.stop()
 
     def fit(
-        self, train_loader: DataLoader, valid_loader: DataLoader, run_id=None
+        self, train_loader: DataLoader, valid_loader: DataLoader = None, run_id=None
     ):
         num_epochs = self._config.training.epochs
 
@@ -379,18 +364,24 @@ class Training(Inference):
             for epoch in range(checkpoint.epoch + 1, num_epochs):
 
                 self.logger.set_epoch(epoch)
-                # Train
-                self.__train(epoch, train_loader)
 
-                # Test
-                self.__validate(epoch, valid_loader)
+                # Train
+                self._train(epoch, train_loader)
+
+                # Validate
+                if valid_loader is not None:
+                    self._validate(epoch, valid_loader)
 
                 # increments scheduler
                 if self.scheduler is not None:
                     self.scheduler.step()
 
                 self._on_epoch_ended(
-                    epoch, checkpoint, checkpoint_epoch, report_per_epoch, valid_loader=valid_loader)
+                    epoch, checkpoint,
+                    checkpoint_epoch=checkpoint_epoch,
+                    report_per_epoch=report_per_epoch,
+                    loader=valid_loader
+                )
 
             if save_model:
                 save_mlflow_model(
@@ -399,11 +390,13 @@ class Training(Inference):
                     epoch=num_epochs
                 )
 
-        return {
+        status = {
             "run_id": self.logger.run_id,
-            "run_name": active_run_name,
-            "loss": self.loss(LossType.VALID).value,
+            "run_name": active_run_name
         }
+        status.update(self.loss.to_dict())
+        logging.info(status)
+        return status
 
     # overwrite
     def predict(self, loader, run_id=None):

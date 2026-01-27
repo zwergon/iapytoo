@@ -99,7 +99,8 @@ class AccumulAccuracyMetric(Metric):
         top_pred = top_pred.t()
         correct = top_pred.eq(target.view(1, -1).expand_as(top_pred))
         self.correct_1 += correct[:1].reshape(-1).float().sum(0, keepdim=True)
-        self.correct_k += correct[: self.k].reshape(-1).float().sum(0, keepdim=True)
+        self.correct_k += correct[: self.k].reshape(-1).float().sum(
+            0, keepdim=True)
         self.n += target.shape[0]
 
     def compute(self):

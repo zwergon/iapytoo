@@ -17,7 +17,6 @@ class TestMetrics(unittest.TestCase):
             "model": {
                 "type": "default",
                 "provider": "provider",
-                "model": "CNN"
             },
             "dataset": {
                 "path": "dummy_path",
