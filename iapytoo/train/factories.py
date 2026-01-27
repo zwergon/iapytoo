@@ -11,10 +11,6 @@ from iapytoo.train.optimizer import (
     OptimizerError,
 )
 
-from iapytoo.train.model import (
-    Model,
-    ModelError
-)
 
 from iapytoo.metrics.metric import (
     Metric,
@@ -25,8 +21,10 @@ from iapytoo.metrics.predefined import (
     R2Metric,
     RMSMetric,
     AccuracyMetric,
-    MSMetric
+    MSMetric,
+    AccumulAccuracyMetric
 )
+
 from iapytoo.train.scheduler import (
     Scheduler,
     StepScheduler,
@@ -75,6 +73,7 @@ class Factory:
             "rms": RMSMetric,
             "ms": MSMetric,
             "accuracy": AccuracyMetric,
+            "accumul_accuracy": AccumulAccuracyMetric
         }
 
     def register_provider(self, provider_cls):

@@ -293,7 +293,6 @@ def save_mlflow_model(config: Config,
         kwargs = {
             "python_model": MlflowModel(),
             "extra_pip_requirements": config.inference_pip_requirements,
-            # "code_paths": config.inference_extra_paths,
             "conda_env": None,
             "artifacts": artifacts
         }
