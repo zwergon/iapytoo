@@ -11,7 +11,6 @@ class MetricError(Exception):
 
 class Metric:
     def __init__(self, name, config: Config, predictor: Predictor = None, with_target=True):
-        from iapytoo.train.factories import Factory
         self.with_target = with_target
         self.name = name
         self.config = config

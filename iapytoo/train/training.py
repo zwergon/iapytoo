@@ -157,6 +157,9 @@ class Training(Inference):
             self._config.training.scheduler, optimizer, self._config
         )
         return [scheduler]
+    
+    def _scheduler_step(self):
+        self.scheduler.step()
 
     def _inner_train(self, batch, batch_idx, metrics: MetricsCollection):
         X, Y = batch
@@ -374,7 +377,7 @@ class Training(Inference):
 
                 # increments scheduler
                 if self.scheduler is not None:
-                    self.scheduler.step()
+                    self.scheduler_step(self.loss(LossType.VALID).value)
 
                 self._on_epoch_ended(
                     epoch, checkpoint,

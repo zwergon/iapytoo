@@ -54,6 +54,7 @@ class MlflowModelProvider(ABC):
         self._input_example: np.array = None
         self._transform: Transform = None
         self._predictor: Predictor = Predictor()  # default one
+        self._ml_predictor: Predictor = None
 
     @property
     def code_path(self) -> str:
@@ -140,7 +141,7 @@ class MlflowModelProvider(ABC):
 
     @property
     def ml_predictor(self) -> Predictor:
-        return self._predictor
+        return self._ml_predictor if self._ml_predictor else self._predictor
 
 
 class MlflowWGANProvider(MlflowModelProvider):
@@ -179,6 +180,7 @@ class MlflowModel(mp.PythonModel):
         if "config" in code_definition:
             module = importlib.import_module(
                 code_definition["config"]["module"])
+            # import pdb; pdb.set_trace()
             if "dataset" in code_definition["config"]:
                 key = code_definition["config"]["dataset"]
                 dataset_config_cls = getattr(module, key)
