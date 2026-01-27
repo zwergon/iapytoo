@@ -43,14 +43,15 @@ class PlateauScheduler(Scheduler):
             factor=0.5,
             patience=5
         )
-        self.loss: float = None
+        self.loss: float = 0
 
     def update(self, loss: float):
-        self.loss = loss
+        self.loss += loss
 
     def step(self):
         assert self.lr_scheduler is not None, f"no torch scheduler associated with {self.__class__.__name__}"
         self.lr_scheduler.step(self.loss)
+        self.loss = 0
 
 
 if __name__ == "__main__":

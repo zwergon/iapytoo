@@ -54,6 +54,7 @@ class MlflowModelProvider(ABC):
         self._input_example: np.array = None
         self._transform: Transform = None
         self._predictor: Predictor = Predictor()  # default one
+        self._ml_predictor: Predictor = None
 
     @property
     def code_path(self) -> str:
@@ -140,7 +141,7 @@ class MlflowModelProvider(ABC):
 
     @property
     def ml_predictor(self) -> Predictor:
-        return self._predictor
+        return self._ml_predictor if self._ml_predictor else self._predictor
 
 
 class MlflowWGANProvider(MlflowModelProvider):
@@ -166,8 +167,10 @@ class MlflowModel(mp.PythonModel):
     def from_context(context: mp.PythonModelContext) -> MlflowModelProvider:
         from iapytoo.utils.config import (
             ConfigFactory,
-            DatasetConfigFactory
+            DatasetConfigFactory,
+            TrainingConfigFactory
         )
+        from iapytoo.utils.model_config import ModelConfigFactory
 
         code_definition_path = context.artifacts.get("code_definition", None)
 
@@ -179,11 +182,22 @@ class MlflowModel(mp.PythonModel):
         if "config" in code_definition:
             module = importlib.import_module(
                 code_definition["config"]["module"])
+            config_type = code_definition["config"]["type"]
             if "dataset" in code_definition["config"]:
                 key = code_definition["config"]["dataset"]
                 dataset_config_cls = getattr(module, key)
                 DatasetConfigFactory().register_dataset_config(
-                    key, dataset_config_cls)
+                    config_type, dataset_config_cls)
+            if "training" in code_definition["config"]:
+                key = code_definition["config"]["training"]
+                training_config_cls = getattr(module, key)
+                TrainingConfigFactory().register_training_config(
+                    config_type, training_config_cls)
+            if "model" in code_definition["config"]:
+                key = code_definition["config"]["model"]
+                model_config_cls = getattr(module, key)
+                ModelConfigFactory().register_model_config(
+                    config_type, model_config_cls)
 
         config = ConfigFactory.from_yaml(context.artifacts["config"])
 
