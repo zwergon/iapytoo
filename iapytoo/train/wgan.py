@@ -6,7 +6,7 @@ from iapytoo.utils.config import Config
 from iapytoo.train.mlflow_model import MlflowWGANProvider
 from iapytoo.train.factories import Factory
 from iapytoo.train.loss import Loss
-from iapytoo.metrics.collection import MetricsCollection
+from iapytoo.metrics.metric import Metric
 
 
 class WGAN_FCT(IntEnum):

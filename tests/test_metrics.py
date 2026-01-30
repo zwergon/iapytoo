@@ -3,7 +3,7 @@ import unittest
 
 from iapytoo.utils.config import ConfigFactory
 from iapytoo.dataset import DummyVisionDataset, DummyLabelDataset
-from iapytoo.metrics.collection import MetricsCollection
+from iapytoo.metrics.metric import Metrics
 from iapytoo.predictions.predictors import Predictor
 
 
@@ -49,7 +49,7 @@ class TestMetrics(unittest.TestCase):
             dataset, batch_size=config.dataset.batch_size, shuffle=True, drop_last=True
         )
 
-        collection = MetricsCollection(
+        collection = Metrics(
             "test",
             ["r2", "rms"],
             config,
@@ -70,7 +70,7 @@ class TestMetrics(unittest.TestCase):
             dataset, batch_size=config.dataset.batch_size, shuffle=True, drop_last=True
         )
 
-        collection = MetricsCollection(
+        collection = Metrics(
             "test",
             ["accuracy"],
             config,

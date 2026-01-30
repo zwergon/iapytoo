@@ -14,6 +14,7 @@ from iapytoo.train.optimizer import (
 
 from iapytoo.metrics.metric import (
     Metric,
+    Metrics,
     MetricError
 )
 
@@ -155,24 +156,25 @@ class Factory:
     def register_metric(self, key, metric_cls):
         self.metrics_dict[key] = metric_cls
 
-    def create_metric(self, kind: str, config: Config, device="cpu", predictor: Predictor = None) -> Metric:
-        """Creates an architecture of NN
+    def create_metrics(
+        self,
+        tag: str,
+        kind: list[str],
+        config: Config,
+        predictor: Predictor | None = None,
+        device: str = "cpu"
+    ) -> Metrics:
 
-        Args:
-            kind (str): kind of metric, key for the factory
-            config (dict): config dict to use to initialize metric
-            device (str, optional): Defaults to "cpu".
+        metric_list = []
+        for k in kind:
+            try:
+                metric = self.metrics_dict[k](config)
+            except KeyError:
+                raise MetricError(f"Metric '{k}' is not registered")
+            metric_list.append(metric)
 
-        Raises:
-            MetricError: error raised if no architecture fit kind key
+        if len(metric_list) > 0:
+            metrics = Metrics(tag, metric_list, config, predictor=predictor)
+            metrics.to(device)
 
-        Returns:
-            iapytoo.metrics.Metric: metric
-        """
-        try:
-            metric: Metric = self.metrics_dict[kind](config, predictor)
-        except KeyError:
-            raise MetricError(f"metric {kind} is not handled")
-
-        metric = metric.to(device=device)
-        return metric
+        return None

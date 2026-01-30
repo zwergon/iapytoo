@@ -3,7 +3,7 @@ import sys
 from tqdm import tqdm
 
 from typing import Protocol
-from iapytoo.metrics.collection import MetricsCollection
+from iapytoo.metrics.collection import Metrics
 from iapytoo.train.loss import Loss
 
 
@@ -11,7 +11,7 @@ class TrainHook(Protocol):
     def on_epoch_start(self, epoch: int, description: str): ...
     def on_batch_start(self, batch_idx: int, total: int): ...
     def on_batch_end(self, batch_idx: int, total: int, loss: float): ...
-    def on_epoch_end(self, epoch: int, metrics: MetricsCollection): ...
+    def on_epoch_end(self, epoch: int, metrics: Metrics): ...
 
 
 class TqdmHook:

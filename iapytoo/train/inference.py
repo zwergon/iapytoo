@@ -17,7 +17,7 @@ from iapytoo.train.logger import Logger
 from iapytoo.train.factories import Factory
 from iapytoo.train.mlflow_model import MlflowModel, MlflowModelProvider
 from iapytoo.predictions import Predictions, PredictionType
-from iapytoo.metrics.collection import MetricsCollection
+from iapytoo.metrics.collection import Metrics
 
 
 class Inference(ABC):
@@ -107,7 +107,7 @@ class MLFlowInference(Inference):
 
     def predict(self, loader):
 
-        metrics = MetricsCollection(
+        metrics = Metrics(
             "inference",
             self._config.metrics.names,
             self._config,

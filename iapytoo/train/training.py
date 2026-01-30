@@ -1,5 +1,5 @@
 from iapytoo.train.mlflow_model import save_mlflow_model
-from iapytoo.metrics.collection import MetricsCollection
+from iapytoo.metrics.metric import Metric
 from iapytoo.train.inference import Inference
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.train.logger import Logger
@@ -158,7 +158,7 @@ class Training(Inference):
         )
         return [scheduler]
 
-    def _inner_train(self, batch, batch_idx, metrics: MetricsCollection):
+    def _inner_train(self, batch, batch_idx, metric: Metric):
         X, Y = batch
         X = X.to(self.device)
         Y = Y.to(self.device)
@@ -175,19 +175,19 @@ class Training(Inference):
         if self.scheduler is not None:
             self.scheduler.update(f_loss)
 
-        metrics.update(model_output, Y)
+        metric.update(model_output, Y)
 
         self.loss(LossType.TRAIN).update(f_loss)
         return {LossType.TRAIN: f_loss}
 
-    def _inner_validate(self, batch, batch_idx, metrics: MetricsCollection):
+    def _inner_validate(self, batch, batch_idx, metric: Metric):
         X, Y = batch
         X = X.to(self.device)
         Y = Y.to(self.device)
         model_output = self.model(X)
         loss = self.criterion(model_output, Y)
 
-        metrics.update(model_output, Y)
+        metric.update(model_output, Y)
         self.loss(LossType.VALID).update(loss.item())
         return {LossType.VALID: loss.item()}
 
@@ -241,13 +241,13 @@ class Training(Inference):
         def new_function(epoch, loader, description):
             hooks = self.hooks or []
 
-            metrics = MetricsCollection(
-                description,
+            metric = Factory().create_metric(
                 self._config.metrics.names,
                 self._config,
-                predictor=self.predictor
+                tag=description,
+                predictor=self.predictor,
+                device=self.device
             )
-            metrics.to(self.device)
 
             timer = Timer()
             timer.start()
@@ -261,18 +261,18 @@ class Training(Inference):
                 for h in hooks:
                     h.on_batch_start(batch_idx, total)
 
-                losses = function(batch, batch_idx, metrics)
+                losses = function(batch, batch_idx, metric)
                 timer.tick()
 
                 for h in hooks:
                     h.on_batch_end(batch_idx, total, losses)
 
             if self.logger.can_report():
-                metrics.compute()
-                self.logger.report_metrics(epoch, metrics)
+                metric.compute()
+                self.logger.report_metrics(epoch, metric)
 
             for h in hooks:
-                h.on_epoch_end(epoch, metrics)
+                h.on_epoch_end(epoch, metric)
 
             timer.log()
             timer.stop()

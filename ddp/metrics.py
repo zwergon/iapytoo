@@ -4,7 +4,7 @@ from pathlib import Path
 
 import torch.distributed as dist
 
-from iapytoo.metrics.collection import MetricsCollection
+from iapytoo.metrics.collection import Metrics
 from iapytoo.utils.config import Config, ConfigFactory
 from iapytoo.train.training import Training
 
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     config: Config = ConfigFactory.from_yaml(
         Path(__file__).parent / "config.yml")
 
-    collection = MetricsCollection("ddp", config.metrics.names, config)
+    collection = Metrics("ddp", config.metrics.names, config)
     collection.to(device)
 
     actual_list = [3.0, -0.5, 2.0, 7.0]
