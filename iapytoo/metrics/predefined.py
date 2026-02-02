@@ -70,13 +70,13 @@ class MSMetric(Metric):
 
 
 class RMSMetric(MSMetric):
-    def __init__(self, config: Config, predictor: Predictor = None) -> None:
-        Metric.__init__(self, "root_mean_square", config, predictor=predictor)
+    def __init__(self, config: Config) -> None:
+        Metric.__init__(self, "root_mean_square", config)
         self.name = "rms"
 
     def compute(self, metrics: Metrics):
         metrics.gather()
-        mean_squared_error = super()._compute()
+        mean_squared_error = super()._compute(metrics)
         return {self.name: torch.sqrt(mean_squared_error)}
 
 

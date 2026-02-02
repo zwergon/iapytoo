@@ -23,18 +23,18 @@ class Metrics:
         self.tag = tag
         self.with_target = with_target
         self.metrics = metrics
-
-        # First dimension is for the concatenation.
+        self.with_output = self._init_with_output(metrics=metrics)
         if self.with_output:
+            # First dimension is for the concatenation.
             self.outputs = torch.zeros(size=(0,))
         if self.with_target:
             self.target = torch.zeros(size=(0,))
 
         self.results = {}
 
-    @property
-    def with_output(self):
-        for m in self.metrics:
+    @staticmethod
+    def _init_with_output(metrics: list['Metric']):
+        for m in metrics:
             if m.with_output:
                 return m.with_output
 
@@ -61,6 +61,10 @@ class Metrics:
             self.outputs = torch.cat((self.outputs, outputs), dim=0)
         if self.with_target:
             self.target = torch.cat((self.target, Y), dim=0)
+
+        for m in self.metrics:
+            if not m.with_output:
+                m.update(outputs, Y)
 
     def reset(self):
         device = self.device

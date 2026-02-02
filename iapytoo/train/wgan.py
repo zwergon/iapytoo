@@ -113,7 +113,7 @@ class WGAN(Training):
 
         return penalty
 
-    def _update_d(self, real_data, real_labels=None, metrics: MetricsCollection = None):
+    def _update_d(self, real_data, real_labels=None, metric: Metric = None):
         noise_dim = self._config.model.noise_dim
         lambda_gp = self._config.model.lambda_gp
 

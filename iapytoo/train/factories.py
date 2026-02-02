@@ -173,8 +173,7 @@ class Factory:
                 raise MetricError(f"Metric '{k}' is not registered")
             metric_list.append(metric)
 
-        if len(metric_list) > 0:
-            metrics = Metrics(tag, metric_list, config, predictor=predictor)
-            metrics.to(device)
+        metrics = Metrics(tag, metric_list, config, predictor=predictor)
+        metrics.to(device)
 
-        return None
+        return metrics
