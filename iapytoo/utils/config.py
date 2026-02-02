@@ -28,10 +28,18 @@ def ensure_list(value, target_type):
         return value
 
 
+class StatsConfig(BaseModel):
+    variable: str
+    stats: List[float] = Field(default_factory=lambda: [0., 1., 0., 1.])
+
+
 class DatasetConfig(BaseModel):
     type: str = "default"
     path: str
     normalization: Optional[bool] = True
+    stats: List[StatsConfig] = Field(
+        default_factory=lambda: [StatsConfig(variable="global")]
+    )
     batch_size: int
     indices: Annotated[List[int], BeforeValidator(
         lambda v: ensure_list(v, int))] = [0]
@@ -42,6 +50,12 @@ class DatasetConfig(BaseModel):
     version_type: Optional[str] = "stable"
     ratio_train_test: Optional[float] = 0.8
     num_workers: Optional[int] = 2
+
+    def statistic(self, key):
+        for s in self.stats:
+            if s.variable == key:
+                return s
+        return None
 
 
 class TrainingConfig(BaseModel):
@@ -181,8 +195,6 @@ class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _PlottersT, _Mo
     seed: Optional[int] = 42
     inference_pip_requirements: Optional[Annotated[list[str], BeforeValidator(
         lambda v: ensure_list(v, str))]] = None
-    inference_extra_paths: Optional[Annotated[list[str], BeforeValidator(
-        lambda v: ensure_list(v, str))]] = None
     dataset: _DataT
     training: Optional[_TrainingT] = None
     metrics: _MetricsT = Field(default_factory=MetricsConfig)
@@ -224,18 +236,6 @@ class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _PlottersT, _Mo
 
     def __str__(self):
         return self.__repr__()
-
-    @staticmethod
-    def default_path():
-        return os.path.join(os.path.dirname(__file__), "cf", "config.json")
-
-    @staticmethod
-    def default_config():
-        return Config(Config.default_path())
-
-    @staticmethod
-    def test_config():
-        return Config(os.path.join(os.path.dirname(__file__), "cf", "config_test.json"))
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)

@@ -12,7 +12,7 @@ class TestConfig(unittest.TestCase):
             "run": "test_run",
             "sensors": "sensor_1",
             "model": {
-                "model": "CNN"
+                "provider": "Provider"
             },
             "dataset": {
                 "path": "dummy_path",
@@ -64,7 +64,7 @@ class TestConfig(unittest.TestCase):
         flat_dict = config_ini.to_flat_dict()
         print(flat_dict)
 
-        self.assertEqual(flat_dict["model.model"], "CNN")
+        self.assertEqual(flat_dict["model.provider"], "Provider")
         self.assertEqual(flat_dict["dataset.batch_size"], 32)
         self.assertEqual(flat_dict["training.learning_rate"], 0.001)
 
@@ -91,7 +91,7 @@ class TestConfig(unittest.TestCase):
         # Vérifie que le dictionnaire imbriqué est correctement reconstruit
         self.assertEqual(config.project, "iapytoo")
         self.assertEqual(config.run, "test_run")
-        self.assertEqual(config.model.model, "CNN")
+        self.assertEqual(config.model.provider, "Provider")
         self.assertEqual(config.dataset.batch_size, 32)
         self.assertEqual(config.training.learning_rate, 0.001)
 

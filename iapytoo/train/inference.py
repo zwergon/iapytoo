@@ -6,7 +6,7 @@ import numpy as np
 import mlflow
 import mlflow.pyfunc
 
-from mlflow.models import ModelSignature
+from mlflow.tracking import MlflowClient
 
 from abc import ABC, abstractmethod
 
@@ -15,12 +15,12 @@ from iapytoo.utils.config import Config
 from iapytoo.utils.model_config import ModelConfig, MLFlowConfig
 from iapytoo.train.logger import Logger
 from iapytoo.train.factories import Factory
-from iapytoo.train.mlflow_model import MlflowTransform, MlflowModel, IMlfowModelProvider
+from iapytoo.train.mlflow_model import MlflowModel, MlflowModelProvider
 from iapytoo.predictions import Predictions, PredictionType
-from iapytoo.metrics.collection import MetricsCollection
+from iapytoo.metrics.metric import Metrics
 
 
-class Inference(ABC, IMlfowModelProvider):
+class Inference(ABC):
 
     def __init__(
         self,
@@ -32,11 +32,9 @@ class Inference(ABC, IMlfowModelProvider):
         self.logger: Logger = None
 
         self._models = []
-        self.valuator = None
-        self.predictor = None
+
         self.predictions: Predictions = Predictions(self)
-        self.mlflow_model: MlflowModel = None
-        self.mlflow_model_provider: IMlfowModelProvider = None
+        self.mlflow_model_provider: MlflowModelProvider = self._create_model_provider()
 
     def _display_device(self):
         use_cuda = torch.cuda.is_available()
@@ -55,65 +53,41 @@ class Inference(ABC, IMlfowModelProvider):
     def model(self):
         return self._models[0]
 
-    @abstractmethod
-    def _create_models(self, loader):
-        pass
+    @property
+    def predictor(self):
+        assert self.mlflow_model_provider is not None, "a provider is required to define predictor"
+        return self.mlflow_model_provider.predictor
 
-    def _init_mlflow_model(self):
-        """ Generates mlflow model by creating valuator and predictor for this inference
-            if a IMlfowModelProvider is provided, use it to initiate signature, transform and input_example
-            Take care that at that point model should already be created
-        """
+    @property
+    def transform(self):
+        if self.mlflow_model_provider is None:
+            return None
+        return self.mlflow_model_provider.transform
 
-        assert self.model is not None, "a pytorch model is required for mlflow model"
-
+    def _create_model_provider(self) -> MlflowModelProvider:
         model_config: ModelConfig = self._config.model
-
-        factory = Factory()
-        self.valuator = factory.create_valuator(
-            model_config.valuator,
-            self.model,
-            self.device
-        )
-        self.predictor = factory.create_predictor(
-            model_config.predictor
+        assert model_config.provider is not None, "a provider is need to define model"
+        return Factory().create_provider(
+            model_config.provider, self._config
         )
 
-        self.mlflow_model = MlflowModel()
-        self.mlflow_model.model = self.model
-        self.mlflow_model.valuator_key = model_config.valuator
-        self.mlflow_model.predictor_key = model_config.predictor
-        self.mlflow_model.ml_valuator = self.valuator
-        if model_config.inference_predictor is None:
-            self.mlflow_model.ml_predictor = self.predictor
-        else:
-            # Custom predictor should accept extra arguments as does the parent class
-            self.mlflow_model.ml_predictor = factory.create_predictor(model_config.inference_predictor,
-                                                                      model_config.inference_predictor_args)
-
-        if self.mlflow_model_provider is not None:
-            self.mlflow_model.signature = self.mlflow_model_provider.get_signature()
-            self.mlflow_model.input_example = self.mlflow_model_provider.get_input_example()
-            self.mlflow_model.transform = self.mlflow_model_provider.get_transform()
-
-    def get_transform(self) -> MlflowTransform:
-        if self.mlflow_model_provider is not None:
-            return self.mlflow_model_provider.get_transform()
-        return None
-
-    def get_input_example(self) -> np.array:
-        if self.mlflow_model_provider is not None:
-            return self.mlflow_model_provider.get_input_example()
-        return None
-
-    def get_signature(self) -> ModelSignature:
-        if self.mlflow_model_provider is not None:
-            return self.mlflow_model_provider.get_signature()
-        return None
+    @abstractmethod
+    def _create_models(self):
+        pass
 
     @abstractmethod
     def predict(self, loader, run_id=None):
         pass
+
+
+def get_model_uri(run_id, idx=-1):
+    """return the idx model_uri for this run_id.
+    return the last one by default.
+    """
+    client = MlflowClient()
+    run = client.get_run(run_id=run_id)
+    model_uri = f"models:/{run.outputs.model_outputs[-1].model_id}"
+    return model_uri
 
 
 class MLFlowInference(Inference):
@@ -121,56 +95,29 @@ class MLFlowInference(Inference):
     def __init__(self, config: Config) -> None:
         super().__init__(config)
         model_config: MLFlowConfig = self._config.model
-        logged_model = f"runs:/{model_config.run_id}/model"
+
+        model_uri = get_model_uri(model_config.run_id)
         self.mlflow_model: MlflowModel = mlflow.pyfunc.load_model(
-            logged_model).unwrap_python_model()
+            model_uri).unwrap_python_model()
 
-    # overidde : use mlflow_model
-    def get_transform(self) -> MlflowTransform:
-        if self.mlflow_model is not None:
-            return self.mlflow_model.transform
-        return None
-
-    # overidde : use mlflow_model
-    def get_input_example(self) -> np.array:
-        if self.mlflow_model is not None:
-            return self.mlflow_model.input_example
-        return None
-
-    # overidde : use mlflow_model
-    def get_signature(self) -> ModelSignature:
-        if self.mlflow_model is not None:
-            return self.mlflow_model.signature
-        return None
-
-    # overidde : use mlflow_model
-    def _create_models(self, loader):
+    def _create_models(self):
         model = self.mlflow_model.model
         model.to(self.device)
         return [model]
 
     def predict(self, loader):
 
-        metrics = MetricsCollection(
-            "inference", self._config.metrics.names, self._config)
-        # metrics.to(self.device)
+        metrics = Factory().create_metrics(
+            "inference",
+            self._config.metrics.names,
+            self._config,
+            predictor=self.predictor)
 
         with Logger(self._config) as self.logger:
             self._display_device()
             self.logger.summary()
 
-            self._models = self._create_models(loader)
-            assert self.model is not None, "no model loaded for prediction"
-
-            factory = Factory()
-            self.valuator = factory.create_valuator(
-                self.mlflow_model.valuator_key,
-                self.model,
-                self.device
-            )
-            self.predictor = factory.create_predictor(
-                self.mlflow_model.predictor_key
-            )
+            self._models = self._create_models()
 
             self.predictions.compute(loader=loader)
             self.logger.report_prediction(0, self.predictions)

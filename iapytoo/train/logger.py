@@ -1,5 +1,6 @@
 import os
 import torch
+import numpy as np
 
 import uuid
 import tempfile
@@ -14,11 +15,11 @@ import mlflow.pyfunc
 
 
 from iapytoo.utils.config import Config
+from iapytoo.utils.model_config import ModelConfig
 from iapytoo.utils.display import lrfind_plot
 from iapytoo.train.checkpoint import CheckPoint
 from iapytoo.train.context import Context
 from iapytoo.predictions import Predictions
-from iapytoo.train.mlflow_model import MlflowModel
 
 
 class Logger:
@@ -72,11 +73,14 @@ class Logger:
     def start(self):
         matplotlib.use("agg")
         params_flag = self.run_id is None
-        active_run = mlflow.start_run(
-            experiment_id=self.experiment_id,
-            run_id=self.run_id,
-            run_name=self._run_name(self.config.run),
-        )
+        kwargs = {
+            "experiment_id": self.experiment_id
+        }
+        if self.run_id is None:
+            kwargs['run_name'] = self._run_name(self.config.run)
+        else:
+            kwargs['run_id'] = self.run_id
+        active_run = mlflow.start_run(**kwargs)
         logging.info(f"active_run {active_run.info.run_id}")
         self.run_id = active_run.info.run_id
         if params_flag:
@@ -105,9 +109,9 @@ class Logger:
     def __str__(self):
         msg = "\nLogger:\n"
 
-        model_config = self.config.model
+        model_config: ModelConfig = self.config.model
 
-        msg += f"Network: {model_config._network()}\n"
+        msg += f"Provider: {model_config.provider}\n"
         msg += f"matplotlib backend: {matplotlib.rcParams['backend']}, interactive: {matplotlib.is_interactive()}\n"
         msg += f"tracking_uri: {mlflow.get_tracking_uri()}\n"
         active_run = mlflow.active_run()
@@ -138,38 +142,6 @@ class Logger:
             mlflow.log_artifact(local_path=ckp_name,
                                 artifact_path="checkpoints")
 
-    def save_model(self, model_wrapper: MlflowModel):
-
-        def supports_name():
-            version = tuple(map(int, mlflow.__version__.split(".")))
-            return version >= (3, 0, 0)
-
-        assert model_wrapper is not None, "no model_wrapper instance ?"
-
-        signature = model_wrapper.signature
-        input_example = model_wrapper.input_example
-
-        model_wrapper.model.cpu()
-
-        kwargs = {
-            "python_model": model_wrapper,
-            "signature": signature,
-            "input_example": input_example,
-            "extra_pip_requirements": self.config.inference_pip_requirements,
-            "code_paths": self.config.inference_extra_paths,
-            "conda_env": None,
-            # Whole model dictionary can't be dumped
-            "metadata": self.config.model.inference_predictor_args,
-        }
-
-        if supports_name():
-            kwargs["name"] = "model"
-        else:
-            kwargs["artifact_path"] = "model"
-
-        with self.lock:
-            mlflow.pyfunc.log_model(**kwargs)
-
     def can_report(self):
         return self.context.epoch > self.context.last_epoch
 
@@ -182,12 +154,11 @@ class Logger:
 
         with self.lock:
             values = {}
-            for k, v in metrics.results.items():
-                if len(v.shape) == 0:
-                    values[k] = v.item()
-                else:
-                    for c in range(v.shape[0]):
-                        values[f"{k}_{c}"] = v[c].item()
+            for k, d in metrics.results.items():
+                for c in d:
+                    v = d[c]
+                    values[f"{k}_{c}"] = v.item() if isinstance(
+                        v, torch.Tensor) else float(v)
             mlflow.log_metrics(values, step=epoch)
 
     def report_prediction(self, epoch, predictions: Predictions):

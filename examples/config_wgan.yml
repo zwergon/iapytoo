@@ -1,29 +1,32 @@
 project: wgan
-run: wgan
-tracking_uri: null
+run: cnn1d
+tracking_uri: "./mlruns"
 
 dataset:
-  path: "./data"
-  n_steps_by_batch: 10
+  path: "./data/sin_wave.csv"
   num_workers: 2
-  batch_size: 256
+  batch_size: 128
+
+
+  
+model:
+  type: "gan"
+  provider: "WindProvider"
+  hidden_size: 128
+  n_critic: 5
+  noise_dim: 20
+  signal_length: 600
+  lambda_gp: 10
 
 training:
-  learning_rate: 0.0002
+  tqdm: False
+  n_steps_by_batch: 3
+  epochs: 11
+  loss: "useless"
+  learning_rate: 0.0001
   optimizer: adam
   scheduler: step
   gamma: 0.7
   # betas:
   #   - 0.5
   #   - 0.99
-  epochs: 11
-  loss: "wasserstein"
-
-model:
-  type: "gan"
-  valuator: "gan"
-  generator: generator
-  discriminator: critic
-  n_critic: 1
-  lambda_gp: 10
-  noise_dim: 100
