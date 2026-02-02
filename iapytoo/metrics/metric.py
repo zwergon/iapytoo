@@ -72,6 +72,8 @@ class Metrics:
             self.outputs = torch.zeros(size=(0,), device=device)
         if self.with_target:
             self.target = torch.zeros(size=(0,), device=self.device)
+        for m in self.metrics:
+            m.reset()
 
     def gather(self):
         import torch.distributed as dist
@@ -105,4 +107,7 @@ class Metric:
         self.with_output = with_output  # by default use Metrics outputs
 
     def compute(self, metrics: Metrics):
+        pass
+    
+    def reset(self):
         pass

@@ -108,3 +108,8 @@ class AccumulAccuracyMetric(Metric):
                 100.0 * self.correct_k / self.n, decimals=2
             ),
         }
+
+    def reset(self):
+        self.correct_1 = 0
+        self.correct_k = 0
+        self.n = 0
