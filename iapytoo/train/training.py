@@ -346,7 +346,7 @@ class Training(Inference):
                         loss.backward()
                         self.optimizer.step()
 
-                        lr = self.scheduler.get_last_lr()[0]
+                        lr = self._get_lr(self.optimizer)
                         lv = loss.item()
                         mean_loss.update(lv)
                         lrs.append(lr)

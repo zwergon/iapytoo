@@ -59,16 +59,18 @@ if __name__ == "__main__":
     from iapytoo.train.ddpm import DDPM
     from iapytoo.train.factories import Factory
     from iapytoo.utils.config import ConfigFactory
-
-    root_dir = Path(__file__).parent
+    from iapytoo.utils.arguments import parse_args
 
     factory = Factory()
     factory.register_provider(PSDProvider)
     factory.register_scheduler("plateau", PlateauScheduler)
     factory.register_loss("psd", PSDLoss)
 
-    # INPUT Parameters
-    config = ConfigFactory.from_yaml(root_dir / "config_ddpm.yml")
+    # INPUT Parametersfrom iapytoo.utils.arguments import parse_args
+
+    args = parse_args()
+    config = ConfigFactory.from_yaml(args.yaml)
+
     ddpm_config: DDPMConfig = config.model
 
     # -----------------------------

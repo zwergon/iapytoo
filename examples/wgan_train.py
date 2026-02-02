@@ -20,8 +20,10 @@ class WindGan(WGAN):
 
 
 if __name__ == "__main__":
-    config = ConfigFactory.from_yaml(os.path.join(
-        os.path.dirname(__file__), "config_wgan.yml"))
+    from iapytoo.utils.arguments import parse_args
+
+    args = parse_args()
+    config = ConfigFactory.from_yaml(args.yaml)
 
     # load training data
     dataset_path = Path(__file__).parent / config.dataset.path

@@ -33,10 +33,12 @@ class StepEnum(IntEnum):
     WGAN_MLFLOW = 6
     DDPM_TRAIN = 7
     DDPM_MLFLOW = 8
+    MNIST_FIND_LR = 9
+    LAST = 10
 
 
 # mnist, mnist_again, mnist_infer, mnist_mlflow_infer, wgan_train, wgan_mlflow
-actions = [True] * 9
+actions = [True] * StepEnum.LAST
 # actions[StepEnum.MNIST] = False
 actions[StepEnum.MNIST_AGAIN] = False
 # actions[StepEnum.MNIST_INFER] = False
@@ -45,6 +47,7 @@ actions[StepEnum.MNIST_AGAIN] = False
 actions[StepEnum.WGAN_AGAIN] = False
 # actions[StepEnum.WGAN_MLFLOW] = False
 # actions[StepEnum.DDPM_TRAIN] = False
+# actions[StepEnum.DDPM_MLFLOW] = False
 
 
 @dataclass
@@ -94,6 +97,8 @@ def run_train(step: Step):
                                     stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
         if step.returns_run_id:
             return step._extract_run_id()
+
+        return 0
 
     except subprocess.CalledProcessError as e:
         print(
@@ -192,14 +197,14 @@ def main():
             name="wgan_train",
             func=run_train,
             script=root_dir / "wgan_train.py",
-            config=root_dir / "config_wgan.py",
+            config=root_dir / "config_wgan.yml",
             log_file=tmp_dir / "wgan_train.log",
             returns_run_id=True
         ),
         Step(name="wgan_again",
              func=run_train_again,
              script=root_dir / "wgan_train.py",
-             config=root_dir / "config_wgan.py",
+             config=root_dir / "config_wgan.yml",
              log_file=tmp_dir / "wgan_again.log",
              needs_run_id=True,
              extra_args=["--epochs", "20"]
@@ -216,7 +221,7 @@ def main():
             name="ddpm_train",
             func=run_train,
             script=root_dir / "ddpm_train.py",
-            config=root_dir / "config_ddpm.py",
+            config=root_dir / "config_ddpm.yml",
             log_file=tmp_dir / "ddpm_train.log",
             returns_run_id=True
         ),
@@ -227,6 +232,15 @@ def main():
             log_file=tmp_dir / "ddpm_infer.log",
             needs_run_id=True,
             extra_args=["--output", str(tmp_dir / "ddpm.jpg")]
+        ),
+        Step(
+            name="mnist_find_lr",
+            func=run_train,
+            script=root_dir / "mnist_find_lr.py",
+            config=root_dir / "config_mnist.yml",
+            log_file=tmp_dir / "mnist_find_lr.log",
+            returns_run_id=False,
+            needs_run_id=False
         )
     ]
 
