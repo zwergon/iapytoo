@@ -154,12 +154,11 @@ class Logger:
 
         with self.lock:
             values = {}
-            for k, v in metrics.results.items():
-                if len(v.shape) == 0:
-                    values[k] = v.item()
-                else:
-                    for c in range(v.shape[0]):
-                        values[f"{k}_{c}"] = v[c].item()
+            for k, d in metrics.results.items():
+                for c in d:
+                    v = d[c]
+                    values[f"{k}_{c}"] = v.item() if isinstance(
+                        v, torch.Tensor) else float(v)
             mlflow.log_metrics(values, step=epoch)
 
     def report_prediction(self, epoch, predictions: Predictions):

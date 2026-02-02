@@ -30,8 +30,7 @@ class DDPM(Training):
         self._lambda = ddpm_config.lambda_
 
     # override
-
-    def _inner_train(self, batch, batch_idx, d_metrics):
+    def _inner_train(self, batch, batch_idx):
 
         model: DDPMModel = self.model
         real_data = batch
@@ -40,11 +39,14 @@ class DDPM(Training):
         xt, noise = model.q_sample(real_data)
 
         pred_noise = model(xt, model.normalized_time)
+
         loss_noise = F.mse_loss(pred_noise, noise)
+        self.loss(DDPM_LOSS.NOISE).update(loss_noise.item())
 
         x0_hat = model.predict(xt, pred_noise)
 
         loss_target = self.criterion(x0_hat, real_data)
+        self.loss(DDPM_LOSS.MODEL).update(loss_target.item())
 
         loss = loss_noise + self._lambda*loss_target
         self.optimizer.zero_grad()
@@ -60,8 +62,8 @@ class DDPM(Training):
         self.optimizer.step()
 
         losses = {
-            "loss_noise": float(loss_noise),
-            "loss_target": float(loss_target)
+            DDPM_LOSS.NOISE: loss_noise.item(),
+            DDPM_LOSS.MODEL: loss_target.item()
         }
 
         return losses

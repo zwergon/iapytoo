@@ -27,8 +27,8 @@ class Metrics:
         if self.with_output:
             # First dimension is for the concatenation.
             self.outputs = torch.zeros(size=(0,))
-        if self.with_target:
-            self.target = torch.zeros(size=(0,))
+            if self.with_target:
+                self.target = torch.zeros(size=(0,))
 
         self.results = {}
 
@@ -52,28 +52,31 @@ class Metrics:
     def to(self, device):
         if self.with_output:
             self.outputs = self.outputs.to(device)
-        if self.with_target:
-            self.target = self.target.to(device)
+            if self.with_target:
+                self.target = self.target.to(device)
         return self
 
     def update(self, outputs, Y):
         if self.with_output:
             self.outputs = torch.cat((self.outputs, outputs), dim=0)
-        if self.with_target:
-            self.target = torch.cat((self.target, Y), dim=0)
+            if self.with_target:
+                self.target = torch.cat((self.target, Y), dim=0)
 
         for m in self.metrics:
             if not m.with_output:
                 m.update(outputs, Y)
 
     def reset(self):
-        device = self.device
+
         if self.with_output:
+            device = self.device
             self.outputs = torch.zeros(size=(0,), device=device)
-        if self.with_target:
-            self.target = torch.zeros(size=(0,), device=self.device)
+            if self.with_target:
+                self.target = torch.zeros(size=(0,), device=self.device)
+
         for m in self.metrics:
-            m.reset()
+            if not m.with_output:
+                m.reset()
 
     def gather(self):
         import torch.distributed as dist
@@ -108,6 +111,6 @@ class Metric:
 
     def compute(self, metrics: Metrics):
         pass
-    
+
     def reset(self):
         pass

@@ -1,3 +1,4 @@
+from torch import Tensor
 import torch.nn as nn
 from torch.types import Device
 from iapytoo.utils.config import Config
@@ -12,7 +13,7 @@ class NNLoss:
     def __init__(self, config: Config) -> None:
         self.torch_loss = None
 
-    def __call__(self, pred, target):
+    def __call__(self, pred, target) -> Tensor:
         return self.torch_loss(pred, target)
 
     def to(self, device: Device):

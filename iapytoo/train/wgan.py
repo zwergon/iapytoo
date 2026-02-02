@@ -6,7 +6,6 @@ from iapytoo.utils.config import Config
 from iapytoo.train.mlflow_model import MlflowWGANProvider
 from iapytoo.train.factories import Factory
 from iapytoo.train.loss import Loss
-from iapytoo.metrics.metric import Metric
 
 
 class WGAN_FCT(IntEnum):
@@ -68,7 +67,18 @@ class WGAN(Training):
 
         return [g_optimizer, d_optimizer]
 
-    @staticmethod
+    def _create_metrics(self):
+        return {
+            "Train": Factory().create_metrics(
+                "Train",
+                self._config.metrics.names,
+                self._config,
+                predictor=self.predictor,
+                device=self.device
+            )
+        }
+
+    @ staticmethod
     def freeze_params(model, freeze: bool):
         for param in model.parameters():
             param.requires_grad = freeze
@@ -113,7 +123,7 @@ class WGAN(Training):
 
         return penalty
 
-    def _update_d(self, real_data, real_labels=None, metric: Metric = None):
+    def _update_d(self, real_data, real_labels=None):
         noise_dim = self._config.model.noise_dim
         lambda_gp = self._config.model.lambda_gp
 
@@ -170,7 +180,7 @@ class WGAN(Training):
         self.loss.flush()
 
     # override
-    def _inner_train(self, batch, batch_idx, d_metrics):
+    def _inner_train(self, batch, batch_idx):
         real_data, real_labels = batch
         real_data = real_data.to(self.device)
         if real_labels is not None:
@@ -179,7 +189,7 @@ class WGAN(Training):
         self.d_optimizer.zero_grad()
         self.g_optimizer.zero_grad()
 
-        d_loss = self._update_d(real_data, real_labels, d_metrics)
+        d_loss = self._update_d(real_data, real_labels)
 
         n_critic = self._config.model.n_critic
         if n_critic == 1 or batch_idx % n_critic == 0:

@@ -3,7 +3,7 @@ import sys
 from tqdm import tqdm
 
 from typing import Protocol
-from iapytoo.metrics.collection import Metrics
+from iapytoo.metrics.metric import Metrics
 from iapytoo.train.loss import Loss
 
 
