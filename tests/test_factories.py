@@ -3,13 +3,12 @@ import torch
 import torch.nn as nn
 from unittest.mock import MagicMock, patch
 from iapytoo.train.factories import (
-    Model,
     Factory,
     OptimizerError,
-    ModelError,
     SchedulerError,
     MetricError
 )
+from iapytoo.train.model import Model
 from iapytoo.utils.config import Config, ConfigFactory
 from iapytoo.train.nn_loss import MSELoss
 from iapytoo.train.mlflow_model import MlflowModelProvider
@@ -107,11 +106,15 @@ class TestFactory(unittest.TestCase):
 
     def test_create_metric(self):
         self.mock_config = ConfigFactory.from_args(self.config_data)
-        metric = self.factory.create_metric("r2", self.mock_config)
+        metric = self.factory.create_metrics(
+            "test_metrics", ["r2"], self.mock_config)
         self.assertIsNotNone(metric)
 
         with self.assertRaises(MetricError):
-            self.factory.create_metric("unknown_metric", self.mock_config)
+            self.factory.create_metrics(
+                "test_metrics",
+                ["unknown_metric"],
+                self.mock_config)
 
 
 if __name__ == "__main__":

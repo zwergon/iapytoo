@@ -21,7 +21,6 @@ class MnistTraining(Training):
 if __name__ == "__main__":
     from iapytoo.utils.arguments import parse_args
     from pathlib import Path
-    root_dir = Path(__file__).parent
 
     factory = Factory()
     factory.register_provider(MnistProvider)
