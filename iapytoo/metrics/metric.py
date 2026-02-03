@@ -54,6 +54,11 @@ class Metrics:
             self.outputs = self.outputs.to(device)
             if self.with_target:
                 self.target = self.target.to(device)
+
+        for m in self.metrics:
+            if not m.with_output:
+                m = m.to(device)
+
         return self
 
     def update(self, outputs, Y):
