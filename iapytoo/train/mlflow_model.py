@@ -251,7 +251,7 @@ class MlflowModel(mp.PythonModel):
 
             if isinstance(path, np.ndarray):
                 arr = path.astype(np.float32)
-            elif isinstance(path, str):
+            elif isinstance(path, str) and path.endswith(".npy"):
                 if path == MlflowModel.INPUT_EXAMPLE:
                     assert MlflowModel.INPUT_EXAMPLE in context.artifacts, "no input example given during training"
                     arr = np.load(context.artifacts[MlflowModel.INPUT_EXAMPLE])
