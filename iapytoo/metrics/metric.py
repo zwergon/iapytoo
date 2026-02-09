@@ -120,5 +120,5 @@ class Metric:
     def reset(self):
         pass
 
-    def to(device):
+    def to(self, device):
         pass
