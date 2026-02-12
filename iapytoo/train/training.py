@@ -21,8 +21,6 @@ import logging
 from tqdm import tqdm
 from enum import Enum
 
-from typing import List
-
 
 class LossType(str, Enum):
     TRAIN = "train_loss"
@@ -376,6 +374,8 @@ class Training(Inference):
         self._metrics = self._create_metrics()
         self._optimizers = self._create_optimizers()
         self._schedulers = self._create_schedulers(self.optimizer)
+
+        self.model.weight_initiator()
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)

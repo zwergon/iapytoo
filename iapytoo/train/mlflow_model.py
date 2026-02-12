@@ -1,25 +1,26 @@
-import os
-import sys
 import importlib
-import tempfile
-import torch
-import mlflow
-import yaml
 import logging
+import os
+import tempfile
+import warnings
+from abc import ABC, abstractmethod
 from typing import Any
 
-import numpy as np
+import mlflow
 import mlflow.pyfunc as mp
-from abc import ABC, abstractmethod
+import numpy as np
+import torch
+import yaml
+
+warnings.filterwarnings("ignore", message="Add type hints to the `predict` method*")  # TODO
 
 
+from iapytoo.dataset.transform import Transform
+from iapytoo.predictions.predictors import Predictor
+from iapytoo.train.model import Model
 from iapytoo.utils.config import (
     Config,
-    ModelConfig
 )
-from iapytoo.train.model import Model
-from iapytoo.predictions.predictors import Predictor
-from iapytoo.dataset.transform import Transform
 
 
 class ProviderError(Exception):
@@ -165,11 +166,7 @@ class MlflowModel(mp.PythonModel):
 
     @staticmethod
     def from_context(context: mp.PythonModelContext) -> MlflowModelProvider:
-        from iapytoo.utils.config import (
-            ConfigFactory,
-            DatasetConfigFactory,
-            TrainingConfigFactory
-        )
+        from iapytoo.utils.config import ConfigFactory, DatasetConfigFactory, TrainingConfigFactory
         from iapytoo.utils.model_config import ModelConfigFactory
 
         code_definition_path = context.artifacts.get("code_definition", None)
@@ -240,45 +237,37 @@ class MlflowModel(mp.PythonModel):
     def predict(
         self,
         context: mp.PythonModelContext,
-        model_input: list[str | np.ndarray],
+        model_input,
         params: dict[str, Any] | None = None
     ):
-        if not isinstance(model_input, (list, tuple)):
-            raise ValueError("model_input must be a list of file paths")
 
-        arrays = []
-        for path in model_input:
-
-            if isinstance(path, np.ndarray):
-                arr = path.astype(np.float32)
-            elif isinstance(path, str) and path.endswith(".npy"):
-                if path == MlflowModel.INPUT_EXAMPLE:
-                    assert MlflowModel.INPUT_EXAMPLE in context.artifacts, "no input example given during training"
-                    arr = np.load(context.artifacts[MlflowModel.INPUT_EXAMPLE])
-                else:
-                    arr = np.load(path)
-            else:
-                raise TypeError("Unsupported input type")
-
-            arrays.append(arr)
-
-            batch = np.stack(arrays, axis=0).astype(np.float32)
-
-        logging.info(f"predict called with input shape: {batch.shape}")
+        # if model_input == MlflowModel.INPUT_EXAMPLE:  # TODO
+        #     assert MlflowModel.INPUT_EXAMPLE in context.artifacts, "no input example given during training"
+        #     batch = np.extend_dim(np.load(context.artifacts[MlflowModel.INPUT_EXAMPLE]), axis=0)
+        logging.info(f"--- Input type: {type(model_input)}")
+        if isinstance(model_input, list):
+            model_input = model_input[0]
         if self.transform is not None:
             logging.info("predict use a transform")
-            batch = self.transform(batch)
+            model_input = self.transform(model_input)
 
-        batch_tensor = torch.from_numpy(batch)
+        # We leave to the user the resposability to transform its data to a torch tensor.
+        if not torch.is_tensor(model_input):
+            raise ValueError(
+                "The transformation should always return a torch tensor to pass to the model."
+                )
 
-        outputs_tensor = self.model.evaluate_one(batch_tensor)
+        outputs_tensor = self.model.evaluate_one(model_input)
 
         predictions = self.ml_predictor(outputs_tensor)
 
-        if isinstance(predictions, torch.Tensor):
+        if torch.is_tensor(predictions):
             predictions = predictions.detach().cpu().numpy()
 
         return predictions
+
+    def load_numpy_input_example(self):
+        pass
 
 
 def save_mlflow_model(config: Config,
@@ -318,11 +307,21 @@ def save_mlflow_model(config: Config,
 
         if provider is not None:
             if provider.input_example is not None:
-                input_path = os.path.join(tmpdir, "input_example.npy")
-                np.save(input_path, provider.input_example)
+                # if isinstance(provider.input_example, np.ndarray):
+                #     input_path = os.path.join(tmpdir, "input_example.npy")
+                #     np.save(input_path, provider.input_example)
 
-                kwargs["input_example"] = [MlflowModel.INPUT_EXAMPLE]
-                artifacts["input_example"] = input_path
+                #     kwargs["input_example"] = None
+                #     artifacts["input_example"] = input_path
+                # else:
+                #     ValueError("For now, only numpy input examples can be passed!")
+                
+                kwargs["input_example"] = provider.input_example
+
+            if provider._signature is not None:
+                kwargs["signature"] = provider._signature
+            else:
+                raise ValueError("Model signature is mandatory!")
 
             code_definition = provider.code_definition()
             if code_definition:

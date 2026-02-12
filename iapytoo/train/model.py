@@ -46,9 +46,10 @@ class Model(nn.Module):
     def device(self):
         return next(self.parameters()).device
 
+    # override
     def weight_initiator(self):
         """return an WeightInitiator subclass that will be used to initialize weights of this model"""
-        return None
+        pass
 
     def predict(self, model_output: torch.Tensor) -> torch.Tensor:
         """Transform raw model outputs into prediction values.
