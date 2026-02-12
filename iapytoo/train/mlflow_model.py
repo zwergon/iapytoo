@@ -2,7 +2,6 @@ import importlib
 import logging
 import os
 import tempfile
-import warnings
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -11,9 +10,6 @@ import mlflow.pyfunc as mp
 import numpy as np
 import torch
 import yaml
-
-warnings.filterwarnings("ignore", message="Add type hints to the `predict` method*")  # TODO
-
 
 from iapytoo.dataset.transform import Transform
 from iapytoo.predictions.predictors import Predictor
@@ -244,7 +240,6 @@ class MlflowModel(mp.PythonModel):
         # if model_input == MlflowModel.INPUT_EXAMPLE:  # TODO
         #     assert MlflowModel.INPUT_EXAMPLE in context.artifacts, "no input example given during training"
         #     batch = np.extend_dim(np.load(context.artifacts[MlflowModel.INPUT_EXAMPLE]), axis=0)
-        logging.info(f"--- Input type: {type(model_input)}")
         if isinstance(model_input, list):
             model_input = model_input[0]
         if self.transform is not None:
@@ -307,16 +302,14 @@ def save_mlflow_model(config: Config,
 
         if provider is not None:
             if provider.input_example is not None:
-                # if isinstance(provider.input_example, np.ndarray):
-                #     input_path = os.path.join(tmpdir, "input_example.npy")
-                #     np.save(input_path, provider.input_example)
+                if isinstance(provider.input_example, np.ndarray):
+                    input_path = os.path.join(tmpdir, "input_example.npy")
+                    np.save(input_path, provider.input_example)
 
-                #     kwargs["input_example"] = None
-                #     artifacts["input_example"] = input_path
-                # else:
-                #     ValueError("For now, only numpy input examples can be passed!")
-                
-                kwargs["input_example"] = provider.input_example
+                    kwargs["input_example"] = None
+                    artifacts["input_example"] = input_path
+                else:
+                    ValueError("For now, only numpy input examples can be passed!")
 
             if provider._signature is not None:
                 kwargs["signature"] = provider._signature
