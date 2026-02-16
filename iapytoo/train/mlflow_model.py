@@ -49,10 +49,13 @@ class MlflowModelProvider(ABC):
             config (Config): Global experiment configuration object.
         """
         self._model: Model = None
-        self._input_example: np.array = None
         self._transform: Transform = None
         self._predictor: Predictor = Predictor()  # default one
         self._ml_predictor: Predictor = None
+
+    @abstractmethod
+    def get_input_example(self):
+        pass
 
     @property
     def code_path(self) -> str:
@@ -114,7 +117,7 @@ class MlflowModelProvider(ABC):
         Returns:
             numpy.ndarray: Example input array, or ``None`` if not defined.
         """
-        return self._input_example
+        return self.get_input_example()
 
     @property
     def transform(self) -> Transform:
@@ -157,8 +160,6 @@ class MlflowWGANProvider(MlflowModelProvider):
 
 
 class MlflowModel(mp.PythonModel):
-    INPUT_EXAMPLE = "input_example"
-
     @staticmethod
     def from_context(context: mp.PythonModelContext) -> MlflowModelProvider:
         from iapytoo.utils.config import ConfigFactory, DatasetConfigFactory, TrainingConfigFactory
@@ -223,23 +224,28 @@ class MlflowModel(mp.PythonModel):
     def load_context(self, context):
         super().load_context(context)
         self._provider = MlflowModel.from_context(context)
+        self.validate_model_input(context)
+
+    def validate_model_input(self, context: mp.PythonModelContext):
+
+        if "input_example" in context.artifacts:
+            logging.info("Validating input example against model signature.")
+
+            if context.artifacts["input_example"].endswith(".npy"):
+                model_input = np.load(context.artifacts["input_example"])
+            elif context.artifacts["input_example"].endswith(".csv"):
+                model_input = pd.read_csv(context.artifacts["input_example"])
+            else:
+                ValueError("Only Numpy.ndarray and Pandas.DataFrame input examples can be passed!")
+
+            try:
+                self.predict(context, model_input)
+                logging.info("Validation passed.")
+            except Exception as e:
+                logging.error(f"Validation failed: {e}")
+                raise
 
     def predict(self, context: mp.PythonModelContext, model_input, params: dict[str, Any] | None = None):
-
-        if isinstance(model_input, np.ndarray):
-            if model_input[0] == MlflowModel.INPUT_EXAMPLE:
-                assert MlflowModel.INPUT_EXAMPLE in context.artifacts, (
-                    "no input example given during training"
-                )
-                model_input = np.load(context.artifacts[MlflowModel.INPUT_EXAMPLE])
-        elif isinstance(model_input, pd.DataFrame):
-            if model_input.iloc[0, 0] == MlflowModel.INPUT_EXAMPLE:
-                assert MlflowModel.INPUT_EXAMPLE in context.artifacts, (
-                    "no input example given during training"
-                )
-                model_input = pd.read_csv(context.artifacts[MlflowModel.INPUT_EXAMPLE])
-        else:  # Already naturally enfoced by mlflow signatures
-            ValueError("Only Numpy.ndarray and Pandas.DataFrame input examples can be passed!")
 
         if self.transform is not None:
             logging.info("predict use a transform")
@@ -282,6 +288,7 @@ def save_mlflow_model(config: Config, provider: MlflowModelProvider, epoch=0):
             "extra_pip_requirements": config.inference_pip_requirements,
             "conda_env": None,
             "artifacts": artifacts,
+            "input_example": None,
         }
 
         if supports_name():
@@ -295,16 +302,12 @@ def save_mlflow_model(config: Config, provider: MlflowModelProvider, epoch=0):
                 np.save(input_path, provider.input_example)
 
                 artifacts["input_example"] = input_path
-                kwargs["input_example"] = np.array([MlflowModel.INPUT_EXAMPLE])
             elif isinstance(provider.input_example, pd.DataFrame):
                 input_path = os.path.join(tmpdir, "input_example.csv")
                 df = provider.input_example
                 df.to_csv(input_path, index=False)
 
                 artifacts["input_example"] = input_path
-                kwargs["input_example"] = pd.DataFrame(
-                    [MlflowModel.INPUT_EXAMPLE], columns=provider.input_example.columns
-                )
             else:  # Already naturally enfoced by mlflow signatures
                 ValueError("Only Numpy.ndarray and Pandas.DataFrame input examples can be passed!")
 
