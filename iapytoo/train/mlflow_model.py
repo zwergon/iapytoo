@@ -8,6 +8,7 @@ from typing import Any
 import mlflow
 import mlflow.pyfunc as mp
 import numpy as np
+import pandas as pd
 import torch
 import yaml
 
@@ -142,7 +143,6 @@ class MlflowModelProvider(ABC):
 
 
 class MlflowWGANProvider(MlflowModelProvider):
-
     def __init__(self, config: Config) -> None:
         super().__init__(config)
         self._discriminator = None
@@ -157,7 +157,6 @@ class MlflowWGANProvider(MlflowModelProvider):
 
 
 class MlflowModel(mp.PythonModel):
-
     INPUT_EXAMPLE = "input_example"
 
     @staticmethod
@@ -173,24 +172,20 @@ class MlflowModel(mp.PythonModel):
             code_definition = yaml.safe_load(file)
 
         if "config" in code_definition:
-            module = importlib.import_module(
-                code_definition["config"]["module"])
+            module = importlib.import_module(code_definition["config"]["module"])
             config_type = code_definition["config"]["type"]
             if "dataset" in code_definition["config"]:
                 key = code_definition["config"]["dataset"]
                 dataset_config_cls = getattr(module, key)
-                DatasetConfigFactory().register_dataset_config(
-                    config_type, dataset_config_cls)
+                DatasetConfigFactory().register_dataset_config(config_type, dataset_config_cls)
             if "training" in code_definition["config"]:
                 key = code_definition["config"]["training"]
                 training_config_cls = getattr(module, key)
-                TrainingConfigFactory().register_training_config(
-                    config_type, training_config_cls)
+                TrainingConfigFactory().register_training_config(config_type, training_config_cls)
             if "model" in code_definition["config"]:
                 key = code_definition["config"]["model"]
                 model_config_cls = getattr(module, key)
-                ModelConfigFactory().register_model_config(
-                    config_type, model_config_cls)
+                ModelConfigFactory().register_model_config(config_type, model_config_cls)
 
         config = ConfigFactory.from_yaml(context.artifacts["config"])
 
@@ -201,8 +196,7 @@ class MlflowModel(mp.PythonModel):
 
         provider: MlflowModelProvider = provider_cls(config=config)
 
-        provider._model.load_state_dict(torch.load(
-            context.artifacts["model"], weights_only=True))
+        provider._model.load_state_dict(torch.load(context.artifacts["model"], weights_only=True))
 
         return provider
 
@@ -230,27 +224,30 @@ class MlflowModel(mp.PythonModel):
         super().load_context(context)
         self._provider = MlflowModel.from_context(context)
 
-    def predict(
-        self,
-        context: mp.PythonModelContext,
-        model_input,
-        params: dict[str, Any] | None = None
-    ):
+    def predict(self, context: mp.PythonModelContext, model_input, params: dict[str, Any] | None = None):
 
-        # if model_input == MlflowModel.INPUT_EXAMPLE:  # TODO
-        #     assert MlflowModel.INPUT_EXAMPLE in context.artifacts, "no input example given during training"
-        #     batch = np.extend_dim(np.load(context.artifacts[MlflowModel.INPUT_EXAMPLE]), axis=0)
-        if isinstance(model_input, list):
-            model_input = model_input[0]
+        if isinstance(model_input, np.ndarray):
+            if model_input[0] == MlflowModel.INPUT_EXAMPLE:
+                assert MlflowModel.INPUT_EXAMPLE in context.artifacts, (
+                    "no input example given during training"
+                )
+                model_input = np.load(context.artifacts[MlflowModel.INPUT_EXAMPLE])
+        elif isinstance(model_input, pd.DataFrame):
+            if model_input.iloc[0, 0] == MlflowModel.INPUT_EXAMPLE:
+                assert MlflowModel.INPUT_EXAMPLE in context.artifacts, (
+                    "no input example given during training"
+                )
+                model_input = pd.read_csv(context.artifacts[MlflowModel.INPUT_EXAMPLE])
+        else:  # Already naturally enfoced by mlflow signatures
+            ValueError("Only Numpy.ndarray and Pandas.DataFrame input examples can be passed!")
+
         if self.transform is not None:
             logging.info("predict use a transform")
             model_input = self.transform(model_input)
 
         # We leave to the user the resposability to transform its data to a torch tensor.
         if not torch.is_tensor(model_input):
-            raise ValueError(
-                "The transformation should always return a torch tensor to pass to the model."
-                )
+            raise ValueError("The transformation should always return a torch tensor to pass to the model.")
 
         outputs_tensor = self.model.evaluate_one(model_input)
 
@@ -261,13 +258,8 @@ class MlflowModel(mp.PythonModel):
 
         return predictions
 
-    def load_numpy_input_example(self):
-        pass
 
-
-def save_mlflow_model(config: Config,
-                      provider: MlflowModelProvider,
-                      epoch=0):
+def save_mlflow_model(config: Config, provider: MlflowModelProvider, epoch=0):
 
     def supports_name():
         version = tuple(map(int, mlflow.__version__.split(".")))
@@ -283,16 +275,13 @@ def save_mlflow_model(config: Config,
         model_path = os.path.join(tmpdir, "model.pt")
         torch.save(model.state_dict(), model_path)
 
-        artifacts = {
-            "model": model_path,
-            "config": config_path
-        }
+        artifacts = {"model": model_path, "config": config_path}
 
         kwargs = {
             "python_model": MlflowModel(),
             "extra_pip_requirements": config.inference_pip_requirements,
             "conda_env": None,
-            "artifacts": artifacts
+            "artifacts": artifacts,
         }
 
         if supports_name():
@@ -301,15 +290,23 @@ def save_mlflow_model(config: Config,
             kwargs["artifact_path"] = f"model_step_{epoch}"
 
         if provider is not None:
-            if provider.input_example is not None:
-                if isinstance(provider.input_example, np.ndarray):
-                    input_path = os.path.join(tmpdir, "input_example.npy")
-                    np.save(input_path, provider.input_example)
+            if isinstance(provider.input_example, np.ndarray):
+                input_path = os.path.join(tmpdir, ".npy")
+                np.save(input_path, provider.input_example)
 
-                    kwargs["input_example"] = None
-                    artifacts["input_example"] = input_path
-                else:
-                    ValueError("For now, only numpy input examples can be passed!")
+                artifacts["input_example"] = input_path
+                kwargs["input_example"] = np.array([MlflowModel.INPUT_EXAMPLE])
+            elif isinstance(provider.input_example, pd.DataFrame):
+                input_path = os.path.join(tmpdir, "input_example.csv")
+                df = provider.input_example
+                df.to_csv(input_path, index=False)
+
+                artifacts["input_example"] = input_path
+                kwargs["input_example"] = pd.DataFrame(
+                    [MlflowModel.INPUT_EXAMPLE], columns=provider.input_example.columns
+                )
+            else:  # Already naturally enfoced by mlflow signatures
+                ValueError("Only Numpy.ndarray and Pandas.DataFrame input examples can be passed!")
 
             if provider._signature is not None:
                 kwargs["signature"] = provider._signature
@@ -319,16 +316,13 @@ def save_mlflow_model(config: Config,
             code_definition = provider.code_definition()
             if code_definition:
                 if provider.code_path is not None:
-
                     specs_path = os.path.join(tmpdir, "code_definition.yml")
                     with open(specs_path, "w") as file:
                         yaml.safe_dump(code_definition, file)
                     artifacts["code_definition"] = specs_path
-                    kwargs['code_paths'] = [provider.code_path]
+                    kwargs["code_paths"] = [provider.code_path]
                 else:
-                    raise ValueError(
-                        "code_path must be set in provider if code_definition is given"
-                    )
+                    raise ValueError("code_path must be set in provider if code_definition is given")
 
         model_info = mp.log_model(**kwargs)
         logging.info(f"ModelURI: {model_info.model_uri}")
