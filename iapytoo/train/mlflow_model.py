@@ -248,7 +248,7 @@ class MlflowModel(mp.PythonModel):
     def predict(self, context: mp.PythonModelContext, model_input, params: dict[str, Any] | None = None):
 
         if self.transform is not None:
-            logging.info("predict use a transform")
+            logging.info("Method predict use a transform.")
             model_input = self.transform(model_input)
 
         # We leave to the user the resposability to transform its data to a torch tensor.

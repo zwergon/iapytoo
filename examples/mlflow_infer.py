@@ -22,7 +22,7 @@ def get_model_input(idx=0):
     # cree le numpy array
     array = to_numpy(pic)
 
-    return array, expected
+    return array[np.newaxis, ...], expected
 
 
 if __name__ == "__main__":
@@ -43,12 +43,6 @@ if __name__ == "__main__":
     # Load model as a PyFuncModel.
     loaded_model: mp.PyFuncModel = mlflow.pyfunc.load_model(logged_model)
 
-    with tempfile.NamedTemporaryFile(suffix='.npy') as temp:
-        model_input, expected = get_model_input()
-        np.save(temp.name, model_input)
-        predicted = loaded_model.predict([temp.name])
-        print(predicted[0], expected)
-
     model_input, expected = get_model_input(1000)
-    predicted = loaded_model.predict([model_input])
+    predicted = loaded_model.predict(model_input)
     print(predicted[0], expected)

@@ -25,6 +25,9 @@ class DummyProvider(MlflowModelProvider):
 
     def code_definition(self) -> dict:
         return {}
+    
+    def get_input_example(self):
+        return
 
 
 class TestModel(unittest.TestCase):
