@@ -298,7 +298,7 @@ def save_mlflow_model(config: Config, provider: MlflowModelProvider, epoch=0):
 
         if provider is not None:
             if isinstance(provider.input_example, np.ndarray):
-                input_path = os.path.join(tmpdir, ".npy")
+                input_path = os.path.join(tmpdir, "input_example.npy")
                 np.save(input_path, provider.input_example)
 
                 artifacts["input_example"] = input_path
