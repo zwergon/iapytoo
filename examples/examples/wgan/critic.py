@@ -4,8 +4,8 @@ import torch.nn as nn
 from iapytoo.train.model import Model
 from iapytoo.utils.config import Config
 
-from wind_gan.dft_layer import DFTLayer
-from wind_gan.generator import CNN1DInitiator
+from .dft_layer import DFTLayer
+from .generator import CNN1DInitiator
 
 
 class CNN1DDiscriminator(Model):

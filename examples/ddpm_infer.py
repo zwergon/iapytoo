@@ -4,6 +4,7 @@ from PIL import Image
 import tempfile
 
 from iapytoo.train.inference import get_model_uri
+from iapytoo.train.mlflow_model import MlModelInput
 from mlflow.tracking import MlflowClient
 
 
@@ -37,7 +38,7 @@ if __name__ == "__main__":
     # Load model as a PyFuncModel.
     loaded_model: mp.PyFuncModel = mlflow.pyfunc.load_model(logged_model)
 
-    model_input = np.random.rand(1, signal_length)
+    model_input = MlModelInput.from_array(np.random.rand(1, signal_length))
     predicted = loaded_model.predict([model_input])
     plt.figure()
     plt.plot(predicted[0, 0, :])
