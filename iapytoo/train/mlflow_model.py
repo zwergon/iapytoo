@@ -1,6 +1,6 @@
 import os
 
-import sys
+import json
 import importlib
 import tempfile
 import torch
@@ -21,6 +21,15 @@ from iapytoo.utils.config import (
 from iapytoo.train.model import Model
 from iapytoo.predictions.predictors import Predictor
 from iapytoo.dataset.transform import Transform
+
+from mlserver.codecs import register_input_codec, register_request_codec, NumpyCodec
+from mlserver.codecs.utils import SingleInputRequestCodec
+from mlserver.types import (
+    RequestInput,
+    Parameters
+)
+
+from typing import List
 
 
 class MlModelInput(BaseModel):
@@ -60,6 +69,77 @@ class MlModelInput(BaseModel):
 
             array = np.load(path)
         return array
+
+
+@register_input_codec
+class MlModelInputCodec(NumpyCodec):
+    ContentType = "mlmodelinput"
+    TypeHint = MlModelInput
+
+    @classmethod
+    def can_decode(cls, request_input: RequestInput) -> bool:
+        return (
+            request_input.datatype == "BYTES"
+            and request_input.parameters is not None
+            and request_input.parameters.content_type == cls.ContentType
+        )
+
+    @classmethod
+    def encode_input(cls, name: str, payload: List[MlModelInput], **kwargs) -> RequestInput:
+        encoded = []
+
+        for item in payload:
+            if not isinstance(item, MlModelInput):
+                raise ValueError(f"Expected MlModelInput, got {type(item)}")
+
+            encoded.append(
+                {
+                    "on_disk": item.on_disk,
+                    "data": item.data,
+                }
+            )
+
+        return RequestInput(
+            name=name,
+            shape=[len(encoded)],
+            datatype="BYTES",
+            parameters=Parameters(content_type=cls.ContentType),
+            data=encoded,
+        )
+
+    @classmethod
+    def decode_input(cls, request_input: RequestInput) -> List[MlModelInput]:
+        decoded: List[MlModelInput] = []
+
+        for item in request_input.data.root:
+            # cas 1: bytes JSON
+            if isinstance(item, (bytes, bytearray)):
+                item = json.loads(item.decode("utf-8"))
+
+            # cas 2: string JSON
+            elif isinstance(item, str):
+                try:
+                    item = json.loads(item)
+                except Exception:
+                    pass  # peut déjà être dict
+
+            # cas 3: dict direct (ce qu'on veut supporter)
+            if isinstance(item, dict):
+                decoded.append(MlModelInput(**item))
+            else:
+                raise ValueError(f"Unsupported item type: {type(item)}")
+
+        return decoded
+
+
+@register_request_codec
+class MlModelRequestCodec(SingleInputRequestCodec):
+    """
+    Decodes the first input of request as a MlModelInput.
+    """
+
+    InputCodec = MlModelInputCodec
+    ContentType = MlModelInputCodec.ContentType
 
 
 class ProviderError(Exception):
