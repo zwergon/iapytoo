@@ -270,4 +270,22 @@ def main():
 
 
 if __name__ == "__main__":
+    import os
+    import numpy as np
+    from create_sindata import sine_data_generation
+    from pathlib import Path
+
+    file_path = Path(__file__).parent / "data" / "sin_wave.csv"
+
+    # Crée le dossier si nécessaire
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    # Test d'existence
+    if not os.path.exists(file_path):
+        data = sine_data_generation(1000, 600, 60, 0.05)
+        np.savetxt(file_path, data, delimiter=",")
+        print(f"Fichier créé : {file_path}")
+    else:
+        print(f"Le fichier existe déjà : {file_path}")
+        
     main()
