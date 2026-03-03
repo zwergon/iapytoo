@@ -69,7 +69,10 @@ class MlInput(BaseModel):
         return array
 
     def to_bytes(self):
-        return json.dumps(self.__dict__).encode()
+        return json.dumps({
+            "on_disk": self.on_disk,
+            "data": base64.b64encode(self.data).decode() if self.data is not None else None
+        }).encode()
 
 
 @register_input_codec
