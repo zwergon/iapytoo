@@ -1,4 +1,4 @@
-from iapytoo.train.mlflow_model import save_mlflow_model
+from iapytoo.mlflow.model import save_mlflow_model
 from iapytoo.metrics.metric import Metrics
 from iapytoo.train.inference import Inference
 from iapytoo.train.checkpoint import CheckPoint

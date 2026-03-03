@@ -26,7 +26,7 @@ Each block in this chain corresponds to an **attribute of `MlflowModelProvider`*
 
 ## The `MlflowModelProvider` contract
 
-At the heart of iapytoo overrides is the {py:class}`MlflowModelProvider <iapytoo.train.mlflow_model.MlflowModelProvider>` class. This abstract class defines **everything that is needed to package and serve a model with MLflow**.
+At the heart of iapytoo overrides is the {py:class}`MlflowModelProvider <iapytoo.mlflow.model.MlflowModelProvider>` class. This abstract class defines **everything that is needed to package and serve a model with MLflow**.
 
 A provider instance describes the *full inference chain* used when MLflow calls `predict` on a logged model.
 

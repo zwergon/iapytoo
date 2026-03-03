@@ -11,7 +11,7 @@ from iapytoo.train.factories import (
 from iapytoo.train.model import Model
 from iapytoo.utils.config import Config, ConfigFactory
 from iapytoo.train.nn_loss import MSELoss
-from iapytoo.train.mlflow_model import MlflowModelProvider
+from iapytoo.mlflow.model import MlflowModelProvider
 
 
 class DummyProvider(MlflowModelProvider):

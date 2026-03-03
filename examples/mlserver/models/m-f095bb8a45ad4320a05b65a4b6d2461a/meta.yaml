@@ -1,0 +1,10 @@
+artifact_location: /work/lecomtje/Repositories/iapy/iapytoo/mlruns/538297821954986897/models/m-f095bb8a45ad4320a05b65a4b6d2461a/artifacts
+creation_timestamp: 1772534217794
+experiment_id: '538297821954986897'
+last_updated_timestamp: 1772534223911
+model_id: m-f095bb8a45ad4320a05b65a4b6d2461a
+model_type: null
+name: model_step_11
+source_run_id: fcd718817c7e469db17652ee4ca467f1
+status: 2
+status_message: null

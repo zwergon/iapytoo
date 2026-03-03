@@ -3,7 +3,7 @@ from enum import IntEnum, Enum
 
 from iapytoo.train.training import Training
 from iapytoo.utils.config import Config
-from iapytoo.train.mlflow_model import MlflowWGANProvider
+from iapytoo.mlflow.model import MlflowWGANProvider
 from iapytoo.train.factories import Factory
 from iapytoo.train.loss import Loss
 

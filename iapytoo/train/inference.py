@@ -15,7 +15,7 @@ from iapytoo.utils.config import Config
 from iapytoo.utils.model_config import ModelConfig, MLFlowConfig
 from iapytoo.train.logger import Logger
 from iapytoo.train.factories import Factory
-from iapytoo.train.mlflow_model import MlflowModel, MlflowModelProvider
+from iapytoo.mlflow.model import MlflowModel, MlflowModelProvider
 from iapytoo.predictions import Predictions, PredictionType
 from iapytoo.metrics.metric import Metrics
 

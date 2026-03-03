@@ -1,19 +1,15 @@
 import os
 
-import json
 import importlib
 import tempfile
 import torch
 import mlflow
 import yaml
 import logging
-import base64
 from typing import Any
-from pydantic import BaseModel, field_validator
 import numpy as np
 import mlflow.pyfunc as mp
 from abc import ABC, abstractmethod
-from io import BytesIO
 
 from iapytoo.utils.config import (
     Config
@@ -21,125 +17,7 @@ from iapytoo.utils.config import (
 from iapytoo.train.model import Model
 from iapytoo.predictions.predictors import Predictor
 from iapytoo.dataset.transform import Transform
-
-from mlserver.codecs import register_input_codec, register_request_codec, NumpyCodec
-from mlserver.codecs.utils import SingleInputRequestCodec
-from mlserver.types import (
-    RequestInput,
-    Parameters
-)
-
-from typing import List
-
-
-class MlModelInput(BaseModel):
-    on_disk: bool = False
-    data: bytes = None
-
-    @field_validator("data", mode="before")
-    @classmethod
-    def ensure_bytes(cls, v):
-        if v is None:
-            return v
-        if isinstance(v, bytes):
-            return v
-        if isinstance(v, str):
-            return base64.b64decode(v)
-        raise TypeError("data must be bytes or base64 string")
-
-    @staticmethod
-    def from_path(path: str):
-        return MlModelInput(on_disk=True, data=path.encode("utf-8"))
-
-    @staticmethod
-    def from_array(array: np.ndarray):
-        buffer = BytesIO()
-        np.save(buffer, array)
-        return MlModelInput(on_disk=False, data=buffer.getvalue())
-
-    def to_array(self, context):
-        if not self.on_disk:
-            buffer = BytesIO(self.data)
-            buffer.seek(0)
-            array = np.load(buffer, allow_pickle=False)
-        else:
-            path = self.data.decode('utf-8')
-            if path == MlflowModel.INPUT_EXAMPLE:
-                path = context.artifacts[MlflowModel.INPUT_EXAMPLE]
-
-            array = np.load(path)
-        return array
-
-
-@register_input_codec
-class MlModelInputCodec(NumpyCodec):
-    ContentType = "mlmodelinput"
-    TypeHint = MlModelInput
-
-    @classmethod
-    def can_decode(cls, request_input: RequestInput) -> bool:
-        return (
-            request_input.datatype == "BYTES"
-            and request_input.parameters is not None
-            and request_input.parameters.content_type == cls.ContentType
-        )
-
-    @classmethod
-    def encode_input(cls, name: str, payload: List[MlModelInput], **kwargs) -> RequestInput:
-        encoded = []
-
-        for item in payload:
-            if not isinstance(item, MlModelInput):
-                raise ValueError(f"Expected MlModelInput, got {type(item)}")
-
-            encoded.append(
-                {
-                    "on_disk": item.on_disk,
-                    "data": item.data,
-                }
-            )
-
-        return RequestInput(
-            name=name,
-            shape=[len(encoded)],
-            datatype="BYTES",
-            parameters=Parameters(content_type=cls.ContentType),
-            data=encoded,
-        )
-
-    @classmethod
-    def decode_input(cls, request_input: RequestInput) -> List[MlModelInput]:
-        decoded: List[MlModelInput] = []
-
-        for item in request_input.data.root:
-            # cas 1: bytes JSON
-            if isinstance(item, (bytes, bytearray)):
-                item = json.loads(item.decode("utf-8"))
-
-            # cas 2: string JSON
-            elif isinstance(item, str):
-                try:
-                    item = json.loads(item)
-                except Exception:
-                    pass  # peut déjà être dict
-
-            # cas 3: dict direct (ce qu'on veut supporter)
-            if isinstance(item, dict):
-                decoded.append(MlModelInput(**item))
-            else:
-                raise ValueError(f"Unsupported item type: {type(item)}")
-
-        return decoded
-
-
-@register_request_codec
-class MlModelRequestCodec(SingleInputRequestCodec):
-    """
-    Decodes the first input of request as a MlModelInput.
-    """
-
-    InputCodec = MlModelInputCodec
-    ContentType = MlModelInputCodec.ContentType
+from iapytoo.mlflow.codec import MlInput
 
 
 class ProviderError(Exception):
@@ -264,11 +142,12 @@ class MlflowModelProvider(ABC):
         return self._ml_predictor if self._ml_predictor else self._predictor
 
     def load_array(self, path: str, context: mp.PythonModelContext) -> np.ndarray:
-        if path == MlflowModel.INPUT_EXAMPLE:
+
+        if path == MlInput.input_example().path:
             assert (
-                MlflowModel.INPUT_EXAMPLE in context.artifacts
+                path in context.artifacts
             ), "no input example given during training"
-            path = context.artifacts[MlflowModel.INPUT_EXAMPLE]
+            path = context.artifacts[path]
 
         return np.load(path)
 
@@ -289,8 +168,6 @@ class MlflowWGANProvider(MlflowModelProvider):
 
 
 class MlflowModel(mp.PythonModel):
-
-    INPUT_EXAMPLE = "input_example"
 
     @staticmethod
     def from_context(context: mp.PythonModelContext) -> MlflowModelProvider:
@@ -369,7 +246,7 @@ class MlflowModel(mp.PythonModel):
     def predict(
         self,
         context: mp.PythonModelContext,
-        model_input: list[MlModelInput],
+        model_input: list[MlInput],
         params: dict[str, Any] | None = None
     ):
 
@@ -434,8 +311,7 @@ def save_mlflow_model(config: Config,
                 input_path = os.path.join(tmpdir, "input_example.npy")
                 np.save(input_path, provider.input_example)
 
-                kwargs["input_example"] = [MlModelInput.from_path(
-                    MlflowModel.INPUT_EXAMPLE)]
+                kwargs["input_example"] = [MlInput.input_example()]
                 artifacts["input_example"] = input_path
 
             code_definition = provider.code_definition()

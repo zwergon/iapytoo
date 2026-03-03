@@ -43,7 +43,7 @@ project/
 
 * Training is driven by a YAML configuration file
 * Custom code lives in override modules (*mlcode* directory)
-    * key module is given by overriding the {py:class}`MlflowModelProvider <iapytoo.train.mlflow_model.MlflowModelProvider>` class
+    * key module is given by overriding the {py:class}`MlflowModelProvider <iapytoo.mlflow.model.MlflowModelProvider>` class
 
 * Models are logged as MLflow PyFunc models
 * Inference reuses the exact same code and configuration

@@ -32,7 +32,7 @@ from iapytoo.train.scheduler import (
     SchedulerError
 )
 
-from iapytoo.train.mlflow_model import (
+from iapytoo.mlflow.model import (
     ProviderError,
     MlflowModelProvider
 )
