@@ -1,0 +1,5 @@
+{
+   "name": "wgan",
+   "version": "v1.0.0",
+   "implementation": "mlserver_mlflow.MLflowRuntime"
+}

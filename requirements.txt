@@ -4,4 +4,5 @@ torch==2.4.1
 torchvision==0.19.1
 cloudpickle==3.1.1
 mlflow
+mlserver_mlflow
 seaborn
