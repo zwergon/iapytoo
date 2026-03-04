@@ -169,4 +169,13 @@ data/
 dockers/Dockerfile.ifpen
 iapytoo/_version.py
 examples/tmp/
+mlflow.db
+v311
+v310
+v312
+examples/mlserver/array.npy
+examples/mlserver/infer_grpc.jpg
+examples/**/.metrics
+
+
 
