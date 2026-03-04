@@ -1,3 +1,4 @@
+from typing import Any
 import ast
 import os
 import sys
@@ -19,7 +20,7 @@ def ensure_list(value, target_type):
     if isinstance(value, str):
         parsed_list = ast.literal_eval(value)
         if isinstance(parsed_list, list):
-            if isinstance(parsed_list[0], str):
+            if isinstance(parsed_list[0], str) and target_type != str:
                 return [target_type(v.strip()) for v in parsed_list]
             else:
                 return parsed_list
@@ -37,7 +38,10 @@ class DatasetConfig(BaseModel):
     type: str = "default"
     path: str
     normalization: Optional[bool] = True
-    stats: List[StatsConfig] = Field(
+    stats: Annotated[
+        List[StatsConfig],
+        BeforeValidator(lambda v: ensure_list(v, str))
+    ] = Field(
         default_factory=lambda: [StatsConfig(variable="global")]
     )
     batch_size: int

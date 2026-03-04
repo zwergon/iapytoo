@@ -40,7 +40,7 @@ class StepEnum(IntEnum):
 # mnist, mnist_again, mnist_infer, mnist_mlflow_infer, wgan_train, wgan_mlflow
 actions = [True] * StepEnum.LAST
 # actions[StepEnum.MNIST] = False
-actions[StepEnum.MNIST_AGAIN] = False
+# actions[StepEnum.MNIST_AGAIN] = False
 # actions[StepEnum.MNIST_INFER] = False
 # actions[StepEnum.MNIST_MLFLOW] = False
 # actions[StepEnum.WGAN] = False
@@ -48,6 +48,7 @@ actions[StepEnum.WGAN_AGAIN] = False
 # actions[StepEnum.WGAN_MLFLOW] = False
 # actions[StepEnum.DDPM_TRAIN] = False
 # actions[StepEnum.DDPM_MLFLOW] = False
+# actions[StepEnum.MNIST_FIND_LR] = False
 
 
 @dataclass
@@ -287,5 +288,5 @@ if __name__ == "__main__":
         print(f"Fichier créé : {file_path}")
     else:
         print(f"Le fichier existe déjà : {file_path}")
-        
+
     main()

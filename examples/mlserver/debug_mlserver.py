@@ -29,10 +29,6 @@ async def main():
 
     server = MLServer(settings=settings)
 
-    # # 👉 MET TON BREAKPOINT ICI
-    # import pdb
-    # pdb.set_trace()
-
     await server.start(models_settings=[models_settings])
 
 if __name__ == "__main__":
