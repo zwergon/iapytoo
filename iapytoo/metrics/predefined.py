@@ -2,7 +2,6 @@ import torch
 
 from iapytoo.utils.config import Config
 from iapytoo.metrics.metric import Metric, Metrics
-from iapytoo.predictions.predictors import Predictor
 
 
 class AccuracyMetric(Metric):
