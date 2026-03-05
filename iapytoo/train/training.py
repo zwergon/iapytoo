@@ -379,6 +379,8 @@ class Training(Inference):
         self._optimizers = self._create_optimizers()
         self._schedulers = self._create_schedulers(self.optimizer)
 
+        self.model.weight_initiator()
+
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
         checkpoint_epoch = self._config.checkpoint_epoch
