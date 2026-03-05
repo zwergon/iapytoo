@@ -15,6 +15,8 @@ def parse_args():
     param_group = exclusive_group.add_argument_group("Individual parameters")
     param_group.add_argument("--run-id", type=str, help="Run identifier.")
     param_group.add_argument("--epochs", type=int, help="Number of epochs.")
+    param_group.add_argument("--tune-config-file", type=str, default=None,
+                             help="Path to tuning configuration file (optional).")
     param_group.add_argument(
         "--tracking-uri", type=str, help="Tracking URI (optional)."
     )
