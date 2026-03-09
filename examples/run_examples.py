@@ -94,14 +94,14 @@ def run_train(step: Step):
     try:
         print(f"Lancement de {step.name} ... (log -> {step.log_file})")
         with open(step.log_file, "w") as f:
-            result = subprocess.run([PYTHON, step.script, "--yaml", step.config],
-                                    stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
+            subprocess.run([PYTHON, step.script, "--yaml", step.config],
+                           stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
         if step.returns_run_id:
             return step._extract_run_id()
 
         return 0
 
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print(
             f"Erreur lors de l'exécution de mnist.py (voir {step.log_file})")
         return 1, None
@@ -116,7 +116,7 @@ def run_train_again(step: Step, run_id):
             subprocess.run([PYTHON, step.script, "--run-id",  run_id] + step.extra_args,
                            stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
         return 0
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print(f"Erreur lors de l'exécution de mnist.py (voir {step.log_file})")
         return 1
 
@@ -133,7 +133,7 @@ def run_mnist_infer(step: Step, run_id):
             subprocess.run([PYTHON, step.script, "--yaml", tmp_config],
                            stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
         return 0
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print(
             f"Erreur lors de l'exécution de mnist_infer.py (voir {step.log_file})")
         return 1
@@ -148,7 +148,7 @@ def run_mlflow_infer(step: Step, run_id):
             subprocess.run([PYTHON, step.script, "--run-id", run_id] + step.extra_args,
                            stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
         return 0
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print(
             f"Erreur lors de l'exécution de mlflow_infer.py (voir {step.log_file})")
         return 1
@@ -271,7 +271,6 @@ def main():
 
 
 if __name__ == "__main__":
-    import os
     import numpy as np
     from create_sindata import sine_data_generation
     from pathlib import Path

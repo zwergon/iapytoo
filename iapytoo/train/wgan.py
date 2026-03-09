@@ -78,7 +78,7 @@ class WGAN(Training):
             )
         }
 
-    @ staticmethod
+    @staticmethod
     def freeze_params(model, freeze: bool):
         for param in model.parameters():
             param.requires_grad = freeze

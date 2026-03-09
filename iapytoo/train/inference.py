@@ -1,8 +1,6 @@
 import torch
 import logging
 
-import numpy as np
-
 import mlflow
 import mlflow.pyfunc
 
@@ -17,7 +15,6 @@ from iapytoo.train.logger import Logger
 from iapytoo.train.factories import Factory
 from iapytoo.mlflow.model import MlflowModel, MlflowModelProvider
 from iapytoo.predictions import Predictions, PredictionType
-from iapytoo.metrics.metric import Metrics
 
 
 class Inference(ABC):

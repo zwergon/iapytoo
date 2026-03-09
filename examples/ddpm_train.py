@@ -55,7 +55,6 @@ class PlateauScheduler(Scheduler):
 
 
 if __name__ == "__main__":
-    from pathlib import Path
     from iapytoo.train.ddpm import DDPM
     from iapytoo.train.factories import Factory
     from iapytoo.utils.config import ConfigFactory

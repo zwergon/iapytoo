@@ -1,7 +1,5 @@
 import mlflow
 import numpy as np
-from PIL import Image
-import tempfile
 
 from iapytoo.train.inference import get_model_uri
 from iapytoo.mlflow.model import MlInput

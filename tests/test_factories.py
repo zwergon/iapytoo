@@ -1,7 +1,7 @@
 import unittest
 import torch
 import torch.nn as nn
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from iapytoo.train.factories import (
     Factory,
     OptimizerError,

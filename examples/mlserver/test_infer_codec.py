@@ -1,5 +1,5 @@
 import requests
-from mlserver.types import InferenceRequest, InferenceResponse
+from mlserver.types import InferenceResponse
 from iapytoo.mlflow.codec import MlRequestCodec
 from utils import get_input_list
 

@@ -13,7 +13,6 @@ from iapytoo.train.optimizer import (
 
 
 from iapytoo.metrics.metric import (
-    Metric,
     Metrics,
     MetricError
 )

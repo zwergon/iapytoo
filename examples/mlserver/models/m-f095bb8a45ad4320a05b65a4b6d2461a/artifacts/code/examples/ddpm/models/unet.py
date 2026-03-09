@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from iapytoo.utils.config import Config
 from iapytoo.train.model import DDPMModel

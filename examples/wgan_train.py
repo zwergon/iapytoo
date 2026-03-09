@@ -1,6 +1,4 @@
 
-import os
-import numpy as np
 from pathlib import Path
 
 from iapytoo.predictions.plotters import Fake1DPlotter, DSPPlotter

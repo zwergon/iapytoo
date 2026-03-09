@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
-from torch.types import Device
 
 from iapytoo.utils.config import Config
 from torch.utils.data import DataLoader
-from iapytoo.utils.model_config import GanConfig, DDPMConfig
+from iapytoo.utils.model_config import DDPMConfig
 
 
 class ModelError(Exception):
@@ -57,7 +56,7 @@ class Model(nn.Module):
         This method converts the output of the neural network into a format
         compatible with the dataset target (Y).
 
-        Args: 
+        Args:
             model_output (torch.Tensor): Raw output of the neural network.
 
         Returns:

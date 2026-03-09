@@ -1,8 +1,6 @@
 import argparse
 import numpy as np
-import argparse
 
-   
 
 def sine_data_generation(no, seq_len, t_max, main_frequency):
     """Sine data generation.
@@ -26,11 +24,13 @@ def sine_data_generation(no, seq_len, t_max, main_frequency):
         # For each feature
 
         # Randomly drawn frequency and phase
-        freq = main_frequency + np.random.uniform(-0.01, 0.01) # normal variation of 0.02 Hz around main_frequency 
+        # normal variation of 0.02 Hz around main_frequency
+        freq = main_frequency + np.random.uniform(-0.01, 0.01)
         data[i, -1] = freq
-        phase = np.random.uniform(-3, 3) # phase variation around 0 of 3 degres
+        # phase variation around 0 of 3 degres
+        phase = np.random.uniform(-3, 3)
         data[i, -2] = phase
-        
+
         # Generate sine signal based on the drawn frequency and phase
         data[i, :-2] = np.sin(2*np.pi*freq*time+phase*np.pi/180)
 
@@ -44,13 +44,10 @@ if __name__ == "__main__":
 
     parser.add_argument('outname', help='filename to store csv file')
 
-  
     parser.add_argument("-n",
-        "--num_samples", type=int, default=1000, help="Number of samples."
-    )
+                        "--num_samples", type=int, default=1000, help="Number of samples."
+                        )
 
-    
-   
     parser.add_argument(
         "-s", "--seq_len",
         type=int,
@@ -58,7 +55,6 @@ if __name__ == "__main__":
         help="duration of the sequence in s",
     )
 
-   
     parser.add_argument(
         "-d", "--duration",
         type=int,
@@ -80,5 +76,6 @@ if __name__ == "__main__":
     print(f"Duration: {args.duration}")
     print(f"Frequency: {args.freq}")
 
-    data = sine_data_generation(args.num_samples, args.seq_len, args.duration, args.freq)
+    data = sine_data_generation(
+        args.num_samples, args.seq_len, args.duration, args.freq)
     np.savetxt(args.outname, data, delimiter=',')

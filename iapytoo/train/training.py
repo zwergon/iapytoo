@@ -21,8 +21,6 @@ import logging
 from tqdm import tqdm
 from enum import Enum
 
-from typing import List
-
 
 class LossType(str, Enum):
     TRAIN = "train_loss"
@@ -325,7 +323,7 @@ class Training(Inference):
         self.optimizer.param_groups[0]["lr"] = 1e-8
         self._schedulers = [Factory().create_scheduler(
             "step", self.optimizer, self._config)]
-        
+
         self.model.weight_initiator()
 
         train_time = Timer()

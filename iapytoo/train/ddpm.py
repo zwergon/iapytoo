@@ -8,10 +8,6 @@ from iapytoo.train.training import Training
 from iapytoo.utils.config import Config
 from iapytoo.train.loss import Loss
 
-
-from iapytoo.train.training import Training
-from iapytoo.utils.config import Config
-from iapytoo.train.loss import Loss
 from iapytoo.train.model import DDPMModel
 from iapytoo.utils.model_config import DDPMConfig
 
