@@ -1,7 +1,6 @@
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-from iapytoo.dataset.transform import Transform
 from iapytoo.predictions.plotters import ConfusionPlotter
 from iapytoo.train.factories import Factory
 from iapytoo.utils.config import ConfigFactory, Config
@@ -20,7 +19,6 @@ class MnistTraining(Training):
 
 if __name__ == "__main__":
     from iapytoo.utils.arguments import parse_args
-    from pathlib import Path
 
     factory = Factory()
     factory.register_provider(MnistProvider)

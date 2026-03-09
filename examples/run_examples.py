@@ -40,7 +40,7 @@ class StepEnum(IntEnum):
 # mnist, mnist_again, mnist_infer, mnist_mlflow_infer, wgan_train, wgan_mlflow
 actions = [True] * StepEnum.LAST
 # actions[StepEnum.MNIST] = False
-actions[StepEnum.MNIST_AGAIN] = False
+# actions[StepEnum.MNIST_AGAIN] = False
 # actions[StepEnum.MNIST_INFER] = False
 # actions[StepEnum.MNIST_MLFLOW] = False
 # actions[StepEnum.WGAN] = False
@@ -48,6 +48,7 @@ actions[StepEnum.WGAN_AGAIN] = False
 # actions[StepEnum.WGAN_MLFLOW] = False
 # actions[StepEnum.DDPM_TRAIN] = False
 # actions[StepEnum.DDPM_MLFLOW] = False
+# actions[StepEnum.MNIST_FIND_LR] = False
 
 
 @dataclass
@@ -93,14 +94,14 @@ def run_train(step: Step):
     try:
         print(f"Lancement de {step.name} ... (log -> {step.log_file})")
         with open(step.log_file, "w") as f:
-            result = subprocess.run([PYTHON, step.script, "--yaml", step.config],
-                                    stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
+            subprocess.run([PYTHON, step.script, "--yaml", step.config],
+                           stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
         if step.returns_run_id:
             return step._extract_run_id()
 
         return 0
 
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print(
             f"Erreur lors de l'exécution de mnist.py (voir {step.log_file})")
         return 1, None
@@ -115,7 +116,7 @@ def run_train_again(step: Step, run_id):
             subprocess.run([PYTHON, step.script, "--run-id",  run_id] + step.extra_args,
                            stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
         return 0
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print(f"Erreur lors de l'exécution de mnist.py (voir {step.log_file})")
         return 1
 
@@ -132,7 +133,7 @@ def run_mnist_infer(step: Step, run_id):
             subprocess.run([PYTHON, step.script, "--yaml", tmp_config],
                            stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
         return 0
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print(
             f"Erreur lors de l'exécution de mnist_infer.py (voir {step.log_file})")
         return 1
@@ -147,7 +148,7 @@ def run_mlflow_infer(step: Step, run_id):
             subprocess.run([PYTHON, step.script, "--run-id", run_id] + step.extra_args,
                            stdout=f, stderr=subprocess.STDOUT, text=True, check=True)
         return 0
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print(
             f"Erreur lors de l'exécution de mlflow_infer.py (voir {step.log_file})")
         return 1
@@ -270,4 +271,21 @@ def main():
 
 
 if __name__ == "__main__":
+    import numpy as np
+    from create_sindata import sine_data_generation
+    from pathlib import Path
+
+    file_path = Path(__file__).parent / "data" / "sin_wave.csv"
+
+    # Crée le dossier si nécessaire
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    # Test d'existence
+    if not os.path.exists(file_path):
+        data = sine_data_generation(1000, 600, 60, 0.05)
+        np.savetxt(file_path, data, delimiter=",")
+        print(f"Fichier créé : {file_path}")
+    else:
+        print(f"Le fichier existe déjà : {file_path}")
+
     main()

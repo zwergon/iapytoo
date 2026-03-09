@@ -1,0 +1,4 @@
+path: /work/lecomtje/Repositories/iapy/iapytoo/examples/examples
+provider:
+  class: WindProvider
+  module: examples.wgan.provider

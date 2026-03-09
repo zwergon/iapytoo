@@ -4,9 +4,7 @@ from PIL import Image
 
 import logging
 
-from numpy._core.multiarray import array
-
-from iapytoo.utils.config import Config, DatasetConfig, StatsConfig
+from iapytoo.utils.config import Config, DatasetConfig
 from iapytoo.dataset.transform import (
     OpType,
     Transform,
@@ -77,10 +75,10 @@ class ScalingByColumn(Transform):
                 self.weights[row, col] = stat[row]
 
     def get_stat(self, name):
-        try:
-            return self.dataset_config.statistic(name).stats
-        except:
+        statistic = self.dataset_config.statistic(name)
+        if statistic is None:
             raise KeyError(f"statistic {name} not found")
+        return statistic.stats
 
     def value(self, name, field: OpType):
         return self.get_stat(name)[field]

@@ -4,7 +4,6 @@ from tqdm import tqdm
 
 from typing import Protocol
 from iapytoo.metrics.metric import Metrics
-from iapytoo.train.loss import Loss
 
 
 class TrainHook(Protocol):

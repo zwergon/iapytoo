@@ -1,4 +1,4 @@
-from iapytoo.train.mlflow_model import save_mlflow_model
+from iapytoo.mlflow.model import save_mlflow_model
 from iapytoo.metrics.metric import Metrics
 from iapytoo.train.inference import Inference
 from iapytoo.train.checkpoint import CheckPoint
@@ -20,8 +20,6 @@ import torch
 import logging
 from tqdm import tqdm
 from enum import Enum
-
-from typing import List
 
 
 class LossType(str, Enum):
@@ -326,6 +324,8 @@ class Training(Inference):
         self._schedulers = [Factory().create_scheduler(
             "step", self.optimizer, self._config)]
 
+        self.model.weight_initiator()
+
         train_time = Timer()
         with Logger(self._config) as self.logger:
             lrs, losses = [], []
@@ -376,6 +376,8 @@ class Training(Inference):
         self._metrics = self._create_metrics()
         self._optimizers = self._create_optimizers()
         self._schedulers = self._create_schedulers(self.optimizer)
+
+        self.model.weight_initiator()
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)

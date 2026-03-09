@@ -1,0 +1,28 @@
+dataset:
+  batch_size: 128
+  num_workers: 2
+  path: ./data/sin_wave.csv
+  type: default
+metrics: {}
+model:
+  hidden_size: 128
+  lambda_gp: 10.0
+  n_critic: 5
+  noise_dim: 20
+  provider: WindProvider
+  signal_length: 600
+  type: gan
+plotters: {}
+project: wgan
+run: cnn1d
+tracking_uri: ./mlruns
+training:
+  epochs: 11
+  gamma: 0.7
+  learning_rate: 0.0001
+  loss: useless
+  n_steps_by_batch: 3
+  optimizer: adam
+  scheduler: step
+  tqdm: false
+  type: default

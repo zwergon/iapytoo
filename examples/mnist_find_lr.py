@@ -1,15 +1,11 @@
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-from iapytoo.dataset.transform import Transform
-from iapytoo.predictions.plotters import ConfusionPlotter
 from iapytoo.train.factories import Factory
-from iapytoo.utils.config import ConfigFactory, Config
+from iapytoo.utils.config import ConfigFactory
 from iapytoo.train.training import Training
 
 from examples.mnist.provider import MnistProvider
-from examples.mnist.scheduler import MnistScheduler
-
 
 if __name__ == "__main__":
     from iapytoo.utils.arguments import parse_args

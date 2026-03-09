@@ -1,7 +1,7 @@
 import unittest
 import torch
 import torch.nn as nn
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from iapytoo.train.factories import (
     Factory,
     OptimizerError,
@@ -11,7 +11,7 @@ from iapytoo.train.factories import (
 from iapytoo.train.model import Model
 from iapytoo.utils.config import Config, ConfigFactory
 from iapytoo.train.nn_loss import MSELoss
-from iapytoo.train.mlflow_model import MlflowModelProvider
+from iapytoo.mlflow.model import MlflowModelProvider
 
 
 class DummyProvider(MlflowModelProvider):

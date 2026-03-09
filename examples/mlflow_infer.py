@@ -6,6 +6,7 @@ import tempfile
 
 from iapytoo.dataset.transform import to_numpy
 from iapytoo.train.inference import get_model_uri
+from iapytoo.mlflow.model import MlInput
 
 
 def get_model_input(idx=0):
@@ -46,9 +47,12 @@ if __name__ == "__main__":
     with tempfile.NamedTemporaryFile(suffix='.npy') as temp:
         model_input, expected = get_model_input()
         np.save(temp.name, model_input)
-        predicted = loaded_model.predict([temp.name])
+
+        m_input = MlInput.from_path(temp.name)
+        predicted = loaded_model.predict([m_input])
         print(predicted[0], expected)
 
     model_input, expected = get_model_input(1000)
-    predicted = loaded_model.predict([model_input])
+    m_input = MlInput.from_array(model_input)
+    predicted = loaded_model.predict([m_input])
     print(predicted[0], expected)

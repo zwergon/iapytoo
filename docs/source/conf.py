@@ -8,7 +8,6 @@
 
 from pathlib import Path
 import sys
-import os
 project = 'iapytoo'
 copyright = '2026, Lecomte Jean-François'
 author = 'Lecomte Jean-François'

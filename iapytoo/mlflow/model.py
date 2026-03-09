@@ -1,5 +1,5 @@
 import os
-import sys
+
 import importlib
 import tempfile
 import torch
@@ -7,19 +7,17 @@ import mlflow
 import yaml
 import logging
 from typing import Any
-
 import numpy as np
 import mlflow.pyfunc as mp
 from abc import ABC, abstractmethod
 
-
 from iapytoo.utils.config import (
-    Config,
-    ModelConfig
+    Config
 )
 from iapytoo.train.model import Model
 from iapytoo.predictions.predictors import Predictor
 from iapytoo.dataset.transform import Transform
+from iapytoo.mlflow.codec import MlInput
 
 
 class ProviderError(Exception):
@@ -143,6 +141,16 @@ class MlflowModelProvider(ABC):
     def ml_predictor(self) -> Predictor:
         return self._ml_predictor if self._ml_predictor else self._predictor
 
+    def load_array(self, path: str, context: mp.PythonModelContext) -> np.ndarray:
+
+        if path == MlInput.input_example().path:
+            assert (
+                path in context.artifacts
+            ), "no input example given during training"
+            path = context.artifacts[path]
+
+        return np.load(path)
+
 
 class MlflowWGANProvider(MlflowModelProvider):
 
@@ -160,8 +168,6 @@ class MlflowWGANProvider(MlflowModelProvider):
 
 
 class MlflowModel(mp.PythonModel):
-
-    INPUT_EXAMPLE = "input_example"
 
     @staticmethod
     def from_context(context: mp.PythonModelContext) -> MlflowModelProvider:
@@ -240,29 +246,13 @@ class MlflowModel(mp.PythonModel):
     def predict(
         self,
         context: mp.PythonModelContext,
-        model_input: list[str | np.ndarray],
+        model_input: list[MlInput],
         params: dict[str, Any] | None = None
     ):
-        if not isinstance(model_input, (list, tuple)):
-            raise ValueError("model_input must be a list of file paths")
 
-        arrays = []
-        for path in model_input:
+        arrays = [m_input.to_array(context) for m_input in model_input]
 
-            if isinstance(path, np.ndarray):
-                arr = path.astype(np.float32)
-            elif isinstance(path, str):
-                if path == MlflowModel.INPUT_EXAMPLE:
-                    assert MlflowModel.INPUT_EXAMPLE in context.artifacts, "no input example given during training"
-                    arr = np.load(context.artifacts[MlflowModel.INPUT_EXAMPLE])
-                else:
-                    arr = np.load(path)
-            else:
-                raise TypeError("Unsupported input type")
-
-            arrays.append(arr)
-
-            batch = np.stack(arrays, axis=0).astype(np.float32)
+        batch = np.stack(arrays, axis=0).astype(np.float32)
 
         logging.info(f"predict called with input shape: {batch.shape}")
         if self.transform is not None:
@@ -321,7 +311,7 @@ def save_mlflow_model(config: Config,
                 input_path = os.path.join(tmpdir, "input_example.npy")
                 np.save(input_path, provider.input_example)
 
-                kwargs["input_example"] = [MlflowModel.INPUT_EXAMPLE]
+                kwargs["input_example"] = [MlInput.input_example()]
                 artifacts["input_example"] = input_path
 
             code_definition = provider.code_definition()

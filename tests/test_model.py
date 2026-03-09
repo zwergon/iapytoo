@@ -3,7 +3,7 @@ import unittest
 import torch.nn as nn
 from iapytoo.train.factories import Factory
 from iapytoo.train.model import Model
-from iapytoo.train.mlflow_model import MlflowModelProvider
+from iapytoo.mlflow.model import MlflowModelProvider
 from iapytoo.utils.config import Config, ConfigFactory
 
 
