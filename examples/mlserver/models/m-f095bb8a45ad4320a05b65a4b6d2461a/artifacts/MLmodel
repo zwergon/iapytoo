@@ -1,0 +1,43 @@
+artifact_path: /work/lecomtje/Repositories/iapy/iapytoo/mlruns/538297821954986897/models/m-f095bb8a45ad4320a05b65a4b6d2461a/artifacts
+flavors:
+  python_function:
+    artifacts:
+      code_definition:
+        path: artifacts/code_definition.yml
+        uri: /tmp/tmpzhj_culg/code_definition.yml
+      config:
+        path: artifacts/config.yaml
+        uri: /tmp/tmpzhj_culg/config.yaml
+      input_example:
+        path: artifacts/input_example.npy
+        uri: /tmp/tmpzhj_culg/input_example.npy
+      model:
+        path: artifacts/model.pt
+        uri: /tmp/tmpzhj_culg/model.pt
+    cloudpickle_version: 3.1.1
+    code: code
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.pyfunc.model
+    python_model: python_model.pkl
+    python_version: 3.10.13
+    streamable: false
+is_signature_from_type_hint: true
+mlflow_version: 3.8.1
+model_id: m-f095bb8a45ad4320a05b65a4b6d2461a
+model_size_bytes: 4723587
+model_uuid: m-f095bb8a45ad4320a05b65a4b6d2461a
+prompts: null
+run_id: fcd718817c7e469db17652ee4ca467f1
+saved_input_example_info:
+  artifact_path: input_example.json
+  serving_input_path: serving_input_example.json
+  type: json_object
+signature:
+  inputs: '[{"type": "object", "properties": {"data": {"type": "binary", "required":
+    true}, "on_disk": {"type": "boolean", "required": true}}, "required": true}]'
+  outputs: '[{"type": "any", "required": true}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-03-03 10:36:57.807040'

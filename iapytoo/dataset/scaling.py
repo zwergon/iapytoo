@@ -1,64 +1,90 @@
 import numpy as np
-from enum import IntEnum
+
+from PIL import Image
+
+import logging
+
+from iapytoo.utils.config import Config, DatasetConfig
+from iapytoo.dataset.transform import (
+    OpType,
+    Transform,
+    to_numpy
+)
 
 
-class NormalizationType(IntEnum):
-    Standard = 1
-    LogMinMax = 2
-
-
-class OpType(IntEnum):
-    MIN = 0
-    MAX = 1
-    MEAN = 2
-    STD = 3
-
-
-class Scaling:
-    """
-    Base class that uses statistics to normalize between [0, 1] or standardize
-    """
-
-    fields = ["min", "max", "mean", "std"]
-
-    @staticmethod
-    def create(kind: str, stats, columns):
-        scaling = None
-        if kind == "min_max":
-            scaling = MinMax(stats, columns=columns)
-        elif kind == "normal":
-            scaling = Normalize(stats, columns=columns)
+class MeanNormalize(Transform):
+    def __init__(self, config: Config, name='global') -> None:
+        super().__init__(config)
+        dataset_config: DatasetConfig = config.dataset
+        stats = dataset_config.statistic(name).stats
+        if not stats:
+            logging.error("no \"global\" statistics in config ")
+            self.mean: float = 0.
+            self.std: float = 1.
         else:
-            print(f"no way to normalize with {kind} kind -> not normalizing!")
+            self.mean: float = stats[OpType.MEAN]
+            self.std: float = stats[OpType.STD]
 
-        return scaling
+    def __call__(self, y):
+        # Many datasets (MNIST, ...) provide PIL image as X
+        if isinstance(y, Image.Image):
+            y = to_numpy(y)
+        return (y - self.mean) / self.std
 
-    def __init__(self, stats, columns) -> None:
-        self.data = stats
-        self.weights = np.zeros(shape=(len(Normalize.fields), len(columns)))
-        for row, f in enumerate(self.fields):
-            for col, d in enumerate(columns):
-                self.weights[row, col] = self.data[d][f]
-
-    def value(self, name, field):
-        return self.data[name][field]
-
-    def __call__(self, x):
-        pass
-
-    def inv(self, x):
-        pass
+    def inv(self, y) -> np.array:
+        return y*self.std + self.mean
 
 
-class Normalize(Scaling):
+class MinMaxNormalize(Transform):
+    def __init__(self, config: Config, name='global') -> None:
+        super().__init__(config)
+        dataset_config: DatasetConfig = config.dataset
+        stats = dataset_config.statistic(name).stats
+        if not stats:
+            logging.error("no \"global\" statistics in config ")
+            self.y_min: float = 0.
+            self.y_max: float = 1.
+        else:
+            self.y_min: float = stats[OpType.MIN]
+            self.y_max: float = stats[OpType.MAX]
+
+    def __call__(self, y) -> np.array:
+        # Many datasets (MNIST, ...) provide PIL image as X
+        if isinstance(y, Image.Image):
+            y = to_numpy(y)
+        return (y - self.y_min) / (self.y_max - self.y_min)
+
+    def inv(self, y) -> np.array:
+        return y * (self.y_max - self.y_min) + self.y_min
+
+
+class ScalingByColumn(Transform):
     """
     Base class that uses statistics to normalize between [0, 1] or standardize
     """
 
-    fields = ["min", "max", "mean", "std"]
+    def __init__(self, config: Config) -> None:
+        super().__init__(config)
+        self.dataset_config: DatasetConfig = config.dataset
+        columns = [s.variable for s in self.dataset_config.stats]
+        self.weights = np.zeros(
+            shape=(OpType.LAST, len(columns)))
+        for col, d in enumerate(columns):
+            stat = self.get_stat(d)
+            for row in range(OpType.LAST):
+                self.weights[row, col] = stat[row]
 
-    def __init__(self, stats, columns) -> None:
-        super().__init__(stats, columns)
+    def get_stat(self, name):
+        statistic = self.dataset_config.statistic(name)
+        if statistic is None:
+            raise KeyError(f"statistic {name} not found")
+        return statistic.stats
+
+    def value(self, name, field: OpType):
+        return self.get_stat(name)[field]
+
+
+class MeanScalingByColumn(ScalingByColumn):
 
     def __call__(self, x):
         return (x - self.weights[OpType.MEAN]) / self.weights[OpType.STD]
@@ -67,9 +93,7 @@ class Normalize(Scaling):
         return x * self.weights[OpType.STD] + self.weights[OpType.MEAN]
 
 
-class MinMax(Scaling):
-    def __init__(self, stats, columns) -> None:
-        super().__init__(stats, columns)
+class MinMaxScalingByColumn(ScalingByColumn):
 
     def __call__(self, x):
         return (x - self.weights[OpType.MIN]) / (
@@ -81,18 +105,3 @@ class MinMax(Scaling):
             x * (self.weights[OpType.MAX] - self.weights[OpType.MIN])
             + self.weights[OpType.MIN]
         )
-
-
-# TODO
-# class LogNormalize(Normalize):
-
-#     def __init__(self, stats, x_columns, y_columns) -> None:
-#         super().__init__(stats)
-
-#     def __call__(self, X, Y):
-#         x_min = np.log(self.wx[0, :])
-#         x_max = np.log(self.wx[1, :])
-#         return (np.log(X) - x_min) / (x_max -x_min), (Y - self.wy[2, :]) / self.wy[3, :]
-
-#     def reverse_Y(self, Y, idx=0):
-#         return Y * self.wy[3, idx] + self.wy[2, idx]

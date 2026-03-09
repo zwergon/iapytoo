@@ -1,26 +1,58 @@
 project: "iapytoo"
 run: "run"
-tracking_uri: null
+tracking_uri: "./mlruns"
+checkpoint_epoch: 2
+plotting_mean: "ewm"
+save_model: true
+
+# Alternative configuration
+# checkpoint_epoch: null  # No checkpoint saved and reinitialization possible
+# plotting_mean: "epoch"  # Loss will be reported / flushed at each epoch
+# save_model: false
+
+# Alternative wrong configuration -> will raise a validation error
+# checkpoint_epoch: 2
+# plotting_mean: "epoch"  # Loss will be reported / flushed at each epoch
+# # This loss with this checkpoint is incoherent for reinitialization, as the loss will be ahead of the checkpoint
+
+
+# Example of some extra parameters
+# inference_extra_paths: 
+#   - "../iapytoo"
+# inference_pip_requirements:
+#   - "--extra-index-url https://test.pypi.org/simple/"  # For test deployment of iapytoo. Comment this if there is a conflict between pypi and testpypi for a version that exists on both!
+#   - "--extra-index-url https://download.pytorch.org/whl/cpu"
+#   - "iapytoo==0.0.9"
+#   - "uvloop==0.21.0"
 
 dataset:
   path: "../data"
   n_steps_by_batch: 10
   num_workers: 2
   batch_size: 64
-
+  stats:
+    - variable: "global"
+      stats:
+        - 0.1307
+        - 0.3081
+        - 0.
+        - 1.
+  
 training:
   learning_rate: 1e-4
   loss: "nll"
   optimizer: "adam"
   scheduler: "step"
   epochs: 2
-  #tqdm: false
+  compile: false
+  # tqdm: false
 
 
 metrics:
   names: ['accuracy']
  
 model:
-  model: "mnist"
-  predictor: "max"
+  provider: "MnistProvider"
   kernel_size: 3
+  # inference_predictor: "labeledTop3" -> include custom predictor for inference
+

@@ -1,125 +1,58 @@
-import torch.nn as nn
 from iapytoo.utils.singleton import singleton
-import torch.optim as to
-from torch.optim.lr_scheduler import StepLR
-from iapytoo.predictions.predictors import Predictor, MaxPredictor
-from iapytoo.train.valuator import ModelValuator, WGANValuator
-from iapytoo.metrics.metric import Metric
-from iapytoo.metrics.predefined import R2Metric, RMSMetric, AccuracyMetric, MSMetric
 
-from iapytoo.utils.config import Config, TrainingConfig
+from iapytoo.utils.config import Config
 
 
-# Model
-
-class WeightInitiator:
-    def __call__(self, m):
-        """method to be overloaded for weight initialization by use of 'model.apply(initiator)'"""
-        classname = m.__class__.__name__
-        print(f"init {classname}")
-
-
-class Model(nn.Module):
-    def __init__(self, loader, config) -> None:
-        super().__init__()
-
-    def weight_initiator(self):
-        """return an WeightInitiator subclass that will be used to initialize weights of this model"""
-        return None
-
-    def predict(self, model_output):
-        """This method gives the opportunity to transform output of the model to something equivalent to Y given by the dataset
-        For example, class from probability distribution"""
-        return model_output
+from iapytoo.train.optimizer import (
+    Optimizer,
+    AdamOptimizer,
+    SGDOptimizer,
+    RMSpropOptimizer,
+    OptimizerError,
+)
 
 
-# Optimizer
+from iapytoo.metrics.metric import (
+    Metrics,
+    MetricError
+)
 
-class Optimizer:
-    def __init__(self, model, config: Config) -> None:
-        self.torch_optimizer = None
+from iapytoo.metrics.predefined import (
+    R2Metric,
+    RMSMetric,
+    AccuracyMetric,
+    MSMetric,
+    AccumulAccuracyMetric
+)
 
+from iapytoo.train.scheduler import (
+    Scheduler,
+    StepScheduler,
+    SchedulerError
+)
 
-class AdamOptimizer(Optimizer):
-    def __init__(self, model, config: Config) -> None:
-        super().__init__(model, config)
+from iapytoo.mlflow.model import (
+    ProviderError,
+    MlflowModelProvider
+)
 
-        training_config: TrainingConfig = config.training
+from iapytoo.train.nn_loss import (
+    NNLoss,
+    MSELoss,
+    NLLLoss,
+    CrossEntropyLoss
+)
 
-        kwargs = {"lr": training_config.learning_rate}
-        if training_config.weight_decay is not None:
-            kwargs["weight_decay"] = training_config.weight_decay
-        if training_config.betas is not None:
-            kwargs["betas"] = training_config.betas
-
-        self.torch_optimizer = to.Adam(model.parameters(), **kwargs)
-
-
-class RMSpropOptimizer(Optimizer):
-    def __init__(self, model, config: Config):
-        super().__init__(model, config)
-        self.torch_optimizer = to.RMSprop(
-            model.parameters(), lr=config.training.learning_rate
-        )
-
-
-class SGDOptimizer(Optimizer):
-    def __init__(self, model, config: Config) -> None:
-        super().__init__(model, config)
-        kwargs = {"lr": config.training.learning_rate}
-        if config.training.weight_decay is not None:
-            kwargs["weight_decay"] = config.training.weight_decay
-        if config.training.momentum is not None:
-            kwargs["momentum"] = config.training.momentum
-        self.torch_optimizer = to.SGD(model.parameters(), **kwargs)
-
-# Scheduler
-
-
-class Scheduler:
-    def __init__(self, optimizer, config: Config) -> None:
-        self.lr_scheduler = None
-
-
-class StepScheduler(Scheduler):
-    def __init__(self, optimizer, config) -> None:
-        super().__init__(optimizer, config)
-
-        kwargs = {}
-        kwargs["gamma"] = config.training.gamma
-        kwargs["step_size"] = config.training.step_size
-        self.lr_scheduler = StepLR(optimizer, **kwargs)
-
-# Factories
-
-
-class OptimizerError(Exception):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
-
-
-class ModelError(Exception):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
-
-
-class SchedulerError(Exception):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
-
-
-class MetricError(Exception):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
+from iapytoo.predictions.predictors import Predictor
 
 
 @singleton
 class Factory:
     def __init__(self) -> None:
         self.loss_dict = {
-            "mse": nn.MSELoss,
-            "nll": nn.NLLLoss,
-            "cel": nn.CrossEntropyLoss,
+            "mse": MSELoss,
+            "nll": NLLLoss,
+            "cel": CrossEntropyLoss,
         }
 
         self.schedulers_dict = {
@@ -132,7 +65,7 @@ class Factory:
             "rmsprop": RMSpropOptimizer,
         }
 
-        self.models_dict = {
+        self.provider_dict = {
         }
 
         self.metrics_dict = {
@@ -140,22 +73,24 @@ class Factory:
             "rms": RMSMetric,
             "ms": MSMetric,
             "accuracy": AccuracyMetric,
+            "accumul_accuracy": AccumulAccuracyMetric
         }
 
-        self.predictor_dict = {
-            "default": Predictor,
-            "max": MaxPredictor
-        }
+    def register_provider(self, provider_cls):
+        self.provider_dict[provider_cls.__name__] = provider_cls
 
-        self.valuator_dict = {
-            "model": ModelValuator,
-            "gan": WGANValuator
-        }
+    def create_provider(self, kind: str, config: Config) -> MlflowModelProvider:
+        try:
+            provider = self.provider_dict[kind](config)
+        except KeyError:
+            raise ProviderError(f"transform {kind} is not handled")
+
+        return provider
 
     def register_loss(self, key, loss_cls):
         self.loss_dict[key] = loss_cls
 
-    def create_loss(self, kind: str):
+    def create_loss(self, kind: str, config: Config) -> NNLoss:
         """Creates a loss criterion
 
         Args:
@@ -165,7 +100,7 @@ class Factory:
             nn.Module: pytorch loss function
         """
         try:
-            criterion = self.loss_dict[kind]()
+            criterion = self.loss_dict[kind](config)
         except KeyError:
             raise Exception(f"loss {kind} is not handled")
 
@@ -174,7 +109,7 @@ class Factory:
     def register_scheduler(self, key, scheduler_cls):
         self.schedulers_dict[key] = scheduler_cls
 
-    def create_scheduler(self, kind: str, optimizer, config: Config):
+    def create_scheduler(self, kind: str, optimizer, config: Config) -> Scheduler:
         """Creates an learning rate scheduler
 
         Args:
@@ -197,7 +132,7 @@ class Factory:
     def register_optimizer(self, key, optimizer_cls):
         self.optimizers_dict[key] = optimizer_cls
 
-    def create_optimizer(self, kind: str, model, config: Config):
+    def create_optimizer(self, kind: str, model, config: Config) -> Optimizer:
         """Creates an optimizer for the NN
 
         Args:
@@ -217,80 +152,27 @@ class Factory:
 
         return optimizer
 
-    def register_model(self, key, model_cls):
-        self.models_dict[key] = model_cls
-
-    def create_model(self, kind: str, config: Config, loader, device="cpu"):
-        """Creates an architecture of NN
-
-        Args:
-            kind (str): kind of NN, key for the factory
-            config (dict): config dict to use to initialize model
-            loader (DataLoader): a dataloader to have input/output dimensions
-            device (str, optional): Defaults to "cpu".
-
-        Raises:
-            ModelError: error raised if no architecture fit kind key
-
-        Returns:
-            nn.Module: pytorch model
-        """
-        try:
-            model: Model = self.models_dict[kind](loader, config)
-        except KeyError:
-            raise ModelError(f"model {kind} is not handled")
-
-        initiator = model.weight_initiator()
-        if initiator is not None:
-            model.apply(initiator)
-
-        model = model.to(device=device)
-        return model
-
     def register_metric(self, key, metric_cls):
         self.metrics_dict[key] = metric_cls
 
-    def create_metric(self, kind: str, config: Config, device="cpu") -> Metric:
-        """Creates an architecture of NN
+    def create_metrics(
+        self,
+        tag: str,
+        kind: list[str],
+        config: Config,
+        predictor: Predictor | None = None,
+        device: str = "cpu"
+    ) -> Metrics:
 
-        Args:
-            kind (str): kind of metric, key for the factory
-            config (dict): config dict to use to initialize metric
-            device (str, optional): Defaults to "cpu".
+        metric_list = []
+        for k in kind:
+            try:
+                metric = self.metrics_dict[k](config)
+            except KeyError:
+                raise MetricError(f"Metric '{k}' is not registered")
+            metric_list.append(metric)
 
-        Raises:
-            MetricError: error raised if no architecture fit kind key
+        metrics = Metrics(tag, metric_list, config, predictor=predictor)
+        metrics.to(device)
 
-        Returns:
-            iapytoo.metrics.Metric: metric
-        """
-        try:
-            metric: Metric = self.metrics_dict[kind](config)
-        except KeyError:
-            raise MetricError(f"metric {kind} is not handled")
-
-        metric = metric.to(device=device)
-        return metric
-
-    def register_predictor(self, key, predictor_cls):
-        self.predictor_dict[key] = predictor_cls
-
-    def create_predictor(self, key: Config | str, *args, **kwargs):
-        if isinstance(key, Config):
-            config: Config = key
-            kind = config.model.predictor
-        else:
-            kind = key
-        assert kind is not None, "no default predictor defined ?"
-
-        return self.predictor_dict[kind](*args, **kwargs)
-
-    def create_valuator(self, key: Config | str, model, device):
-        if isinstance(key, Config):
-            config: Config = key
-            kind = config.model.valuator
-        else:
-            kind = key
-        assert kind is not None, "no default valuator defined ?"
-
-        return self.valuator_dict[kind](model, device)
+        return metrics

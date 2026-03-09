@@ -1,17 +1,26 @@
 import unittest
 import torch
-from unittest.mock import MagicMock, patch
+import torch.nn as nn
+from unittest.mock import MagicMock
 from iapytoo.train.factories import (
-    Model,
     Factory,
     OptimizerError,
-    ModelError,
     SchedulerError,
     MetricError
 )
+from iapytoo.train.model import Model
 from iapytoo.utils.config import Config, ConfigFactory
+from iapytoo.train.nn_loss import MSELoss
+from iapytoo.mlflow.model import MlflowModelProvider
 
-import torch.nn as nn
+
+class DummyProvider(MlflowModelProvider):
+
+    def __init__(self, config: Config) -> None:
+        super().__init__(config)
+
+    def code_definition(self) -> dict:
+        return {}
 
 
 class TestFactory(unittest.TestCase):
@@ -25,7 +34,7 @@ class TestFactory(unittest.TestCase):
             "run": "test_run",
             "sensors": "sensor_1",
             "model": {
-                "model": "CNN"
+                "provider": "DummyProvider"
             },
             "dataset": {
                 "path": "dummy_path",
@@ -40,8 +49,10 @@ class TestFactory(unittest.TestCase):
         }
 
     def test_create_loss(self):
-        loss = self.factory.create_loss("mse")
-        self.assertIsInstance(loss, nn.MSELoss)
+        self.mock_config = ConfigFactory.from_args(self.config_data)
+
+        loss = self.factory.create_loss("mse", self.mock_config)
+        self.assertIsInstance(loss, MSELoss)
 
         with self.assertRaises(Exception):
             self.factory.create_loss("unknown_loss")
@@ -87,39 +98,23 @@ class TestFactory(unittest.TestCase):
             self.factory.create_optimizer(
                 "unknown_optimizer", self.mock_model, self.mock_config)
 
-    def test_create_model(self):
-        self.factory.register_model("mock_model", MagicMock(spec=Model))
-        model = self.factory.create_model(
-            "mock_model", self.mock_config, loader=MagicMock())
-        self.assertIsNotNone(model)
-
-        with self.assertRaises(ModelError):
-            self.factory.create_model(
-                "unknown_model", self.mock_config, loader=MagicMock())
+    def test_create_provider(self):
+        self.factory.register_provider(DummyProvider)
+        provider = self.factory.create_provider(
+            "DummyProvider", self.mock_config)
+        self.assertIsInstance(provider, DummyProvider)
 
     def test_create_metric(self):
         self.mock_config = ConfigFactory.from_args(self.config_data)
-        metric = self.factory.create_metric("r2", self.mock_config)
+        metric = self.factory.create_metrics(
+            "test_metrics", ["r2"], self.mock_config)
         self.assertIsNotNone(metric)
 
         with self.assertRaises(MetricError):
-            self.factory.create_metric("unknown_metric", self.mock_config)
-
-    def test_create_predictor(self):
-        predictor = self.factory.create_predictor("default")
-        self.assertIsNotNone(predictor)
-
-        with self.assertRaises(KeyError):
-            self.factory.create_predictor("unknown_predictor")
-
-    def test_create_valuator(self):
-        valuator = self.factory.create_valuator(
-            "model", self.mock_model, device="cpu")
-        self.assertIsNotNone(valuator)
-
-        with self.assertRaises(KeyError):
-            self.factory.create_valuator(
-                "unknown_valuator", self.mock_model, device="cpu")
+            self.factory.create_metrics(
+                "test_metrics",
+                ["unknown_metric"],
+                self.mock_config)
 
 
 if __name__ == "__main__":

@@ -1,17 +1,11 @@
-import sys
 import torch
-import logging
 from enum import IntEnum, Enum
-from tqdm import tqdm
 
 from iapytoo.train.training import Training
 from iapytoo.utils.config import Config
+from iapytoo.mlflow.model import MlflowWGANProvider
 from iapytoo.train.factories import Factory
 from iapytoo.train.loss import Loss
-from iapytoo.train.logger import Logger
-from iapytoo.train.checkpoint import CheckPoint
-from iapytoo.utils.timer import Timer
-from iapytoo.metrics.collection import MetricsCollection
 
 
 class WGAN_FCT(IntEnum):
@@ -29,12 +23,6 @@ class WGAN(Training):
         super().__init__(config)
         # one for generator, one for discriminator
         self.loss = Loss(WGAN_LOSS)
-        if self._config.training.tqdm:
-            self.train_loop = self.__tqdm_gan_loop(
-                self._update_g, self._update_d)
-        else:
-            self.train_loop = self.__batch_gan_loop(
-                self._update_g, self._update_d)
 
     @property
     def generator(self):
@@ -55,14 +43,16 @@ class WGAN(Training):
     def _create_criterion(self):
         return None
 
-    def _create_models(self, loader):
-        factory = Factory()
-        generator = factory.create_model(
-            self._config.model.generator, self._config, loader, self.device
-        )
-        discriminator = factory.create_model(
-            self._config.model.discriminator, self._config, loader, self.device
-        )
+    def _create_models(self):
+        assert self.mlflow_model_provider is not None, "generator is defined as model in provider"
+
+        gan_provider: MlflowWGANProvider = self.mlflow_model_provider
+
+        generator = gan_provider.generator
+        generator.to(self.device)
+
+        discriminator = gan_provider.discriminator
+        discriminator.to(self.device)
 
         return [generator, discriminator]
 
@@ -76,6 +66,17 @@ class WGAN(Training):
         )
 
         return [g_optimizer, d_optimizer]
+
+    def _create_metrics(self):
+        return {
+            "Train": Factory().create_metrics(
+                "Train",
+                self._config.metrics.names,
+                self._config,
+                predictor=self.predictor,
+                device=self.device
+            )
+        }
 
     @staticmethod
     def freeze_params(model, freeze: bool):
@@ -122,7 +123,7 @@ class WGAN(Training):
 
         return penalty
 
-    def _update_d(self, real_data, real_labels=None, metrics: MetricsCollection = None):
+    def _update_d(self, real_data, real_labels=None):
         noise_dim = self._config.model.noise_dim
         lambda_gp = self._config.model.lambda_gp
 
@@ -144,6 +145,7 @@ class WGAN(Training):
         d_loss.backward()
         self.d_optimizer.step()
 
+        self.loss(WGAN_LOSS.DISCRIMINATOR).update(d_loss.item())
         return d_loss.item()
 
     def _update_g(self, real_data, real_labels=None):
@@ -159,6 +161,7 @@ class WGAN(Training):
         g_loss.backward()
         self.g_optimizer.step()
 
+        self.loss(WGAN_LOSS.GENERATOR).update(g_loss.item())
         return g_loss.item()
 
     def _on_epoch_ended(self, epoch, checkpoint, **kwargs):
@@ -170,167 +173,45 @@ class WGAN(Training):
                 self.logger.report_prediction(epoch, self.predictions)
 
         for lt in self.loss.enum_cls:
-            for item in self.loss(lt).buffer:
+            key: str = str(lt)
+            for item in self.loss(lt).get_loss():
                 self.logger.report_metric(epoch=item[0], metrics={
-                    lt: item[1]})
+                    key: item[1]})
         self.loss.flush()
 
-    def __tqdm_gan_loop(self, update_g, update_d):
-        """
-        This is a decorator that encapsulates the inner learning procces.
-        Iterations over all batches of one epoch.
-        This decorator displays a progress bar and computes some times
-        """
+    # override
+    def _inner_train(self, batch, batch_idx):
+        real_data, real_labels = batch
+        real_data = real_data.to(self.device)
+        if real_labels is not None:
+            real_labels = real_labels.to(self.device)
 
-        def new_function(epoch, loader, description):
-            d_metrics = MetricsCollection(
-                "critic", self._config.metrics.names, self._config)
-            d_metrics.to(self.device)
+        self.d_optimizer.zero_grad()
+        self.g_optimizer.zero_grad()
 
-            timer = Timer()
-            timer.start()
-            with tqdm(loader, unit="batch", file=sys.stdout) as tepoch:
-                d_mean = self.loss(WGAN_LOSS.DISCRIMINATOR)
-                g_mean = self.loss(WGAN_LOSS.GENERATOR)
-                tepoch.set_description(f"{description} {epoch}")
-                for step, (real_data, real_labels) in enumerate(tepoch):
-                    # update discriminator
-                    real_data = real_data.to(self.device)
-                    if real_labels is not None:
-                        real_labels = real_labels.to(self.device)
-                    self.d_optimizer.zero_grad()
-                    self.g_optimizer.zero_grad()
+        d_loss = self._update_d(real_data, real_labels)
 
-                    d_loss = update_d(real_data, real_labels, d_metrics)
-                    d_mean.update(d_loss)
+        n_critic = self._config.model.n_critic
+        if n_critic == 1 or batch_idx % n_critic == 0:
+            g_loss = self._update_g(real_data, real_labels)
+        else:
+            g_loss = None
 
-                    # TODO add clip_value in Config.
-                    # if "clip_value" in self.config:
-                    #     clip_value = self.config["clip_value"]
-                    #     for p in self.discriminator.parameters():
-                    #         p.data.clamp_(-clip_value, clip_value)
+        losses = {
+            "d_loss": float(d_loss)
+        }
+        if g_loss is not None:
+            losses["g_loss"] = float(g_loss)
 
-                    # update generator not so often
-                    n_critic = self._config.model.n_critic
-                    if n_critic == 1 or step % n_critic == 0:
-                        g_loss = update_g(real_data, real_labels)
-                        g_mean.update(g_loss)
+        return losses
 
-                    timer.tick()
-
-                    tepoch.set_postfix(d_loss=d_mean.value,
-                                       g_loss=g_mean.value)
-
-            timer.log()
-            timer.stop()
-            if self.logger.can_report():
-                d_metrics.compute()
-                self.logger.report_metrics(epoch, d_metrics)
-
-        return new_function
-
-    def __batch_gan_loop(self, update_g, update_d):
-        """
-        This is a decorator that encapsulates the inner learning procces.
-        Iterations over all batches of one epoch.
-        This decorator displays a progress bar and computes some times
-        """
-
-        def new_function(epoch, loader, description):
-
-            d_metrics = MetricsCollection(
-                description, self._config.metrics.names, self._config)
-            d_metrics.to(self.device)
-
-            timer = Timer()
-            timer.start()
-            d_mean = self.loss(WGAN_LOSS.DISCRIMINATOR)
-            g_mean = self.loss(WGAN_LOSS.GENERATOR)
-
-            logging.info(f"Epoch {epoch} {description}")
-
-            size_by_batch = len(loader)
-            step = max(size_by_batch //
-                       self._config.training.n_steps_by_batch, 1)
-            for i, (real_data, real_labels) in enumerate(loader):
-
-                if i % step == 0:
-                    f"Processing batch {i+1}/{size_by_batch}"
-
-                # update discriminator
-                real_data = real_data.to(self.device)
-                self.d_optimizer.zero_grad()
-                self.g_optimizer.zero_grad()
-
-                d_loss = update_d(real_data, real_labels, d_metrics)
-                d_mean.update(d_loss)
-
-                # TODO add clip_value in Config.
-                # if "clip_value" in self.config:
-                #     clip_value = self.config["clip_value"]
-                #     for p in self.discriminator.parameters():
-                #         p.data.clamp_(-clip_value, clip_value)
-
-                # update generator not so often
-                n_critic = self._config.model.n_critic
-                if n_critic == 1 or i % n_critic == 0:
-                    g_loss = update_g(real_data, real_labels)
-                    g_mean.update(g_loss)
-
-                timer.tick()
-
-                if i % step == 0:
-                    logging.info(
-                        f"Step {i+1}/{size_by_batch} - d_loss: {d_mean.value:.6f}, g_loss: {g_mean.value:.6f}"
-                    )
-
-            timer.log()
-            timer.stop()
-            if self.logger.can_report():
-                d_metrics.compute()
-                self.logger.report_metrics(epoch, d_metrics)
-
-        return new_function
-
-    def __train(self, epoch, train_loader):
+    # override
+    def _train(self, epoch, train_loader):
         # Train
         self.generator.train()
         self.discriminator.train()
         return self.train_loop(epoch, train_loader, "Train")
 
-    def fit(self, train_loader, valid_loader, run_id=None):
-        num_epochs = self._config.training.epochs
-
-        self.loss.reset()
-
-        self._models = self._create_models(train_loader)
-        self._optimizers = self._create_optimizers()
-        self._init_mlflow_model()
-
-        checkpoint = CheckPoint(run_id)
-        checkpoint.init(self)
-
-        with Logger(self._config, run_id=checkpoint.run_id) as self.logger:
-            active_run_name = self.logger.active_run_name()
-            self._display_device()
-            self.logger.summary()
-
-            for epoch in range(checkpoint.epoch + 1, num_epochs):
-                self.logger.set_epoch(epoch)
-                # Train
-                self.__train(epoch, train_loader)
-
-                # increments scheduler
-                if self.scheduler is not None:
-                    self.scheduler.step()
-
-                self._on_epoch_ended(epoch, checkpoint, loader=valid_loader)
-
-            self.logger.save_model(self.mlflow_model)
-
-        return {
-            "run_id": self.logger.run_id,
-            "run_name": active_run_name,
-            "g_loss": self.loss(WGAN_LOSS.GENERATOR).value,
-            "d_loss": self.loss(WGAN_LOSS.DISCRIMINATOR).value,
-        }
+    # override
+    def _validate(self, epoch, valid_loader):
+        pass

@@ -1,0 +1,6 @@
+FROM iapytoo:latest
+
+ENV PYTHONPATH=/workspace
+WORKDIR /workspace
+
+ENTRYPOINT ["python", "ddp/broadcast.py"]

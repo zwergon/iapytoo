@@ -1,3 +1,18 @@
+from iapytoo.mlflow.model import save_mlflow_model
+from iapytoo.metrics.metric import Metrics
+from iapytoo.train.inference import Inference
+from iapytoo.train.checkpoint import CheckPoint
+from iapytoo.train.logger import Logger
+from iapytoo.train.factories import Factory
+from iapytoo.train.hooks import TrainHook, TqdmHook, LoggingHook
+from iapytoo.train.loss import Loss
+from iapytoo.utils.iterative_mean import Mean
+from iapytoo.utils.timer import Timer
+from iapytoo.utils.config import Config, TrainingConfig
+from iapytoo.train.scheduler import Scheduler
+from torch.utils.data import DataLoader
+
+import os
 import sys
 import random
 import numpy
@@ -5,18 +20,6 @@ import torch
 import logging
 from tqdm import tqdm
 from enum import Enum
-
-from torch.utils.data import DataLoader
-
-from iapytoo.utils.config import Config
-from iapytoo.utils.timer import Timer
-from iapytoo.utils.iterative_mean import Mean
-from iapytoo.train.loss import Loss
-from iapytoo.train.factories import Factory
-from iapytoo.train.logger import Logger
-from iapytoo.train.checkpoint import CheckPoint
-from iapytoo.train.inference import Inference
-from iapytoo.metrics.collection import MetricsCollection
 
 
 class LossType(str, Enum):
@@ -35,6 +38,22 @@ class Training(Inference):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
+    @staticmethod
+    def setup_ddp(rank):
+        import torch.distributed as dist
+        world_size = int(os.environ['WORLD_SIZE'])
+        master_addr = os.environ['MASTER_ADDR']
+        master_port = os.environ['MASTER_PORT']
+
+        os.environ['MASTER_ADDR'] = master_addr
+        os.environ['MASTER_PORT'] = master_port
+
+        # Choisir NCCL si GPU disponible, sinon Gloo
+        backend = 'nccl' if torch.cuda.is_available() else 'gloo'
+        dist.init_process_group(
+            backend=backend, rank=rank, world_size=world_size)
+        print(f"[Rank {rank}] Process initialized using {backend} backend")
+
     def __init__(self, config: Config) -> None:
         super().__init__(config=config)
 
@@ -43,21 +62,26 @@ class Training(Inference):
 
         self.criterion = self._create_criterion()
 
-        if self._config.training.tqdm:
-            self.train_loop = self.__tqdm_loop(self._inner_train)
-            self.valid_loop = self.__tqdm_loop(self._inner_validate)
-        else:
-            self.train_loop = self.__batch_loop(self._inner_train)
-            self.valid_loop = self.__batch_loop(self._inner_validate)
+        train_func = torch.compile(
+            self._inner_train) if config.training.compile else self._inner_train
 
-        self.loss = Loss(LossType)
+        if self._config.training.tqdm:
+            self.hooks: list[TrainHook] = [TqdmHook()]
+        else:
+            self.hooks: list[TrainHook] = [LoggingHook()]
+
+        self.train_loop = self.__hooked_loop(train_func)
+        self.valid_loop = self.__hooked_loop(self._inner_validate)
+
+        self.loss = Loss(LossType, config.plotting_mean)
         self._optimizers = []
         self._schedulers = []
+        self._metrics = {}
 
     @property
-    def scheduler(self):
+    def scheduler(self) -> Scheduler:
         if len(self._schedulers) > 0:
-            return self._schedulers[0].lr_scheduler
+            return self._schedulers[0]
 
         return None
 
@@ -103,7 +127,10 @@ class Training(Inference):
     # ----------------------------------------
 
     def _create_criterion(self):
-        return Factory().create_loss(self._config.training.loss)
+        training_conf: TrainingConfig = self._config.training
+        criterion = Factory().create_loss(training_conf.loss, self._config)
+        criterion.to(self.device)
+        return criterion
 
     def _get_lr(self, optimizer):
         for param_group in optimizer.param_groups:
@@ -117,9 +144,11 @@ class Training(Inference):
         return [optimizer]
 
     # overwrite
-    def _create_models(self, loader):
-        model = Factory().create_model(self._config.model.model,
-                                       self._config, loader, self.device)
+
+    def _create_models(self):
+        assert self.mlflow_model_provider is not None, "all model definition in provider"
+        model = self.mlflow_model_provider.model
+        model.to(self.device)
 
         return [model]
 
@@ -129,7 +158,25 @@ class Training(Inference):
         )
         return [scheduler]
 
-    def _inner_train(self, batch, batch_idx, metrics: MetricsCollection):
+    def _create_metrics(self):
+        return {
+            "Train": Factory().create_metrics(
+                "Train",
+                self._config.metrics.names,
+                self._config,
+                predictor=self.predictor,
+                device=self.device
+            ),
+            "Valid": Factory().create_metrics(
+                "Valid",
+                self._config.metrics.names,
+                self._config,
+                predictor=self.predictor,
+                device=self.device
+            )
+        }
+
+    def _inner_train(self, batch, batch_idx):
         X, Y = batch
         X = X.to(self.device)
         Y = Y.to(self.device)
@@ -141,119 +188,122 @@ class Training(Inference):
 
         self.optimizer.step()
 
-        metrics.update(model_output, Y)
+        f_loss = loss.item()
 
-        return loss.item()
+        if self.scheduler is not None:
+            self.scheduler.update(f_loss)
 
-    def _inner_validate(self, batch, batch_idx, metrics: MetricsCollection):
+        try:
+            metrics: Metrics = self._metrics["Train"]
+            metrics.update(model_output, Y)
+        except KeyError:
+            pass
+
+        self.loss(LossType.TRAIN).update(f_loss)
+        return {LossType.TRAIN: f_loss}
+
+    def _inner_validate(self, batch, batch_idx):
         X, Y = batch
         X = X.to(self.device)
         Y = Y.to(self.device)
         model_output = self.model(X)
         loss = self.criterion(model_output, Y)
 
-        metrics.update(model_output, Y)
+        try:
+            metrics: Metrics = self._metrics["Valid"]
+            metrics.update(model_output, Y)
+        except KeyError:
+            pass
 
-        return loss.item()
+        self.loss(LossType.VALID).update(loss.item())
+        return {LossType.VALID: loss.item()}
 
-    def _on_epoch_ended(self, epoch, checkpoint, **kwargs):
+    def _train(self, epoch, train_loader):
+        # Train
+        self.model.train()
+        return self.train_loop(epoch, train_loader, "Train")
+
+    def _validate(self, epoch, valid_loader):
+        self.model.eval()
+        with torch.no_grad():
+            return self.valid_loop(epoch, valid_loader, "Valid")
+
+    def _on_epoch_ended(self, epoch, checkpoint, checkpoint_epoch=None, report_per_epoch=None, **kwargs):
         lr = self._get_lr(self.optimizer)
         self.logger.report_metric(epoch=epoch, metrics={"learning_rate": lr})
 
         num_epochs = self._config.training.epochs
-        if epoch % 10 == 0 or epoch == num_epochs - 1:
-            if "valid_loader" in kwargs and len(self.predictions) > 0:
 
-                self.predictions.compute(loader=kwargs["valid_loader"])
-                self.logger.report_prediction(epoch, self.predictions)
+        if report_per_epoch:
+            self._report_metrics(epoch, **kwargs)
 
-            for lt in self.loss.enum_cls:
-                for item in self.loss(lt).buffer:
-                    self.logger.report_metric(epoch=item[0], metrics={
-                                              lt: item[1]})
-            self.loss.flush()
-
+        if checkpoint_epoch is not None and \
+                (epoch % checkpoint_epoch == 0 or epoch == num_epochs - 1):
             checkpoint.update(run_id=self.logger.run_id,
                               epoch=epoch, training=self)
             self.logger.log_checkpoint(checkpoint=checkpoint)
+
+            if not report_per_epoch:
+                self._report_metrics(epoch, **kwargs)
+        if checkpoint_epoch is None and not report_per_epoch and epoch == num_epochs - 1:
+            self._report_metrics(epoch, **kwargs)
+
+    def _report_metrics(self, epoch, **kwargs):
+        if "loader" in kwargs and len(self.predictions) > 0:
+            self.predictions.compute(loader=kwargs["loader"])
+            self.logger.report_prediction(epoch, self.predictions)
+
+        for lt in self.loss.enum_cls:
+            for item in self.loss(lt).get_loss():
+                key: str = str(lt)
+                self.logger.report_metric(epoch=item[0], metrics={
+                    key: item[1]})
+        self.loss.flush()
 
     # ----------------------------------------
     # Private methods
     # ----------------------------------------
 
-    def __tqdm_loop(self, function):
-        """
-        This is a decorator that encapsulates the inner learning procces.
-        Iterations over all batches of one epoch.
-        This decorator displays a progress bar and computes some times
-        """
+    def __hooked_loop(self, function):
+        def new_function(epoch, loader, description):
+            hooks = self.hooks or []
 
-        def new_function(epoch, loader, description, mean: Mean):
-            metrics = MetricsCollection(
-                description, self._config.metrics.names, self._config)
-            metrics.to(self.device)
+            try:
+                metrics: Metrics = self._metrics[description]
+                metrics.reset()
+            except KeyError:
+                logging.warning(f"No metrics defined for {description} phase")
+                metrics = None
 
             timer = Timer()
             timer.start()
-            with tqdm(loader, unit="batch", file=sys.stdout) as tepoch:
-                for batch_idx, batch in enumerate(tepoch):
-                    tepoch.set_description(f"{description} {epoch}")
-                    loss = function(batch, batch_idx, metrics)
-                    timer.tick()
 
-                    mean.update(loss)
+            for h in hooks:
+                h.on_epoch_start(epoch, description)
 
-                    tepoch.set_postfix(loss=mean.value)
+            total = len(loader)
+
+            for batch_idx, batch in enumerate(loader):
+                for h in hooks:
+                    h.on_batch_start(batch_idx, total)
+
+                losses = function(batch, batch_idx)
+                timer.tick()
+
+                for h in hooks:
+                    h.on_batch_end(batch_idx, total, losses)
+
+            if self.logger.can_report() and metrics is not None:
+                metrics.compute()
+                self.logger.report_metrics(epoch, metrics)
+
+            for h in hooks:
+                h.on_epoch_end(epoch, metrics)
 
             timer.log()
             timer.stop()
 
-            if self.logger.can_report():
-                metrics.compute()
-                self.logger.report_metrics(epoch, metrics)
-
         return new_function
-
-    def __batch_loop(self, function):
-        """
-        This is a decorator that encapsulates the inner learning procces.
-        Iterations over all batches of one epoch.
-        This decorator is used for learning process in batch mode (less verbose)
-        """
-
-        def new_function(epoch, loader, description, mean: Mean):
-            size_by_batch = len(loader)
-            step = max(size_by_batch //
-                       self._config.training.n_steps_by_batch, 1)
-
-            metrics = MetricsCollection(
-                description, self._config.metrics.names, self._config)
-            metrics.to(self.device)
-
-            for batch_idx, batch in enumerate(loader):
-                loss = function(batch, batch_idx, metrics)
-
-                mean.update(loss)
-
-                if mean.iter % step == 0:
-                    logging.info(
-                        f"Epoch {epoch} {description} iter {mean.iter} loss: {mean.value}")
-
-            if self.logger.can_report():
-                metrics.compute()
-                self.logger.report_metrics(epoch, metrics)
-
-        return new_function
-
-    def __train(self, epoch, train_loader):
-        # Train
-        self.model.train()
-        return self.train_loop(epoch, train_loader, "Train", self.loss(LossType.TRAIN))
-
-    def __validate(self, epoch, valid_loader):
-        self.model.eval()
-        with torch.no_grad():
-            return self.valid_loop(epoch, valid_loader, "Valid", self.loss(LossType.VALID))
 
     # ----------------------------------------
     # Public methods
@@ -263,7 +313,7 @@ class Training(Inference):
         num_epochs = self._config.training.epochs
         num_batch = len(train_loader)
 
-        self._models = self._create_models(train_loader)
+        self._models = self._create_models()
         self._optimizers = self._create_optimizers()
 
         lr = self._config.training.learning_rate
@@ -274,11 +324,13 @@ class Training(Inference):
         self._schedulers = [Factory().create_scheduler(
             "step", self.optimizer, self._config)]
 
+        self.model.weight_initiator()
+
         train_time = Timer()
         with Logger(self._config) as self.logger:
             lrs, losses = [], []
             train_time.start()
-            mean_loss = Mean.create("ewm")
+            mean_loss = Mean.create(self._config.plotting_mean)
             for _ in range(num_epochs):
                 with tqdm(train_loader, unit="batch", file=sys.stdout) as tepoch:
                     self.model.train()
@@ -294,7 +346,7 @@ class Training(Inference):
                         loss.backward()
                         self.optimizer.step()
 
-                        lr = self.scheduler.get_last_lr()[0]
+                        lr = self._get_lr(self.optimizer)
                         lv = loss.item()
                         mean_loss.update(lv)
                         lrs.append(lr)
@@ -315,19 +367,24 @@ class Training(Inference):
         train_time.stop()
 
     def fit(
-        self, train_loader: DataLoader, valid_loader: DataLoader, run_id=None
+        self, train_loader: DataLoader, valid_loader: DataLoader = None, run_id=None
     ):
         num_epochs = self._config.training.epochs
 
         self.loss.reset()
-
-        self._models = self._create_models(loader=train_loader)
+        self._models = self._create_models()
+        self._metrics = self._create_metrics()
         self._optimizers = self._create_optimizers()
         self._schedulers = self._create_schedulers(self.optimizer)
-        self._init_mlflow_model()
+
+        self.model.weight_initiator()
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
+        checkpoint_epoch = self._config.checkpoint_epoch
+        report_per_epoch = True if self.loss.plotting_mean in [
+            "raw_loss", "epoch"] else False
+        save_model = self._config.save_model
 
         with Logger(self._config, run_id=checkpoint.run_id) as self.logger:
             active_run_name = self.logger.active_run_name()
@@ -337,26 +394,39 @@ class Training(Inference):
             for epoch in range(checkpoint.epoch + 1, num_epochs):
 
                 self.logger.set_epoch(epoch)
-                # Train
-                self.__train(epoch, train_loader)
 
-                # Test
-                self.__validate(epoch, valid_loader)
+                # Train
+                self._train(epoch, train_loader)
+
+                # Validate
+                if valid_loader is not None:
+                    self._validate(epoch, valid_loader)
 
                 # increments scheduler
                 if self.scheduler is not None:
                     self.scheduler.step()
 
                 self._on_epoch_ended(
-                    epoch, checkpoint, valid_loader=valid_loader)
+                    epoch, checkpoint,
+                    checkpoint_epoch=checkpoint_epoch,
+                    report_per_epoch=report_per_epoch,
+                    loader=valid_loader
+                )
 
-            self.logger.save_model(self.mlflow_model)
+            if save_model:
+                save_mlflow_model(
+                    self._config,
+                    provider=self.mlflow_model_provider,
+                    epoch=num_epochs
+                )
 
-        return {
+        status = {
             "run_id": self.logger.run_id,
-            "run_name": active_run_name,
-            "loss": self.loss(LossType.VALID).value,
+            "run_name": active_run_name
         }
+        status.update(self.loss.to_dict())
+        logging.info(status)
+        return status
 
     # overwrite
     def predict(self, loader, run_id=None):
@@ -365,7 +435,7 @@ class Training(Inference):
         if run_id is None, reuse a model
         """
         if run_id is not None:
-            self._models = self._create_models(loader)
+            self._models = self._create_models()
             checkpoint = CheckPoint(run_id)
             checkpoint.init(self, only_model=True)
         else:
