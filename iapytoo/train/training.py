@@ -249,7 +249,7 @@ class Training(Inference):
             self._report_metrics(epoch, **kwargs)
 
     def _report_metrics(self, epoch, **kwargs):
-        if "loader" in kwargs and len(self.predictions) > 0:
+        if kwargs.get("loader") is not None and len(self.predictions) > 0:
             self.predictions.compute(loader=kwargs["loader"])
             self.logger.report_prediction(epoch, self.predictions)
 
