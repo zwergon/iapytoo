@@ -16,6 +16,21 @@ license = {text = "Apache-2.0"}
 readme = "README.md"
 requires-python = ">=3.7"
 
+dependencies = [
+    "tqdm",
+    "mlflow>=3.0.0,<=3.1.4",
+    "torch>=2.1.0,<=2.9.1",
+    "torchvision",
+    "cloudpickle",
+    "numpy",
+]
+
+[project.optional-dependencies]
+mlserver = [
+    "mlserver == 1.7.1",
+    "mlserver_mlflow",
+]
+
 [tool.setuptools_scm]
 local_scheme = "no-local-version"
 version_scheme = "no-guess-dev"
@@ -24,6 +39,3 @@ write_to = "iapytoo/_version.py"
 [tool.setuptools.packages.find]
 exclude = ["examples", "tests"]
 where = ["."]
-
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
