@@ -59,7 +59,7 @@ def get_payload_dict():
 
 
 def get_input_list():
-    from iapytoo.mlflow.codec import MlInput
+    from iapytoo.mlflow.mlinput import MlInput
 
     file_path = array_to_file(np.random.rand(20))
     return [

@@ -17,7 +17,7 @@ from iapytoo.utils.config import (
 from iapytoo.train.model import Model
 from iapytoo.predictions.predictors import Predictor
 from iapytoo.dataset.transform import Transform
-from iapytoo.mlflow.codec import MlInput
+from iapytoo.mlflow.mlinput import MlInput
 
 
 class ProviderError(Exception):

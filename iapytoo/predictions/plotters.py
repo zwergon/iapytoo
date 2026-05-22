@@ -2,7 +2,6 @@ import torchvision
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 from sklearn.manifold import TSNE
-import seaborn as sns
 from scipy.signal import welch
 import numpy as np
 
@@ -62,15 +61,26 @@ class ConfusionPlotter(PredictionPlotter):
         super().__init__(title="confusion_matrix")
 
     def plot(self, epoch):
-        # Calcul de la matrice de confusion
         predicted = self.predictions.numpy(PredictionType.PREDICTED)
         actual = self.predictions.numpy(PredictionType.ACTUAL)
         cm = confusion_matrix(predicted, actual)
+
         fig, ax = plt.subplots(figsize=(10, 5))
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False)
+        im = ax.imshow(cm, interpolation="nearest", cmap="Blues")
+
+        # Annotate cells
+        thresh = cm.max() / 2
+        for i in range(cm.shape[0]):
+            for j in range(cm.shape[1]):
+                ax.text(j, i, format(cm[i, j], "d"),
+                        ha="center", va="center",
+                        color="white" if cm[i, j] > thresh else "black")
+
+        ax.set_xticks(range(cm.shape[1]))
+        ax.set_yticks(range(cm.shape[0]))
+        fig.tight_layout()
 
         return {self.title: fig}
-
 
 class TSNEPlotter(PredictionPlotter):
 

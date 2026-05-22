@@ -190,9 +190,6 @@ class Training(Inference):
 
         f_loss = loss.item()
 
-        if self.scheduler is not None:
-            self.scheduler.update(f_loss)
-
         try:
             metrics: Metrics = self._metrics["Train"]
             metrics.update(model_output, Y)
@@ -208,6 +205,9 @@ class Training(Inference):
         Y = Y.to(self.device)
         model_output = self.model(X)
         loss = self.criterion(model_output, Y)
+
+        if self.scheduler is not None:
+            self.scheduler.update(loss)
 
         try:
             metrics: Metrics = self._metrics["Valid"]
@@ -249,7 +249,7 @@ class Training(Inference):
             self._report_metrics(epoch, **kwargs)
 
     def _report_metrics(self, epoch, **kwargs):
-        if "loader" in kwargs and len(self.predictions) > 0:
+        if kwargs.get("loader") is not None and len(self.predictions) > 0:
             self.predictions.compute(loader=kwargs["loader"])
             self.logger.report_prediction(epoch, self.predictions)
 

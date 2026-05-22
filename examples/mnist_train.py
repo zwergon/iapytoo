@@ -61,6 +61,6 @@ if __name__ == "__main__":
 
     training.fit(
         train_loader=train_loader,
-        valid_loader=test_loader,
+        valid_loader=test_loader,  # Possible to use "=None"
         run_id=args.run_id
     )

@@ -2,5 +2,4 @@ tqdm
 numpy 
 matplotlib
 mlflow
-seaborn
 pydantic
