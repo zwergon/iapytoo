@@ -40,6 +40,24 @@ class Model(nn.Module):
 
     def __init__(self, config: Config) -> None:
         super().__init__()
+        model_config = config.model
+        if model_config.backbone:
+            # Import differe : evite le cycle train/model.py -> train/factories.py ->
+            # mlflow/model.py -> train/model.py (Factory importe MlflowModelProvider,
+            # qui type-hint Model).
+            from iapytoo.train.factories import Factory
+            self.backbone = Factory().create_backbone(model_config.backbone, config)
+        else:
+            self.backbone = None
+
+    def forward(self, *args, **kwargs):
+        """Delegue au backbone (config.model.backbone) si defini. Les sous-classes
+        qui ont leur propre architecture (pas de backbone pluggable) overrident
+        forward() normalement et ne sont pas affectees."""
+        assert self.backbone is not None, (
+            "Model.forward() necessite config.model.backbone (ou l'override de forward())"
+        )
+        return self.backbone(*args, **kwargs)
 
     @property
     def device(self):
@@ -109,7 +127,7 @@ class DDPMModel(Model):
         super().__init__(config)
         ddpm_config: DDPMConfig = config.model
         self.T = ddpm_config.n_times
-        self.betas = torch.linspace(1e-4, 0.02, self.T)
+        self.betas = torch.linspace(ddpm_config.beta_start, ddpm_config.beta_end, self.T)
         self.alphas = 1 - self.betas
         self.alphas_cumprod = torch.cumprod(self.alphas, 0)
         self.t = None
@@ -146,8 +164,8 @@ class DDPMModel(Model):
 
     def evaluate_one(self, x):
         for t in reversed(range(self.T)):
-            z = torch.randn_like(x) if t > 0 else 0
-            t_batch = torch.full((x.shape[0],), t)
+            z = torch.randn_like(x, device=x.device) if t > 0 else 0
+            t_batch = torch.full((x.shape[0],), t, device=x.device)
             eps = self(x, t_batch.float()/self.T)
             x = (x - (1-self.alphas[t])/torch.sqrt(1-self.alphas_cumprod[t])
                  * eps)/torch.sqrt(self.alphas[t]) + torch.sqrt(self.betas[t])*z

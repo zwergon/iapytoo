@@ -11,6 +11,10 @@ from threading import Lock
 
 import mlflow
 import mlflow.pyfunc
+from mlflow import MlflowClient
+from mlflow.entities import Metric
+from mlflow.utils.time import get_current_time_millis
+from mlflow.utils.validation import MAX_METRICS_PER_BATCH
 
 
 from iapytoo.utils.config import Config
@@ -148,6 +152,36 @@ class Logger:
 
         with self.lock:
             mlflow.log_metrics(metrics, step=epoch)
+
+    def report_metric_history(self, key: str, points):
+        """
+        Journalise en un seul (ou quelques, cf. MAX_METRICS_PER_BATCH) appel(s)
+        MlflowClient.log_batch tous les points (step, value) d'une meme cle
+        metrique, au lieu d'un appel report_metric (donc mlflow.log_metrics)
+        par point.
+
+        Utilise par Training._report_metrics pour flusher self.loss(lt).get_loss()
+        (le buffer accumule par Mean.update() depuis le dernier flush - potentiellement
+        des centaines/milliers de points quand plotting_mean="mean"/"ewm" et que le
+        flush n'a lieu qu'aux checkpoints, cf. Training.fit()). Journalier ces points
+        un par un (mlflow.log_metrics par point, donc FileStore._log_run_metric/
+        append_to par point) rend le flush lineairement plus lent en NOMBRE D'APPELS
+        Python/MLflow a mesure que l'intervalle entre flushs est long - regroupes en
+        log_batch, ces memes points ne coutent plus qu'un ou quelques appels.
+        """
+        if not points:
+            return
+
+        now_ms = get_current_time_millis()
+        metrics = [Metric(key=key, value=float(v), timestamp=now_ms, step=int(s))
+                   for s, v in points]
+
+        with self.lock:
+            for i in range(0, len(metrics), MAX_METRICS_PER_BATCH):
+                MlflowClient().log_batch(
+                    run_id=self.run_id,
+                    metrics=metrics[i:i + MAX_METRICS_PER_BATCH],
+                )
 
     def report_metrics(self, epoch, metrics):
 

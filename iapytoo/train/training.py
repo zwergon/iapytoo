@@ -245,6 +245,7 @@ class Training(Inference):
 
             if not report_per_epoch:
                 self._report_metrics(epoch, **kwargs)
+                
         if checkpoint_epoch is None and not report_per_epoch and epoch == num_epochs - 1:
             self._report_metrics(epoch, **kwargs)
 
@@ -254,10 +255,8 @@ class Training(Inference):
             self.logger.report_prediction(epoch, self.predictions)
 
         for lt in self.loss.enum_cls:
-            for item in self.loss(lt).get_loss():
-                key: str = str(lt)
-                self.logger.report_metric(epoch=item[0], metrics={
-                    key: item[1]})
+            key: str = str(lt)
+            self.logger.report_metric_history(key, self.loss(lt).get_loss())
         self.loss.flush()
 
     # ----------------------------------------
