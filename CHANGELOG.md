@@ -42,6 +42,19 @@ to that project — not yet committed.
   configured via `config.metrics` are now tracked for `DDPM` runs too, not just Flow
   Matching — previously silently skipped since `DDPM._inner_train`/`_inner_validate` never
   called `Metrics.update(...)` at all.
+- `TransformPhase` (`iapytoo.dataset.transform`, `IntEnum`: `INPUT` / `OUTPUT` / `BOTH`) and
+  `Transform.phase` (class attribute, defaults to `INPUT` — retrocompatible, every existing
+  `Transform` subclass keeps its current behavior unless it explicitly overrides `phase`).
+  `MlflowModel.predict` (`iapytoo.mlflow.model`) now consults it: forward-transforms the
+  input (`self.transform(batch)`) only when `phase` is `INPUT`/`BOTH` (the historical,
+  unconditional behavior — correct for a classic predictive model whose input is real
+  physical data needing normalization before the forward pass), and applies the inverse to
+  the generated output (`self.transform.inv(predictions)`) when `phase` is `OUTPUT`/`BOTH`.
+  Needed for generative models (`DDPMModel`/`FlowMatchingModel.evaluate_one`): their input is
+  already noise in the model's native space (forward-transforming it would corrupt the
+  sampling process — verified empirically in the sibling project, noise `std` dropping from
+  `~1.0` to `~0.47` after an unconditional forward-transform), and only the generated output
+  needs denormalizing back to physical units.
 
 ### Changed
 
@@ -75,3 +88,28 @@ to that project — not yet committed.
   `MlflowModel.predict` (the pyfunc serving path, used by e.g. an mlserver deployment) also
   wraps its `evaluate_one` call in `torch.no_grad()` as defense in depth for any model type
   whose own `evaluate_one` might not self-guard.
+- `save_mlflow_model` passed `input_example=[MlInput.input_example()]` (the on-disk placeholder,
+  `to_array` resolving via `context.artifacts`) to `mp.log_model(...)`, which triggers MLflow's
+  own automatic signature inference — that calls `predict(context=None, input_example)` with a
+  bare `context=None` (no `PythonModelContext` exists yet at that point in the save flow). With
+  the on-disk placeholder, `to_array(None)` hits `context.artifacts` on a `None` context
+  (`AttributeError`), which `mlflow.models.signature` catches and downgrades to a warning
+  ("Failed to run the predict function on input example") — silent otherwise, no traceback
+  unless logging is at DEBUG (diagnosed via `mlflow.models.validate_serving_input`, which
+  succeeds because it goes through a real reloaded context, unlike the in-process signature
+  check).
+  The on-disk placeholder is deliberate for *large* input examples (e.g. a 100x100x100 cube):
+  embedding it directly (`MlInput.from_array`, `on_disk=False`, bytes inlined in the object)
+  would avoid the `context=None` problem entirely (`to_array` needs no context at all in that
+  branch) but bloats the logged model's metadata for a large array. Fixed with a size split
+  instead of unconditionally switching mechanisms:
+  `MlflowModelProvider.INPUT_EXAMPLE_EMBED_MAX_BYTES` (1 MiB — generous for a typical
+  time-series/tabular example, e.g. ~1.5 KB for a `(3, 128)` float32 signal, well under any
+  cube-sized example) — `provider.input_example.nbytes` at or below that threshold uses
+  `MlInput.from_array` (embedded, so signature inference now succeeds instead of warning);
+  above it, keeps the on-disk placeholder as before (signature inference still warns for that
+  case — accepted tradeoff, avoids embedding a large array — but the artifact still loads and
+  resolves normally through a real context at model load time, so the model itself is
+  unaffected). The on-disk artifact registration (`artifacts["input_example"]`) is unchanged in
+  both cases, so `MlInput.input_example()` still resolves correctly against a real context
+  regardless of which branch was used for `input_example=`.
