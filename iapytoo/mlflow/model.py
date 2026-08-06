@@ -261,7 +261,8 @@ class MlflowModel(mp.PythonModel):
 
         batch_tensor = torch.from_numpy(batch)
 
-        outputs_tensor = self.model.evaluate_one(batch_tensor)
+        with torch.no_grad():
+            outputs_tensor = self.model.evaluate_one(batch_tensor)
 
         predictions = self.ml_predictor(outputs_tensor)
 

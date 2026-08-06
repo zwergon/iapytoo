@@ -163,10 +163,12 @@ class DDPMModel(Model):
         return super().evaluate_loader(loader)
 
     def evaluate_one(self, x):
-        for t in reversed(range(self.T)):
-            z = torch.randn_like(x, device=x.device) if t > 0 else 0
-            t_batch = torch.full((x.shape[0],), t, device=x.device)
-            eps = self(x, t_batch.float()/self.T)
-            x = (x - (1-self.alphas[t])/torch.sqrt(1-self.alphas_cumprod[t])
-                 * eps)/torch.sqrt(self.alphas[t]) + torch.sqrt(self.betas[t])*z
+        self.eval()
+        with torch.no_grad():
+            for t in reversed(range(self.T)):
+                z = torch.randn_like(x, device=x.device) if t > 0 else 0
+                t_batch = torch.full((x.shape[0],), t, device=x.device)
+                eps = self(x, t_batch.float()/self.T)
+                x = (x - (1-self.alphas[t])/torch.sqrt(1-self.alphas_cumprod[t])
+                     * eps)/torch.sqrt(self.alphas[t]) + torch.sqrt(self.betas[t])*z
         return x

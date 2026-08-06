@@ -61,3 +61,17 @@ to that project — not yet committed.
   `t_batch = torch.full((x.shape[0],), t)` were created without `device=x.device`, always
   landing on CPU regardless of where the model/input actually live — a latent CPU/GPU
   mismatch during sampling.
+- `DDPMModel.evaluate_one` and `MlflowModel.predict` neither called `self.eval()` nor wrapped
+  their loop/call in `torch.no_grad()`, unlike the base `Model.evaluate_one` which does both.
+  Values generated were unaffected here (the reference backbone only uses
+  `GroupNorm`/`SiLU`, no `BatchNorm`/`Dropout`, so train vs eval mode doesn't change outputs —
+  verified by re-running generation with a controlled RNG seed and diffing bit-for-bit), but
+  without `torch.no_grad()` the output carried a live autograd graph
+  (`requires_grad=True`, `grad_fn=AddBackward0`) spanning all `T` sequential reverse steps,
+  never freed since `.backward()` is never called — measured ~1.16-1.19x slower on a small
+  backbone (`base=16`, 116k params, CPU, batch=4) and expected to scale worse (memory
+  especially) on larger backbones/batches or GPU. `DDPMModel.evaluate_one` now calls
+  `self.eval()` and wraps its loop in `torch.no_grad()`, matching the base class contract;
+  `MlflowModel.predict` (the pyfunc serving path, used by e.g. an mlserver deployment) also
+  wraps its `evaluate_one` call in `torch.no_grad()` as defense in depth for any model type
+  whose own `evaluate_one` might not self-guard.
