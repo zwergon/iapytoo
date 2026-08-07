@@ -109,6 +109,27 @@ to that project — not yet committed.
   `FlowMatchingModel.evaluate_one`), so today only Flow Matching conditional benefits — left
   as-is rather than extended speculatively, since no active training script in the sibling
   project produces a DDPM-conditional artifact to test against yet.
+- `iapytoo/mlflow/mlserver_runtime.py` (`MLflowRuntime`) — a thin subclass of
+  `mlserver_mlflow.MLflowRuntime` whose only job is to import `iapytoo.mlflow.codec` as a side
+  effect before delegating everything else. Needed because a real `mlserver` deployment
+  (`model_settings.json` → `"implementation": "mlserver_mlflow.MLflowRuntime"`) never decodes a
+  `content_type="mlmodelinput"` request into `list[MlInput]` on its own: `MLflowRuntime.predict`
+  calls `self.decode_request(payload)` with no `default_codec`, and codec resolution there is a
+  pure registry lookup by content type, populated only when `@register_input_codec`/
+  `@register_request_codec` (`MlInputCodec`/`MlRequestCodec`) actually run — which requires
+  importing `iapytoo.mlflow.codec` somewhere in that process. Nothing does: `iapytoo/mlflow/
+  __init__.py` is empty, `MlflowModel.from_context` only imports the *provider*'s module (never
+  `codec`), `mlserver_mlflow` itself has no idea this iapytoo-specific codec exists, and iapytoo
+  declares no `entry_points` for mlserver's plugin discovery. Without the import, `decode_request`
+  silently falls back to the raw `InferenceRequest` object, which MLflow's own type-hint
+  validation then rejects (`Expected list, but got InferenceRequest` — `predict`'s signature
+  declares `model_input: list[MlInput]`) — reproduced against a real deployed model, unrelated to
+  conditioning (`MlInput.condition`): it would already fail for a plain, non-conditional
+  `MlInput` the moment `content_type="mlmodelinput"` is actually used end-to-end through a real
+  `mlserver` process rather than only exercised client-side (`test_infer_codec.py` importing the
+  codec only registers *encoding*, in the client process — it does nothing for the server's
+  decoding). Fix: point `model_settings.json`'s `"implementation"` at
+  `"iapytoo.mlflow.mlserver_runtime.MLflowRuntime"` instead.
 
 ### Changed
 
