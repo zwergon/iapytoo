@@ -55,6 +55,60 @@ to that project — not yet committed.
   sampling process — verified empirically in the sibling project, noise `std` dropping from
   `~1.0` to `~0.47` after an unconditional forward-transform), and only the generated output
   needs denormalizing back to physical units.
+- `MlInput.condition: Optional[MlConditionInput]` — lets each `predict()` example carry its own
+  conditioning vector (`c`) alongside its main array (`x`), enabling conditional generation
+  (e.g. `FlowMatchingModel.evaluate_one(x, c=...)`) through the MLflow pyfunc artifact alone,
+  with no need to reload a raw checkpoint. `MlInput.from_array(array, condition=...)` builds it
+  (embeds a nested `MlConditionInput.from_array(condition)`); `to_condition_array(context)` is
+  the `condition`-side counterpart of `to_array(context)`. `MlflowModel.predict` builds a
+  batched `c` tensor from `model_input`'s conditions (all-`None` → `c=None`, unchanged
+  non-conditional path; all-set → stacked `c` tensor passed to `evaluate_one(x, c=...)`; a mix
+  raises, since that's a caller mistake rather than a case to paper over) — 100% backward
+  compatible for models whose `MlInput`s never set `condition`.
+  Deliberately *not* implemented via `predict()`'s existing `params: dict` argument: `params`
+  is one dict per HTTP request/call, applied to the whole batch, with no alignment mechanism
+  to `model_input`'s rows (`ParamSchema`/`ParamSpec` support scalars or flat lists, not
+  per-row structure) — fine for a hyperparameter constant across a batch, structurally wrong
+  for a condition that could vary per sample. `MlInput` is already the "one entry per sample"
+  structure, so conditioning belongs there.
+  HTTP-serving note: `list[MlInput]` today only round-trips over HTTP via MLServer's v2/KServe
+  protocol + `iapytoo/mlflow/codec.py`'s hand-written codec (`MlInputCodec`/`MlRequestCodec`,
+  updated here to also encode/decode the nested `condition`) — MLflow's native scoring server
+  (`mlflow models serve`, `dataframe_split`/`instances` JSON) has never round-tripped a raw
+  `MlInput` (verified: it materializes plain DataFrames/records, not custom pydantic types),
+  conditional or not, so this adds no new HTTP-serving gap.
+  `condition` is typed `Optional[MlConditionInput]`, a **new base class** that `MlInput` now
+  extends (`MlInput(MlConditionInput)`, one-way inheritance) rather than `Optional["MlInput"]`
+  (self-reference) as first tried: a self-referencing type broke `save_mlflow_model()` outright
+  — MLflow's type-hint-based schema walker
+  (`mlflow.models.signature._infer_signature_from_type_hints`, unconditionally invoked from
+  `mlflow.pyfunc.log_model`) recurses into nested pydantic models with no cycle detection, hits
+  Python's real recursion limit (`RecursionError`), and that particular MLflow call site doesn't
+  catch generic exceptions the way `_get_func_info_if_type_hint_supported` does elsewhere in the
+  same library (it assumes `e.message`, which `RecursionError` doesn't have, raising a secondary
+  `AttributeError` that aborts `log_model()` entirely) — verified by actually running a training
+  script through `save_mlflow_model()`, not just importing the module.
+  `MlConditionInput` holds the `on_disk`/`data` fields, the `ensure_bytes` validator, the `path`
+  property, and the base (de)serialization logic (`from_array`/`to_array`/`to_bytes`) shared by
+  both classes; `MlInput` inherits all of that and adds only what's genuinely `MlInput`-specific
+  — the `condition` field itself, the on-disk `input_example()` artifact-placeholder resolution
+  in `to_array` (a condition is always embedded via `from_array`, never registered as that
+  placeholder, so `MlConditionInput.to_array`'s plain on-disk branch never needs it), and
+  `to_condition_array`. This avoids the cycle at the type level (walking `MlInput.condition`
+  only ever reaches `MlConditionInput`'s scalar fields, never `MlInput` itself — the inheritance
+  is strictly one-directional) while removing the duplication an earlier, non-inheriting version
+  of this same split had (two independent classes both declaring `on_disk`/`data`/the validator/
+  `path`/`to_array`'s common branch). `MlConditionInput` must stay the hierarchy's terminal node:
+  never give it a field that references `MlInput` or `MlConditionInput`, or the cycle comes back.
+  `cond_indices: Optional[list[int]]` / `cond_labels: Optional[list[str]]` added to
+  `ModelConfig` (same optional/no-default-impact pattern as `cond_dim`/`backbone`) so a
+  conditional model's expected conditioning columns/order travel with `config.yaml` in the
+  MLflow artifact instead of staying flat in a training YAML only the training script reads.
+  DDPM conditional models aren't wired into this path yet: `DDPMModel.evaluate_one`
+  (`iapytoo/train/model.py`) doesn't accept a `c` argument at all (unlike
+  `FlowMatchingModel.evaluate_one`), so today only Flow Matching conditional benefits — left
+  as-is rather than extended speculatively, since no active training script in the sibling
+  project produces a DDPM-conditional artifact to test against yet.
 
 ### Changed
 

@@ -11,6 +11,13 @@ class ModelConfig(BaseModel):
     # restent optionnels pour ne rien changer aux modeles qui n'utilisent pas ce pattern.
     backbone: Optional[str] = None
     cond_dim: Optional[int] = None
+    # Colonnes physiques (indices dans conditions/input_values) et leurs labels
+    # utilises comme conditionnement (c), dans cet ordre -- permet a un
+    # predict() rechargeant uniquement l'artefact MLflow de savoir quelles
+    # cles de conditionnement il attend (cf. iapytoo/mlflow/model.py, MlInput.
+    # condition). Optionnels, sans impact sur les modeles non conditionnels.
+    cond_indices: Optional[list[int]] = None
+    cond_labels: Optional[list[str]] = None
     n_channels: Optional[int] = 3
     base: Optional[int] = 64
     t_dim: Optional[int] = 256

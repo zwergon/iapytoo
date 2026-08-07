@@ -272,8 +272,29 @@ class MlflowModel(mp.PythonModel):
 
         batch_tensor = torch.from_numpy(batch)
 
+        # Conditionnement optionnel : chaque MlInput peut porter une condition
+        # (m_input.condition) a cote de son tableau principal (cf. mlinput.py).
+        # Soit aucun element n'en porte (modele non conditionnel, c_tensor=None,
+        # comportement inchange), soit tous en portent une (batch conditionnel).
+        cond_arrays = [m_input.to_condition_array(context) for m_input in model_input]
+        n_with_condition = sum(c is not None for c in cond_arrays)
+        if n_with_condition == 0:
+            c_tensor = None
+        elif n_with_condition == len(cond_arrays):
+            cond_batch = np.stack(cond_arrays, axis=0).astype(np.float32)
+            c_tensor = torch.from_numpy(cond_batch)
+        else:
+            raise ValueError(
+                "predict called with a mix of conditioned and unconditioned "
+                "MlInput entries in the same batch — all entries must carry "
+                "a condition, or none of them."
+            )
+
         with torch.no_grad():
-            outputs_tensor = self.model.evaluate_one(batch_tensor)
+            if c_tensor is not None:
+                outputs_tensor = self.model.evaluate_one(batch_tensor, c=c_tensor)
+            else:
+                outputs_tensor = self.model.evaluate_one(batch_tensor)
 
         predictions = self.ml_predictor(outputs_tensor)
 

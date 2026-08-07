@@ -59,6 +59,29 @@ class MlInputCodec(NumpyCodec):
 
     #     return infer_input
 
+    @staticmethod
+    def _encode_item(item) -> dict:
+        # item : MlInput (a le champ condition) ou MlConditionInput (une feuille,
+        # pas de condition imbriquee -- cf. sa docstring dans mlinput.py) : les
+        # deux exposent on_disk/data, donc getattr(..., "condition", None) gere
+        # les deux uniformement sans isinstance.
+        data_field = item.data
+
+        # bytes -> base64 string
+        if isinstance(data_field, (bytes, bytearray)):
+            data_field = base64.b64encode(data_field).decode()
+
+        condition = getattr(item, "condition", None)
+        return {
+            "on_disk": item.on_disk,
+            "data": data_field,
+            # Conditionnement optionnel (cf. MlInput.condition) -- encode
+            # recursivement pour que le round-trip via MLServer v2 le
+            # preserve, sinon la condition ne survit qu'a l'API Python
+            # in-process.
+            "condition": MlInputCodec._encode_item(condition) if condition is not None else None,
+        }
+
     @classmethod
     def encode_input(cls, name: str, payload: List[MlInput], **kwargs) -> RequestInput:
         encoded = []
@@ -67,18 +90,7 @@ class MlInputCodec(NumpyCodec):
             if not isinstance(item, MlInput):
                 raise ValueError(f"Expected MlModelInput, got {type(item)}")
 
-            data_field = item.data
-
-            # bytes -> base64 string
-            if isinstance(data_field, (bytes, bytearray)):
-                data_field = base64.b64encode(data_field).decode()
-
-            encoded.append(
-                {
-                    "on_disk": item.on_disk,
-                    "data": data_field,
-                }
-            )
+            encoded.append(cls._encode_item(item))
 
         return RequestInput(
             name=name,
