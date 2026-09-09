@@ -16,8 +16,8 @@ from iapytoo.utils.config import (
 )
 from iapytoo.train.model import Model
 from iapytoo.predictions.predictors import Predictor
-from iapytoo.dataset.transform import Transform
-from iapytoo.mlflow.codec import MlInput
+from iapytoo.dataset.transform import Transform, TransformPhase
+from iapytoo.mlflow.mlinput import MlInput
 
 
 class ProviderError(Exception):
@@ -39,6 +39,17 @@ class MlflowModelProvider(ABC):
     Subclasses must implement :meth:`code_definition` and define how the model
     is exposed for inference.
     """
+
+    # Seuil (octets) en-deca duquel save_mlflow_model() embarque input_example
+    # directement (MlInput.from_array, auto-porte) plutot que de le referencer
+    # sur disque (MlInput.input_example(), place-holder resolu via
+    # context.artifacts) -- voir le commentaire dans save_mlflow_model() pour
+    # le compromis (inference automatique de signature MLflow vs. eviter
+    # d'embarquer un gros tableau, ex. un cube 100x100x100, dans les
+    # metadonnees du modele). 1 MiB : tres large pour un exemple de time-series
+    # ou tabulaire typique (~1.5 Ko pour un signal (3, 128) float32), largement
+    # en dessous d'un cube de ce genre (plusieurs Mo).
+    INPUT_EXAMPLE_EMBED_MAX_BYTES = 1_048_576  # 1 MiB
 
     @abstractmethod
     def __init__(self, config: Config) -> None:
@@ -255,18 +266,44 @@ class MlflowModel(mp.PythonModel):
         batch = np.stack(arrays, axis=0).astype(np.float32)
 
         logging.info(f"predict called with input shape: {batch.shape}")
-        if self.transform is not None:
-            logging.info("predict use a transform")
+        if self.transform is not None and self.transform.phase in (TransformPhase.INPUT, TransformPhase.BOTH):
+            logging.info("predict use a transform (input, forward)")
             batch = self.transform(batch)
 
         batch_tensor = torch.from_numpy(batch)
 
-        outputs_tensor = self.model.evaluate_one(batch_tensor)
+        # Conditionnement optionnel : chaque MlInput peut porter une condition
+        # (m_input.condition) a cote de son tableau principal (cf. mlinput.py).
+        # Soit aucun element n'en porte (modele non conditionnel, c_tensor=None,
+        # comportement inchange), soit tous en portent une (batch conditionnel).
+        cond_arrays = [m_input.to_condition_array(context) for m_input in model_input]
+        n_with_condition = sum(c is not None for c in cond_arrays)
+        if n_with_condition == 0:
+            c_tensor = None
+        elif n_with_condition == len(cond_arrays):
+            cond_batch = np.stack(cond_arrays, axis=0).astype(np.float32)
+            c_tensor = torch.from_numpy(cond_batch)
+        else:
+            raise ValueError(
+                "predict called with a mix of conditioned and unconditioned "
+                "MlInput entries in the same batch — all entries must carry "
+                "a condition, or none of them."
+            )
+
+        with torch.no_grad():
+            if c_tensor is not None:
+                outputs_tensor = self.model.evaluate_one(batch_tensor, c=c_tensor)
+            else:
+                outputs_tensor = self.model.evaluate_one(batch_tensor)
 
         predictions = self.ml_predictor(outputs_tensor)
 
         if isinstance(predictions, torch.Tensor):
             predictions = predictions.detach().cpu().numpy()
+
+        if self.transform is not None and self.transform.phase in (TransformPhase.OUTPUT, TransformPhase.BOTH):
+            logging.info("predict use a transform (output, inverse)")
+            predictions = self.transform.inv(predictions)
 
         return predictions
 
@@ -310,9 +347,35 @@ def save_mlflow_model(config: Config,
             if provider.input_example is not None:
                 input_path = os.path.join(tmpdir, "input_example.npy")
                 np.save(input_path, provider.input_example)
-
-                kwargs["input_example"] = [MlInput.input_example()]
                 artifacts["input_example"] = input_path
+
+                # Deux facons de passer input_example a log_model(), selon sa
+                # taille -- log_model() declenche l'inference automatique de
+                # signature MLflow, qui appelle predict(context=None,
+                # input_example) : un contexte MLflow reel n'existe pas encore
+                # a ce stade de la sauvegarde.
+                #
+                # - Petit (<= INPUT_EXAMPLE_EMBED_MAX_BYTES) : MlInput.from_array
+                #   (on_disk=False, bytes auto-portes dans l'objet) -- to_array()
+                #   n'a alors besoin d'aucun contexte, l'inference de signature
+                #   marche donc aussi bien a la sauvegarde (context=None) qu'au
+                #   rechargement reel. Cout memoire/stockage negligeable pour un
+                #   exemple de cette taille.
+                # - Gros : MlInput.input_example() (placeholder on-disk, resolu
+                #   via context.artifacts) pour EVITER d'embarquer un gros
+                #   tableau (ex. un cube 100x100x100) directement dans les
+                #   metadonnees du modele. Prix a payer : to_array(context=None)
+                #   plante sur context.artifacts pendant l'inference automatique
+                #   de signature (AttributeError, avalee en warning par
+                #   mlflow.models.signature, jamais remontee) -- pas de
+                #   signature auto-inferee pour ce cas, mais le fichier reste
+                #   utilisable normalement via un contexte reel au chargement
+                #   (MlflowModel.from_context), donc le modele lui-meme n'est
+                #   pas affecte.
+                if provider.input_example.nbytes <= MlflowModelProvider.INPUT_EXAMPLE_EMBED_MAX_BYTES:
+                    kwargs["input_example"] = [MlInput.from_array(provider.input_example)]
+                else:
+                    kwargs["input_example"] = [MlInput.input_example()]
 
             code_definition = provider.code_definition()
             if code_definition:

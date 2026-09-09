@@ -41,7 +41,7 @@ jobs:
         echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV
     - name: Test with pytest
       run: |
-        pytest
+        pytest --ignore examples
 
   publish:
     needs: build

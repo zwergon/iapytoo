@@ -46,6 +46,11 @@ from iapytoo.train.nn_loss import (
 from iapytoo.predictions.predictors import Predictor
 
 
+class BackboneError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
 @singleton
 class Factory:
     def __init__(self) -> None:
@@ -68,6 +73,9 @@ class Factory:
         self.provider_dict = {
         }
 
+        self.backbone_dict = {
+        }
+
         self.metrics_dict = {
             "r2": R2Metric,
             "rms": RMSMetric,
@@ -86,6 +94,25 @@ class Factory:
             raise ProviderError(f"transform {kind} is not handled")
 
         return provider
+
+    def register_backbone(self, key, backbone_cls):
+        self.backbone_dict[key] = backbone_cls
+
+    def create_backbone(self, kind: str, config: Config):
+        """Creates a model backbone (plain nn.Module, no training process logic).
+
+        Args:
+            kind (str): kind of backbone, key for the factory (config.model.backbone)
+
+        Returns:
+            nn.Module: backbone instantiated as backbone_cls(config)
+        """
+        try:
+            backbone = self.backbone_dict[kind](config)
+        except KeyError:
+            raise BackboneError(f"backbone {kind} is not handled")
+
+        return backbone
 
     def register_loss(self, key, loss_cls):
         self.loss_dict[key] = loss_cls

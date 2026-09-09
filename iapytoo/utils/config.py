@@ -18,7 +18,7 @@ os.environ["MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR"] = "false"
 def ensure_list(value, target_type):
     if isinstance(value, str):
         parsed_list = ast.literal_eval(value)
-        if isinstance(parsed_list, list):
+        if isinstance(parsed_list, list) and len(parsed_list) > 0:
             if isinstance(parsed_list[0], str) and target_type != str:
                 return [target_type(v.strip()) for v in parsed_list]
             else:

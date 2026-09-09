@@ -1,78 +1,21 @@
-import json
 import base64
-from io import BytesIO
-import numpy as np
+import json
 import struct
-
 from typing import List
 
-from pydantic import BaseModel, field_validator
+import numpy as np
+try:
+    from mlserver.codecs import NumpyCodec, register_input_codec, register_request_codec
+    from mlserver.codecs.utils import SingleInputRequestCodec
+    from mlserver.types import Parameters, RequestInput, ResponseOutput
+except ImportError as err:
+    raise ImportError("MLServer is required for this feature. Install with: pip install mlserver." \
+                      " Warning: mlserver does not work on Windows.") from err
 
-from mlserver.codecs import register_input_codec, register_request_codec, NumpyCodec
-from mlserver.codecs.utils import SingleInputRequestCodec
-from mlserver.types import (
-    RequestInput,
-    ResponseOutput,
-    Parameters
-)
+from .mlinput import MlInput
+
 # from tritonclient.grpc import InferInput
 
-
-class MlInput(BaseModel):
-    on_disk: bool = False
-    data: bytes = None
-
-    @field_validator("data", mode="before")
-    @classmethod
-    def ensure_bytes(cls, v):
-        if v is None:
-            return v
-        if isinstance(v, bytes):
-            return v
-        if isinstance(v, str):
-            return base64.b64decode(v)
-        raise TypeError("data must be bytes or base64 string")
-
-    @property
-    def path(self):
-        if self.on_disk:
-            return self.data.decode('utf-8')
-
-        return ""
-
-    @staticmethod
-    def from_path(path: str):
-        return MlInput(on_disk=True, data=path.encode("utf-8"))
-
-    @staticmethod
-    def input_example():
-        return MlInput.from_path("input_example")
-
-    @staticmethod
-    def from_array(array: np.ndarray):
-        buffer = BytesIO()
-        np.save(buffer, array)
-        return MlInput(on_disk=False, data=buffer.getvalue())
-
-    def to_array(self, context):
-        if not self.on_disk:
-            buffer = BytesIO(self.data)
-            buffer.seek(0)
-            array = np.load(buffer, allow_pickle=False)
-        else:
-            if self.path == MlInput.input_example().path:
-                path = context.artifacts[self.path]
-            else:
-                path = self.path
-
-            array = np.load(path)
-        return array
-
-    def to_bytes(self):
-        return json.dumps({
-            "on_disk": self.on_disk,
-            "data": base64.b64encode(self.data).decode() if self.data is not None else None
-        }).encode()
 
 
 @register_input_codec
@@ -116,6 +59,29 @@ class MlInputCodec(NumpyCodec):
 
     #     return infer_input
 
+    @staticmethod
+    def _encode_item(item) -> dict:
+        # item : MlInput (a le champ condition) ou MlConditionInput (une feuille,
+        # pas de condition imbriquee -- cf. sa docstring dans mlinput.py) : les
+        # deux exposent on_disk/data, donc getattr(..., "condition", None) gere
+        # les deux uniformement sans isinstance.
+        data_field = item.data
+
+        # bytes -> base64 string
+        if isinstance(data_field, (bytes, bytearray)):
+            data_field = base64.b64encode(data_field).decode()
+
+        condition = getattr(item, "condition", None)
+        return {
+            "on_disk": item.on_disk,
+            "data": data_field,
+            # Conditionnement optionnel (cf. MlInput.condition) -- encode
+            # recursivement pour que le round-trip via MLServer v2 le
+            # preserve, sinon la condition ne survit qu'a l'API Python
+            # in-process.
+            "condition": MlInputCodec._encode_item(condition) if condition is not None else None,
+        }
+
     @classmethod
     def encode_input(cls, name: str, payload: List[MlInput], **kwargs) -> RequestInput:
         encoded = []
@@ -124,18 +90,7 @@ class MlInputCodec(NumpyCodec):
             if not isinstance(item, MlInput):
                 raise ValueError(f"Expected MlModelInput, got {type(item)}")
 
-            data_field = item.data
-
-            # bytes -> base64 string
-            if isinstance(data_field, (bytes, bytearray)):
-                data_field = base64.b64encode(data_field).decode()
-
-            encoded.append(
-                {
-                    "on_disk": item.on_disk,
-                    "data": data_field,
-                }
-            )
+            encoded.append(cls._encode_item(item))
 
         return RequestInput(
             name=name,

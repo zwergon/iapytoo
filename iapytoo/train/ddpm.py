@@ -15,6 +15,7 @@ from iapytoo.utils.model_config import DDPMConfig
 class DDPM_LOSS(str, Enum):
     NOISE = 'noise'
     MODEL = 'model'
+    VALIDATE = 'validate'
 
 
 class DDPM(Training):
@@ -44,6 +45,11 @@ class DDPM(Training):
         loss_target = self.criterion(x0_hat, real_data)
         self.loss(DDPM_LOSS.MODEL).update(loss_target.item())
 
+        try:
+            self._metrics["Train"].update(x0_hat.detach(), real_data)
+        except KeyError:
+            pass
+
         loss = loss_noise + self._lambda*loss_target
         self.optimizer.zero_grad()
         loss.backward()
@@ -63,6 +69,46 @@ class DDPM(Training):
         }
 
         return losses
+
+    # override
+    def _inner_validate(self, batch, batch_idx):
+
+        model: DDPMModel = self.model
+        real_data = batch
+        real_data = real_data.to(self.device)
+
+        # Seed deterministe par batch_idx : le meme (t, bruit) est tire a chaque
+        # epoch pour ce batch, donc seule la prediction du modele fait varier la
+        # loss d'une epoch a l'autre (sinon q_sample tire un t/bruit different a
+        # chaque appel et la loss de validation n'est plus comparable epoch a epoch).
+        rng_state = torch.get_rng_state()
+        torch.manual_seed(42 + batch_idx)
+
+        xt, noise = model.q_sample(real_data)
+
+        pred_noise = model(xt, model.normalized_time)
+
+        torch.set_rng_state(rng_state)
+
+        loss_noise = F.mse_loss(pred_noise, noise)
+
+        x0_hat = model.predict(xt, pred_noise)
+
+        loss_target = self.criterion(x0_hat, real_data)
+
+        try:
+            self._metrics["Valid"].update(x0_hat.detach(), real_data)
+        except KeyError:
+            pass
+
+        loss = loss_noise + self._lambda*loss_target
+
+        if self.scheduler is not None:
+            self.scheduler.update(loss.item())
+
+        self.loss(DDPM_LOSS.VALIDATE).update(loss.item())
+
+        return {DDPM_LOSS.VALIDATE: loss.item()}
 
     # override
     def _train(self, epoch, train_loader):
