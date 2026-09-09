@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-09
+
 Changes below were made in the sibling `ifpen-wind-diffusion` project while adapting it to
 `iapytoo`, for gaps that turned out to be generic (architecture-agnostic) rather than specific
 to that project — not yet committed.
