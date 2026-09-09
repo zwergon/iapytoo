@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-09
+
+### Fixed
+
+- CI (`python-app.yml`) `build` job silently stopped installing the project's runtime
+  dependencies (`torch`, `numpy`, `mlflow`, ...) once `requirements.txt` was removed in favor
+  of `pyproject.toml` (commit `94754d5`): the step only ran `pip install -r requirements.txt`
+  when that file existed, so it became a no-op. Every test module failed to import
+  (`ModuleNotFoundError: No module named 'torch'`/`'numpy'`), which failed `build` and, since
+  `publish` depends on it (`needs: build`), silently skipped the PyPI upload — `v0.1.1` was
+  tagged and merged but never actually published. Fixed by installing the package itself
+  (`pip install -e .`) instead of the dead `requirements.txt` path.
+
 ## [0.1.1] - 2026-09-09
 
 Changes below were made in the sibling `ifpen-wind-diffusion` project while adapting it to
