@@ -1,15 +1,24 @@
-version: "3.8"
-
 services:
   iapytoo:
     build:
       context: .
-      dockerfile: Dockerfile.ifpen
+      # Dockerfile : image CUDA de Docker Hub. Dockerfile.ifpen (non versionné,
+      # base sur le registre interne IFPEN) : DOCKERFILE=Dockerfile.ifpen dans .env
+      dockerfile: ${DOCKERFILE:-Dockerfile}
+      # lus dans l'environnement ou dans .env (facultatif), non conservés dans l'image
       args:
-        http_proxy: ${http_proxy}
-        https_proxy: ${https_proxy}
-        no_proxy: ${no_proxy}
-    image: iapytoo:latest
-
-    env_file:
-      - .env
+        http_proxy: ${http_proxy:-}
+        https_proxy: ${https_proxy:-}
+        no_proxy: ${no_proxy:-}
+        IAPYTOO_REF: ${IAPYTOO_REF:-develop}
+    # une image par référence d'iapytoo (tag Docker : pas de "/", donc une
+    # branche feature/x doit être passée par son tag git ou son sha)
+    image: iapytoo:${IAPYTOO_REF:-develop}
+    # GPU (nvidia-container-toolkit sur l'hôte)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
