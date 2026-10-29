@@ -6,6 +6,83 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Gaps found in `iapytoo.train.wgan.WGAN` while adding a WGAN-GP to the sibling
+`ifpen-wind-diffusion` project — generic (not specific to that project), so fixed here
+instead of being worked around in a local subclass.
+
+### Fixed
+
+- `WGAN._on_epoch_ended` override removed: it called `predictions.compute(loader=None)` at
+  epoch 0 whenever `fit()` was called without a `valid_loader` (`fit()` always passes
+  `loader=valid_loader`, so the `"loader" in kwargs` test was always true), and it never
+  saved a checkpoint, so a WGAN run could not be resumed. `Training._on_epoch_ended` now
+  applies: checkpoint every `config.checkpoint_epoch` epochs (and at the last one), learning
+  rate logging, predictions only when plotters are defined and a loader is given. The
+  prediction cadence of the WGAN example is unchanged in practice (every 10 epochs = the
+  default `checkpoint_epoch`, plus the last epoch).
+- `WGAN._update_g` sizes the generator batch from the real batch (`real_data.shape[0]`)
+  instead of `config.dataset.batch_size`, so it is correct for an incomplete last batch.
+- `Config.is_gan` read a nonexistent `model.model` field; it now reads `model.type`.
+- `PlottersConfig.names` goes through `ensure_list`, like `MetricsConfig.names`. Reloaded from
+  MLflow params (`ConfigFactory.from_run_id`, to resume a run), it arrives as the string
+  `"['name']"` and failed validation.
+
+### Added
+
+- WGAN validation: `WGAN._inner_validate` estimates the Wasserstein distance
+  `E[D(real)] - E[D(generated)]` (no gradient penalty) on each `valid_loader` batch, logged as
+  `w_dist_valid` (`WGAN_LOSS.VALIDATE`) — the usual WGAN convergence indicator, since `d_loss`
+  includes the gradient penalty and `g_loss` depends on the critic's arbitrary offset. It also
+  feeds `scheduler.update()`, like `valid_loss` does in `Training`, so a plateau scheduler can be
+  driven by it. `WGAN._validate` was a no-op. A `"Valid"` metrics collection is now created too.
+- `DDPMModel.evaluate_loader` now generates samples: for each real batch of the loader, it
+  runs `evaluate_one` from Gaussian noise of the same shape and returns `(generated, real)`,
+  like `WGANModel.evaluate_loader`. Prediction plotters can therefore plot generated samples
+  during DDPM training, at each checkpoint. It previously used `Model.evaluate_loader`:
+  `self(X)` without a diffusion step (not a generation), and `(X, Y)` batches only. Each sample
+  costs `n_times` model passes, so generation stops after the new `DDPMConfig.n_eval` samples
+  (default 64; `None` = the whole loader).
+- `WGANModel.get_noise(n_samples, noise_dim=None, device="cpu")`: default generator input, a
+  Gaussian `(n_samples, noise_dim)` tensor (`noise_dim` defaults to `config.model.noise_dim`).
+  Generators expecting another input shape override it, as the example generators already did.
+
+### Changed
+
+- **Breaking** — for a WGAN, `valid_loader` now holds **real data**, like for every other
+  `Training`, instead of latent noise vectors. `WGANModel.evaluate_loader` (used by the
+  prediction plotters) generates as many samples as each real batch from `get_noise()` and
+  returns `(generated, real)` instead of `(generated, None)`. Code passing a latent-noise loader
+  as `valid_loader` must pass a real-data loader instead. Side benefit: the example's
+  `LatentDataset` drew *uniform* noise (`np.random.rand`) while the generators are trained on
+  Gaussian noise (`get_noise` → `torch.randn`), so the example's prediction plots showed the
+  generator on an input distribution it never saw in training.
+- Example `wgan_train.py` updated accordingly: 90/10 train/validation split of `SinDataset`
+  (seeded by `config.seed`); `LatentDataset` removed.
+- Example `wgan_train.py` supports `--run-id <id> --epochs <n> [--tracking-uri <uri>]` to resume
+  a run from its last checkpoint (config reloaded with `ConfigFactory.from_run_id`, as in
+  `mnist_train.py`); it previously always called `fit(..., run_id=None)`. Possible now that WGAN
+  runs save checkpoints. The `wgan_again` step of `run_examples.py` is re-enabled.
+- `WGAN._inner_train` accepts a bare tensor batch (`X` only) as well as `(X, Y)` / `(X,)`:
+  generative datasets usually have no target. Existing `(X, Y)` datasets are unaffected.
+- `dockers/Dockerfile` rewritten. It is now based on `nvidia/cuda:12.6.3-cudnn-runtime-rockylinux9`
+  (was Ubuntu 22.04, CUDA 12.2) and uses Python 3.11 in a venv (`/opt/venv`). It installs
+  torch 2.9.1 cu126, which matches the CUDA of the base image and is the `pyproject.toml` upper
+  bound. It now installs iapytoo itself: `iapytoo[mlserver]` from GitHub at `ARG IAPYTOO_REF`
+  (default `develop`). The previous image only had its dependencies.
+- `dockers/docker-compose.yml`:
+  - builds `${DOCKERFILE:-Dockerfile}`, so a local, unversioned Dockerfile (for example one
+    based on an internal registry) can be selected from `dockers/.env`;
+  - tags the image `iapytoo:${IAPYTOO_REF}`;
+  - passes the proxy as build args, so it is not stored in the image;
+  - reserves the GPU;
+  - drops the obsolete `version` key and the `env_file: .env` entry.
+- `dockers/Readme.md` documents this build. `dockers/run-python.sh` runs
+  `examples/mnist_train.py` (the `examples/mnist.py` it called no longer exists) with the
+  image `iapytoo:${IAPYTOO_REF:-develop}`.
+- `dockers/requirements.txt`: adds `sqlalchemy<2.1`, because mlflow 3.1.x fails to import
+  with SQLAlchemy 2.1 (`FallbackAsyncAdaptedQueuePool`), which breaks `mlflow server` and
+  sqlite tracking.
+
 ## [0.1.2] - 2026-09-09
 
 ### Fixed

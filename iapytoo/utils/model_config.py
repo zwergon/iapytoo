@@ -57,6 +57,11 @@ class DDPMConfig(ModelConfig):
     # garde alphas_cumprod[-1] du meme ordre de grandeur qu'a n_times=1000).
     beta_start: Optional[float] = 1e-4
     beta_end: Optional[float] = 0.02
+    # Nombre max d'echantillons generes par DDPMModel.evaluate_loader (plotters,
+    # a chaque checkpoint) : chaque echantillon coute n_times passes du modele,
+    # generer tout le jeu de validation serait bien plus cher qu'une epoch.
+    # None = autant que de donnees reelles dans le loader.
+    n_eval: Optional[int] = 64
 
 
 class MLFlowConfig(ModelConfig):

@@ -89,7 +89,8 @@ class MetricsConfig(BaseModel):
 
 class PlottersConfig(BaseModel):
     type: str = "default"
-    names: Optional[list[str]] = Field(default_factory=list)
+    names: Optional[Annotated[List[str], BeforeValidator(
+        lambda v: ensure_list(v, str))]] = Field(default_factory=list)
 
 
 _DataT = t.TypeVar("_DataT", bound=DatasetConfig)
@@ -256,7 +257,7 @@ class Config(BaseModel, t.Generic[_DataT, _TrainingT, _MetricsT, _PlottersT, _Mo
 
     @property
     def is_gan(self) -> bool:
-        return self.model.model.lower() == "gan"
+        return self.model.type.lower() == "gan"
 
 
 # endregion

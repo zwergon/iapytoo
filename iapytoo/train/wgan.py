@@ -16,6 +16,9 @@ class WGAN_FCT(IntEnum):
 class WGAN_LOSS(str, Enum):
     GENERATOR = 'g_loss'
     DISCRIMINATOR = 'd_loss'
+    # Distance de Wasserstein estimee E[D(reel)] - E[D(genere)] sur le
+    # valid_loader (sans penalite de gradient) -- cf. WGAN._inner_validate.
+    VALIDATE = 'w_dist_valid'
 
 
 class WGAN(Training):
@@ -69,13 +72,14 @@ class WGAN(Training):
 
     def _create_metrics(self):
         return {
-            "Train": Factory().create_metrics(
-                "Train",
+            phase: Factory().create_metrics(
+                phase,
                 self._config.metrics.names,
                 self._config,
                 predictor=self.predictor,
                 device=self.device
             )
+            for phase in ("Train", "Valid")
         }
 
     @staticmethod
@@ -150,7 +154,9 @@ class WGAN(Training):
 
     def _update_g(self, real_data, real_labels=None):
         noise_dim = self._config.model.noise_dim
-        batch_size = self._config.dataset.batch_size
+        # Taille du batch reel (et non config.dataset.batch_size) : correct
+        # aussi pour un dernier batch incomplet (DataLoader sans drop_last).
+        batch_size = real_data.shape[0]
 
         # Mise à jour du générateur
         noise = self.generator.get_noise(
@@ -164,24 +170,25 @@ class WGAN(Training):
         self.loss(WGAN_LOSS.GENERATOR).update(g_loss.item())
         return g_loss.item()
 
-    def _on_epoch_ended(self, epoch, checkpoint, **kwargs):
-        if epoch % 10 == 0:
-            if "loader" in kwargs:
-                self.predictions.compute(
-                    loader=kwargs["loader"]
-                )
-                self.logger.report_prediction(epoch, self.predictions)
+    # Pas d'override de _on_epoch_ended : celui de Training (checkpoint tous
+    # les config.checkpoint_epoch, log du learning rate, predictions seulement
+    # si des plotters sont definis ET qu'un loader est fourni) s'applique tel
+    # quel. L'ancien override appelait predictions.compute(loader=None) des
+    # l'epoch 0 quand fit() etait appele sans valid_loader (fit() passe
+    # toujours loader=valid_loader, meme None), et ne sauvegardait jamais de
+    # checkpoint (reprise d'entrainement impossible).
 
-        for lt in self.loss.enum_cls:
-            key: str = str(lt)
-            for item in self.loss(lt).get_loss():
-                self.logger.report_metric(epoch=item[0], metrics={
-                    key: item[1]})
-        self.loss.flush()
+    @staticmethod
+    def _split_batch(batch):
+        """batch = X seul (tenseur) ou (X, Y) / (X,) : renvoie (X, Y ou None)."""
+        if isinstance(batch, (list, tuple)):
+            return batch[0], (batch[1] if len(batch) > 1 else None)
+        return batch, None
 
     # override
     def _inner_train(self, batch, batch_idx):
-        real_data, real_labels = batch
+        # Un dataset generatif n'a en general pas de cible : X seul accepte.
+        real_data, real_labels = self._split_batch(batch)
         real_data = real_data.to(self.device)
         if real_labels is not None:
             real_labels = real_labels.to(self.device)
@@ -213,5 +220,32 @@ class WGAN(Training):
         return self.train_loop(epoch, train_loader, "Train")
 
     # override
+    def _inner_validate(self, batch, batch_idx):
+        """
+        valid_loader = donnees reelles (comme pour tout Training ; le bruit du
+        generateur vient de get_noise(), cf. WGANModel). Estime la distance de
+        Wasserstein E[D(reel)] - E[D(genere)] sur le batch, sans penalite de
+        gradient : l'indicateur de convergence usuel d'un WGAN (d_loss inclut
+        la penalite, g_loss depend du niveau arbitraire du critique). Pilote
+        aussi le scheduler (ex. plateau), comme la valid_loss de Training.
+        """
+        real_data, _ = self._split_batch(batch)
+        real_data = real_data.to(self.device)
+        noise = self.generator.get_noise(
+            real_data.shape[0], self._config.model.noise_dim, device=self.device)
+
+        w_dist = (self.discriminator(real_data).mean()
+                  - self.discriminator(self.generator(noise)).mean()).item()
+
+        if self.scheduler is not None:
+            self.scheduler.update(w_dist)
+
+        self.loss(WGAN_LOSS.VALIDATE).update(w_dist)
+        return {WGAN_LOSS.VALIDATE.value: w_dist}
+
+    # override
     def _validate(self, epoch, valid_loader):
-        pass
+        self.generator.eval()
+        self.discriminator.eval()
+        with torch.no_grad():
+            return self.valid_loop(epoch, valid_loader, "Valid")
