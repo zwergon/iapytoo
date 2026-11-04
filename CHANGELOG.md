@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-04
+
 Gaps found in `iapytoo.train.wgan.WGAN` while adding a WGAN-GP to the sibling
 `ifpen-wind-diffusion` project — generic (not specific to that project), so fixed here
 instead of being worked around in a local subclass.
