@@ -1,5 +1,8 @@
 tqdm
-numpy 
+numpy
 matplotlib
 mlflow
 pydantic
+# mlflow 3.1.x (borne de pyproject.toml) importe FallbackAsyncAdaptedQueuePool,
+# retiré de SQLAlchemy 2.1 : sans cette borne, mlflow server / sqlite échoue
+sqlalchemy<2.1

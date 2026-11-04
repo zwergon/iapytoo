@@ -29,16 +29,3 @@ class SinDataset(_Dataset):
     def __init__(self, filename):
         super().__init__(filename=filename)
         self.labels_size = 2
-
-
-class LatentDataset(Dataset):
-    def __init__(self, noise_dim, size=1) -> None:
-        super().__init__()
-        self.noise_dim = noise_dim
-        self.size = size
-
-    def __len__(self):
-        return self.size
-
-    def __getitem__(self, _):
-        return np.random.rand(self.noise_dim).astype(np.float32)

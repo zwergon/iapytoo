@@ -100,25 +100,40 @@ class Model(nn.Module):
 
 
 class WGANModel(Model):
+    """
+    Base des generateurs WGAN. Le bruit d'entree vient de get_noise() (a
+    surcharger si le generateur attend autre chose qu'un vecteur gaussien de
+    taille config.model.noise_dim), jamais d'un loader : les loaders d'un WGAN
+    contiennent des donnees reelles, comme pour tout autre entrainement.
+    """
 
     def __init__(self, config: Config) -> None:
         super().__init__(config)
+        self.noise_dim = getattr(config.model, "noise_dim", None)
+
+    def get_noise(self, n_samples, noise_dim=None, device="cpu"):
+        """Bruit d'entree du generateur : (n_samples, noise_dim) gaussien."""
+        noise_dim = noise_dim if noise_dim is not None else self.noise_dim
+        return torch.randn(n_samples, noise_dim, device=device)
 
     # override
     def evaluate_loader(self, loader: DataLoader):
-
+        """
+        Pour chaque batch reel du loader, genere autant d'echantillons a
+        partir de get_noise() : renvoie (generes, reels) -- les plotters
+        disposent ainsi des deux (PredictionType.PREDICTED / ACTUAL).
+        """
         # self is generator
         device = self.device
 
         self.eval()
         with torch.no_grad():
-            for X in loader:
-                X = X.to(device)
-                gen_output = self(X)
+            for batch in loader:
+                X = batch[0] if isinstance(batch, (list, tuple)) else batch
+                noise = self.get_noise(X.shape[0], self.noise_dim, device=device)
+                outputs = self(noise).detach().cpu()
 
-                outputs = gen_output.detach().cpu()
-
-                yield outputs, None
+                yield outputs, X.detach().cpu()
 
 
 class DDPMModel(Model):
@@ -132,6 +147,7 @@ class DDPMModel(Model):
         self.alphas_cumprod = torch.cumprod(self.alphas, 0)
         self.t = None
         self.noise = None
+        self.n_eval = getattr(ddpm_config, "n_eval", None)
 
     def to(self, device):
         super().to(device)
@@ -159,8 +175,28 @@ class DDPMModel(Model):
         return (xt - torch.sqrt(1-self.alphas_cumprod[self.t])[
             :, None, None]*pred_noise) / torch.sqrt(self.alphas_cumprod[self.t])[:, None, None]
 
+    # override
     def evaluate_loader(self, loader: DataLoader):
-        return super().evaluate_loader(loader)
+        """
+        Comme WGANModel.evaluate_loader : pour chaque batch reel du loader,
+        genere autant d'echantillons (evaluate_one, depuis du bruit gaussien
+        de meme forme) et renvoie (generes, reels) -- les plotters disposent
+        ainsi des deux (PredictionType.PREDICTED / ACTUAL). S'arrete apres
+        self.n_eval echantillons (config.model.n_eval, None = tout le loader).
+        """
+        device = self.device
+        n_done = 0
+        for batch in loader:
+            X = batch[0] if isinstance(batch, (list, tuple)) else batch
+            if self.n_eval is not None:
+                if n_done >= self.n_eval:
+                    break
+                X = X[:self.n_eval - n_done]
+            noise = torch.randn(X.shape, device=device)
+            outputs = self.evaluate_one(noise).detach().cpu()
+            n_done += X.shape[0]
+
+            yield outputs, X.detach().cpu()
 
     def evaluate_one(self, x):
         self.eval()
