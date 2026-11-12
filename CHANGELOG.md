@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `DDPM._inner_validate` no longer leaves the CUDA random generator reseeded after
+  validation. It seeds with `42 + batch_idx` so that each validation batch gets the same
+  `(t, noise)` at every epoch, but it saved and restored only the CPU state
+  (`torch.get_rng_state` / `torch.set_rng_state`), while `torch.manual_seed` also reseeds
+  CUDA and `q_sample` draws on the data device. On GPU, every training epoch after the first
+  therefore replayed the same sequence of `(t, noise)`, whatever `config.seed`: different
+  seeds only differed by the weight initialisation, the data order and the first epoch. The
+  seeded block now runs inside `torch.random.fork_rng`, which restores the CPU and CUDA
+  states. Validation draws are unchanged. Training runs made on GPU with earlier versions
+  are not reproduced exactly from epoch 2 on.
+
+### Added
+
+- `tests/test_ddpm_rng.py`: validation restores the global CPU and CUDA generators (the
+  CUDA case is skipped without a GPU, so CI only covers the CPU) and its draws do not
+  depend on the incoming generator state.
+
 ## [0.1.3] - 2026-11-04
 
 Gaps found in `iapytoo.train.wgan.WGAN` while adding a WGAN-GP to the sibling

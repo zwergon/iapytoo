@@ -81,14 +81,15 @@ class DDPM(Training):
         # epoch pour ce batch, donc seule la prediction du modele fait varier la
         # loss d'une epoch a l'autre (sinon q_sample tire un t/bruit different a
         # chaque appel et la loss de validation n'est plus comparable epoch a epoch).
-        rng_state = torch.get_rng_state()
-        torch.manual_seed(42 + batch_idx)
-
-        xt, noise = model.q_sample(real_data)
-
-        pred_noise = model(xt, model.normalized_time)
-
-        torch.set_rng_state(rng_state)
+        # fork_rng sauvegarde et restaure aussi le generateur CUDA, sur lequel
+        # q_sample tire : torch.get/set_rng_state ne couvrent que le CPU, et le
+        # generateur CUDA restait dans le meme etat apres chaque validation (meme
+        # suite (t, bruit) d'apprentissage a chaque epoch, quelle que soit config.seed).
+        cuda_devices = [real_data.device] if real_data.is_cuda else []
+        with torch.random.fork_rng(devices=cuda_devices):
+            torch.manual_seed(42 + batch_idx)
+            xt, noise = model.q_sample(real_data)
+            pred_noise = model(xt, model.normalized_time)
 
         loss_noise = F.mse_loss(pred_noise, noise)
 
