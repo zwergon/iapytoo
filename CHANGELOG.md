@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `DDPM._inner_train` no longer calls `scheduler.update`. The scheduler was fed by both the
+  training and the validation losses, so a plateau scheduler, which averages the losses it
+  receives over the epoch, was driven mostly by the training loss (many more training
+  batches than validation batches). It is now fed by the validation loss only, as in
+  `Training`, `WGAN` and `FlowMatchingTraining`. This changes the learning rate trajectory
+  of DDPM runs with a scheduler that uses `update` (e.g. `ReduceLROnPlateau`), which now
+  needs a `valid_loader`. Runs with a `step` scheduler are unchanged.
+- `examples/ddpm_train.py` passes a validation loader, which its plateau scheduler needs.
+
+### Added
+
+- `tests/test_ddpm_scheduler.py`: the DDPM scheduler only receives validation losses.
+
 ## [0.2.0] - 2026-11-16
 
 ### Added

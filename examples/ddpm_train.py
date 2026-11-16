@@ -79,9 +79,12 @@ if __name__ == "__main__":
 
     loader = DataLoader(
         dataset, batch_size=config.dataset.batch_size, shuffle=True)
+    # The plateau scheduler is fed by the validation loss only.
+    valid_loader = DataLoader(
+        PSDDataset(n=256, T=ddpm_config.signal_length), batch_size=config.dataset.batch_size)
 
     training = DDPM(config)
-    training.fit(loader)
+    training.fit(loader, valid_loader)
 
 
 # np.save("samples.npy", samples)
