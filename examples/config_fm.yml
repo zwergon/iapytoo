@@ -1,0 +1,26 @@
+project: flow_matching
+run: sines
+tracking_uri: "./mlruns"
+
+dataset:
+  path: "useless"
+  batch_size: 64
+  num_workers: 2
+  stats: []
+
+model:
+  type: "flow_matching"
+  provider: "SineFMProvider"
+  backbone: "velocity_unet1d"
+  n_channels: 1
+  base: 32
+  signal_length: 256
+  sampler: "heun"
+  n_steps: 20
+
+training:
+  learning_rate: 1e-3
+  loss: "mse"
+  optimizer: "adam"
+  scheduler: "step"
+  epochs: 40

@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-16
+
+### Added
+
+- Rectified flow matching, moved from the sibling `ifpen-wind-diffusion` project, where it
+  was trained on wind time series. It is the generic part only: dataset formats and
+  conditioning sources stay in the projects.
+  - `FlowMatchingConfig` (`model.type: flow_matching`), registered by default in
+    `ModelConfigFactory`: `signal_length`, `n_steps`, `sampler` (`euler` or `heun`) and
+    `n_eval`.
+  - `iapytoo.train.model`: `FlowMatchingModel`, the counterpart of `DDPMModel`. It holds
+    the process, and the velocity network is the backbone named by `config.model.backbone`.
+    `q_sample(x1)` returns `(x_t, t, v_target)`. `evaluate_one(x, c=None)` integrates the ODE
+    with `integrate`, explicit Euler (order 1) or Heun (order 2, two network evaluations per
+    step).
+  - `iapytoo.train.flow_matching.FlowMatchingTraining`, the counterpart of `DDPM`. The
+    loss is the MSE on the velocity. The metrics compare the one-step reconstruction
+    `x1_hat` to `x1`. Gradients are clipped to norm 1. Validation is seeded per batch, like
+    DDPM. A conditional training only overrides `_split_batch(batch) -> (x1, c)`.
+- `iapytoo.utils.rng.seeded_rng(seed, device)`: reproducible draws inside a block, with the
+  global CPU and CUDA generators restored on exit. `DDPM._inner_validate` uses it (same
+  behaviour as in 0.1.4).
+- `tests/test_flow_matching.py`: config registration, convergence orders of Euler and Heun,
+  `q_sample`, `state_dict` round trip, conditioning, `evaluate_loader`, validation RNG.
+- `examples/fm_train.py`, `examples/fm_infer.py` and `examples/config_fm.yml`: flow matching
+  on random sines, with a small U-Net registered as backbone. Added to `run_examples.py`.
+
 ## [0.1.4] - 2026-11-12
 
 ### Fixed
