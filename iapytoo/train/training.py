@@ -2,6 +2,7 @@ from iapytoo.mlflow.model import save_mlflow_model
 from iapytoo.metrics.metric import Metrics
 from iapytoo.train.inference import Inference
 from iapytoo.train.checkpoint import CheckPoint
+from iapytoo.train.ema import EMA
 from iapytoo.train.logger import Logger
 from iapytoo.train.factories import Factory
 from iapytoo.train.hooks import TrainHook, TqdmHook, LoggingHook
@@ -18,6 +19,7 @@ import random
 import numpy
 import torch
 import logging
+from contextlib import nullcontext
 from tqdm import tqdm
 from enum import Enum
 
@@ -77,6 +79,7 @@ class Training(Inference):
         self._optimizers = []
         self._schedulers = []
         self._metrics = {}
+        self._ema: EMA | None = None
 
     @property
     def scheduler(self) -> Scheduler:
@@ -104,6 +107,8 @@ class Training(Inference):
         for i, s in enumerate(self._schedulers):
             state_dict[f"scheduler_{i}"] = s.lr_scheduler.state_dict()
         state_dict["loss"] = self.loss.state_dict()
+        if self._ema is not None:
+            state_dict["ema_0"] = self._ema.state_dict()
 
         return state_dict
 
@@ -111,7 +116,18 @@ class Training(Inference):
         n_models = state_dict["n_models"]
         for i in range(n_models):
             self._models[i].load_state_dict(state_dict[f"model_{i}"])
+        if only_model and "ema_0" in state_dict:
+            # Model loaded to predict: generate with the averaged weights.
+            self._models[0].load_state_dict(state_dict["ema_0"]["model"])
         if not only_model:
+            if self._ema is not None:
+                if "ema_0" in state_dict:
+                    self._ema.load_state_dict(state_dict["ema_0"])
+                else:
+                    logging.warning(
+                        "checkpoint without EMA weights: the average restarts "
+                        "from the weights of the checkpoint")
+                    self._ema.reset(self.model)
             n_optimizers = state_dict["n_optimizers"]
             for i in range(n_optimizers):
                 self._optimizers[i].torch_optimizer.load_state_dict(
@@ -122,9 +138,26 @@ class Training(Inference):
                     state_dict[f"scheduler_{i}"])
             self.loss.load_state_dict(state_dict["loss"])
 
+    def ema_weights(self):
+        """Context in which self.model holds the EMA weights, if any."""
+        if self._ema is None:
+            return nullcontext()
+        return self._ema.swapped(self.model)
+
     # ----------------------------------------
     # Protected methods that may be overloaded
     # ----------------------------------------
+
+    def _create_ema(self):
+        """EMA of the main model (self.model, the generator of a WGAN), updated
+        after each step of the main optimizer (self.optimizer). None if
+        training.ema_decay is not set."""
+        training_conf: TrainingConfig = self._config.training
+        if training_conf.ema_decay is None:
+            return None
+        ema = EMA(self.model, training_conf.ema_decay, warmup=bool(training_conf.ema_warmup))
+        ema.attach(self.optimizer, self.model)
+        return ema
 
     def _create_criterion(self):
         training_conf: TrainingConfig = self._config.training
@@ -251,7 +284,8 @@ class Training(Inference):
 
     def _report_metrics(self, epoch, **kwargs):
         if kwargs.get("loader") is not None and len(self.predictions) > 0:
-            self.predictions.compute(loader=kwargs["loader"])
+            with self.ema_weights():
+                self.predictions.compute(loader=kwargs["loader"])
             self.logger.report_prediction(epoch, self.predictions)
 
         for lt in self.loss.enum_cls:
@@ -377,6 +411,8 @@ class Training(Inference):
         self._schedulers = self._create_schedulers(self.optimizer)
 
         self.model.weight_initiator()
+        # After the weight initialisation, before a resumed checkpoint is loaded.
+        self._ema = self._create_ema()
 
         checkpoint = CheckPoint(run_id)
         checkpoint.init(self)
@@ -413,11 +449,12 @@ class Training(Inference):
                 )
 
             if save_model:
-                save_mlflow_model(
-                    self._config,
-                    provider=self.mlflow_model_provider,
-                    epoch=num_epochs
-                )
+                with self.ema_weights():
+                    save_mlflow_model(
+                        self._config,
+                        provider=self.mlflow_model_provider,
+                        epoch=num_epochs
+                    )
 
         status = {
             "run_id": self.logger.run_id,
@@ -435,10 +472,13 @@ class Training(Inference):
         """
         if run_id is not None:
             self._models = self._create_models()
+            # The checkpoint loads its EMA weights, if any, into the model itself.
+            self._ema = None
             checkpoint = CheckPoint(run_id)
             checkpoint.init(self, only_model=True)
         else:
             assert self.model is not None, "no model loaded for prediction"
 
         assert self.predictions is not None, "no predictions defined for this training"
-        self.predictions.compute(loader=loader)
+        with self.ema_weights():
+            self.predictions.compute(loader=loader)

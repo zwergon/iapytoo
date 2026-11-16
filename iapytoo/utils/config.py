@@ -78,6 +78,13 @@ class TrainingConfig(BaseModel):
     step_size: Optional[int] = 10
     gamma: Optional[float] = 0.9
     groups: Optional[int] = 1
+    # Moyenne exponentielle des poids (iapytoo.train.ema.EMA), mise a jour apres
+    # chaque pas de l'optimiseur principal. None = desactivee. Les poids moyennes
+    # servent a generer (predictions aux checkpoints, modele MLflow final) ;
+    # l'apprentissage, la validation et le scheduler restent sur les poids bruts.
+    ema_decay: Optional[float] = None
+    # Decay croissant au debut : min(ema_decay, (1 + n) / (10 + n)) apres n mises a jour.
+    ema_warmup: Optional[bool] = False
 
 
 class MetricsConfig(BaseModel):

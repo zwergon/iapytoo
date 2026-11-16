@@ -19,7 +19,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Exponential moving average (EMA) of the weights, for every `Training` subclass (`DDPM`,
+  `FlowMatchingTraining`, `WGAN`, plain `Training`).
+  - Enabled by `training.ema_decay` (`None`, the default, disables it: training is then
+    unchanged). `training.ema_warmup: true` makes the decay grow as
+    `min(ema_decay, (1 + n) / (10 + n))` over the first updates.
+  - `iapytoo.train.ema.EMA` averages `self.model` (the generator of a WGAN) after each step
+    of `self.optimizer`, through `register_step_post_hook`: subclasses need no change.
+    Buffers are copied, not averaged.
+  - The raw weights keep driving the training, the validation loss and the scheduler. The
+    EMA weights are used to generate: predictions at checkpoints (plotters), the final MLflow
+    model, and `Training.predict`. `Training.ema_weights()` is the context that swaps them in,
+    and restores the raw weights exactly on exit.
+  - Checkpoints store the average as `ema_0`, next to the raw `model_0`, so a resumed run
+    continues both. Resuming a checkpoint without `ema_0` restarts the average from its
+    weights, with a warning. Loading a checkpoint to predict (`only_model=True`) loads the EMA
+    weights when present. `iapytoo.train.ema.generation_state_dict(training_state)` returns
+    the weights to generate with from the `training` entry of a checkpoint.
 - `tests/test_ddpm_scheduler.py`: the DDPM scheduler only receives validation losses.
+- `tests/test_ema.py`: update, warmup, buffers, optimizer hook, exact restore of the raw
+  weights, checkpoint round trip and resume without EMA.
 
 ## [0.2.0] - 2026-11-16
 
