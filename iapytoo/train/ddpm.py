@@ -10,6 +10,7 @@ from iapytoo.train.loss import Loss
 
 from iapytoo.train.model import DDPMModel
 from iapytoo.utils.model_config import DDPMConfig
+from iapytoo.utils.rng import seeded_rng
 
 
 class DDPM_LOSS(str, Enum):
@@ -81,13 +82,9 @@ class DDPM(Training):
         # epoch pour ce batch, donc seule la prediction du modele fait varier la
         # loss d'une epoch a l'autre (sinon q_sample tire un t/bruit different a
         # chaque appel et la loss de validation n'est plus comparable epoch a epoch).
-        # fork_rng sauvegarde et restaure aussi le generateur CUDA, sur lequel
-        # q_sample tire : torch.get/set_rng_state ne couvrent que le CPU, et le
-        # generateur CUDA restait dans le meme etat apres chaque validation (meme
-        # suite (t, bruit) d'apprentissage a chaque epoch, quelle que soit config.seed).
-        cuda_devices = [real_data.device] if real_data.is_cuda else []
-        with torch.random.fork_rng(devices=cuda_devices):
-            torch.manual_seed(42 + batch_idx)
+        # seeded_rng restaure aussi le generateur CUDA, sur lequel q_sample tire
+        # (cf. sa docstring).
+        with seeded_rng(42 + batch_idx, real_data.device):
             xt, noise = model.q_sample(real_data)
             pred_noise = model(xt, model.normalized_time)
 

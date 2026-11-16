@@ -34,7 +34,9 @@ class StepEnum(IntEnum):
     DDPM_TRAIN = 7
     DDPM_MLFLOW = 8
     MNIST_FIND_LR = 9
-    LAST = 10
+    FM_TRAIN = 10
+    FM_MLFLOW = 11
+    LAST = 12
 
 
 # mnist, mnist_again, mnist_infer, mnist_mlflow_infer, wgan_train, wgan_mlflow
@@ -49,6 +51,8 @@ actions = [True] * StepEnum.LAST
 # actions[StepEnum.DDPM_TRAIN] = False
 # actions[StepEnum.DDPM_MLFLOW] = False
 # actions[StepEnum.MNIST_FIND_LR] = False
+# actions[StepEnum.FM_TRAIN] = False
+# actions[StepEnum.FM_MLFLOW] = False
 
 
 @dataclass
@@ -242,6 +246,22 @@ def main():
             log_file=tmp_dir / "mnist_find_lr.log",
             returns_run_id=False,
             needs_run_id=False
+        ),
+        Step(
+            name="fm_train",
+            func=run_train,
+            script=root_dir / "fm_train.py",
+            config=root_dir / "config_fm.yml",
+            log_file=tmp_dir / "fm_train.log",
+            returns_run_id=True
+        ),
+        Step(
+            name="fm_mlflow_infer",
+            func=run_mlflow_infer,
+            script=root_dir / "fm_infer.py",
+            log_file=tmp_dir / "fm_infer.log",
+            needs_run_id=True,
+            extra_args=["--output", str(tmp_dir / "fm.jpg")]
         )
     ]
 
