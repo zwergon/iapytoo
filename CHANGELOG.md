@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `CheckPoint` and the MLflow pyfunc reload (`MlflowModel.from_context`) load the tensors
+  with `map_location="cpu"`. A checkpoint or a model saved on GPU no longer fails to load
+  on a machine without CUDA (e.g. a login node, or mlserver on CPU). `load_state_dict` then
+  copies the tensors onto the device of the model (and of the optimizer state), so loading
+  on GPU is unchanged.
+
 ## [0.3.0] - 2026-11-16
 
 ### Fixed

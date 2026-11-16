@@ -225,8 +225,11 @@ class MlflowModel(mp.PythonModel):
 
         provider: MlflowModelProvider = provider_cls(config=config)
 
+        # map_location: a model trained on GPU also loads on a machine
+        # without CUDA (e.g. mlserver); load_state_dict copies the weights onto
+        # the device of the model built by the provider.
         provider._model.load_state_dict(torch.load(
-            context.artifacts["model"], weights_only=True))
+            context.artifacts["model"], map_location="cpu", weights_only=True))
 
         return provider
 

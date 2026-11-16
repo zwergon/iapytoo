@@ -21,8 +21,11 @@ class CheckPoint:
                         files.append(ck_name)
                 files.sort(key=lambda x: os.path.getmtime(x))
                 ck_name = files[-1]
+                # map_location: a checkpoint saved on GPU also loads on a machine
+                # without CUDA; load_state_dict then copies the tensors onto the
+                # device of the model and of the optimizer state.
                 self.params = torch.load(
-                    ck_name, weights_only=False)
+                    ck_name, map_location="cpu", weights_only=False)
         else:
             self.params["epoch"] = -1
 
