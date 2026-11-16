@@ -55,9 +55,8 @@ class DDPM(Training):
         self.optimizer.zero_grad()
         loss.backward()
 
-        if self.scheduler is not None:
-            self.scheduler.update(loss.item())
-
+        # Pas de scheduler.update ici : comme dans Training, seule la validation
+        # alimente le scheduler (cf. _inner_validate).
         torch.nn.utils.clip_grad_norm_(
             model.parameters(),
             max_norm=1.0
