@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 from iapytoo.train.training import Training, LossType
-from iapytoo.train.model import FlowMatchingModel
+from iapytoo.train.model import FlowMatchingModel, per_sample
 from iapytoo.utils.rng import seeded_rng
 
 
@@ -38,7 +38,7 @@ class FlowMatchingTraining(Training):
         x_t, t, v_target = model.q_sample(x1)
         v_pred = model(x_t, t) if c is None else model(x_t, t, c)
         loss = F.mse_loss(v_pred, v_target)
-        x1_hat = x_t + (1.0 - t[:, None, None]) * v_pred.detach()
+        x1_hat = x_t + (1.0 - per_sample(t, x_t)) * v_pred.detach()
         return loss, x1_hat
 
     # override

@@ -13,6 +13,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   on a machine without CUDA (e.g. a login node, or mlserver on CPU). `load_state_dict` then
   copies the tensors onto the device of the model (and of the optimizer state), so loading
   on GPU is unchanged.
+- `DDPMModel.q_sample`, `DDPMModel.predict`, `FlowMatchingModel.q_sample` and
+  `FlowMatchingTraining._loss` scaled the samples by per-sample coefficients broadcast with
+  `[:, None, None]`, which only fits 1D signals `(B, C, N)`. They now use
+  `iapytoo.train.model.per_sample`, which reshapes the coefficients to `(B, 1, ..., 1)`, so
+  DDPM and flow matching also train on images `(B, C, H, W)` and volumes `(B, C, D, H, W)`.
+  Before, 2D data raised a shape error, and 3D data with a batch size equal to the depth
+  trained silently on wrong noise levels (coefficients varying along the depth instead of
+  across samples). 1D results are bit-identical.
+
+### Changed
+
+- `FlowMatchingConfig.signal_length` is optional (default `None`): the model does not use it,
+  and it means nothing for images or volumes.
+
+### Added
+
+- `tests/test_nd_shapes.py`: DDPM and flow matching on 1D, 2D and 3D data, with a batch size
+  equal to every spatial size, checked sample by sample.
 
 ## [0.3.0] - 2026-11-16
 

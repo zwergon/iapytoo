@@ -136,6 +136,15 @@ class WGANModel(Model):
                 yield outputs, X.detach().cpu()
 
 
+def per_sample(values: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """
+    Reshapes per-sample values of shape (B,) to (B, 1, ..., 1), to scale x of
+    shape (B, C, *spatial) sample by sample, whatever its number of spatial
+    dimensions: signals (B, C, N), images (B, C, H, W), volumes (B, C, D, H, W).
+    """
+    return values.view(-1, *([1] * (x.dim() - 1)))
+
+
 class DDPMModel(Model):
 
     def __init__(self, config: Config) -> None:
@@ -164,16 +173,16 @@ class DDPMModel(Model):
         noise = torch.randn_like(real_data, device=real_data.device)
         self.t = torch.randint(
             0, self.T, (real_data.shape[0],), device=real_data.device)
+        alpha_bar = per_sample(self.alphas_cumprod[self.t], real_data)
         return (
-            torch.sqrt(self.alphas_cumprod[self.t])[:, None, None]*real_data +
-            torch.sqrt(1-self.alphas_cumprod[self.t])[:, None, None]*noise,
+            torch.sqrt(alpha_bar)*real_data + torch.sqrt(1-alpha_bar)*noise,
             noise
         )
 
     def predict(self, xt: torch.Tensor, pred_noise: torch.Tensor):
         assert self.t is not None
-        return (xt - torch.sqrt(1-self.alphas_cumprod[self.t])[
-            :, None, None]*pred_noise) / torch.sqrt(self.alphas_cumprod[self.t])[:, None, None]
+        alpha_bar = per_sample(self.alphas_cumprod[self.t], xt)
+        return (xt - torch.sqrt(1-alpha_bar)*pred_noise) / torch.sqrt(alpha_bar)
 
     # override
     def evaluate_loader(self, loader: DataLoader):
@@ -273,7 +282,7 @@ class FlowMatchingModel(Model):
         """
         x0 = torch.randn_like(x1)
         t = torch.rand(x1.shape[0], device=x1.device)
-        t_bc = t[:, None, None]
+        t_bc = per_sample(t, x1)
         x_t = (1.0 - t_bc) * x0 + t_bc * x1
         return x_t, t, x1 - x0
 

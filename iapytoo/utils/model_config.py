@@ -66,7 +66,9 @@ class DDPMConfig(ModelConfig):
 
 class FlowMatchingConfig(ModelConfig):
     """model.type: flow_matching (rectified flow, cf. iapytoo.train.flow_matching)."""
-    signal_length: int
+    # Length of a 1D signal. Optional: the model does not use it (the shape of
+    # the generated samples comes from the data), only providers may.
+    signal_length: Optional[int] = None
     # Integration steps of the ODE in FlowMatchingModel.evaluate_one.
     n_steps: Optional[int] = 50
     # Integration scheme: euler (order 1, n_steps network evaluations) or heun
