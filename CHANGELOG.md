@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-16
+
 ### Fixed
 
 - `DDPM._inner_train` no longer calls `scheduler.update`. The scheduler was fed by both the
